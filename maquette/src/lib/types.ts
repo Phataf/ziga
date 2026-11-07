@@ -3,8 +3,11 @@
 export type UnitStatus = 'free' | 'rented' | 'reserved' | 'unavailable';
 export type Visibility = 'internal' | 'published';
 export type PaymentMethod = 'cash' | 'orange_money' | 'moov_money' | 'transfer';
-/** validated = validé ; to_reconcile = Mobile Money déclaré, à rapprocher (CLAUDE.md §5.6). */
-export type PaymentStatus = 'validated' | 'to_reconcile';
+/**
+ * validated = validé ; to_reconcile = Mobile Money déclaré, à rapprocher ;
+ * to_validate = espèces saisies par un agent de terrain, à valider (CLAUDE.md §5.6).
+ */
+export type PaymentStatus = 'validated' | 'to_reconcile' | 'to_validate';
 export type Civility = 'M.' | 'Mme';
 
 export interface Agency {

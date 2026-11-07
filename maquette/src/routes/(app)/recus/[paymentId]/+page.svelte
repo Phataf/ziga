@@ -2,12 +2,9 @@
 	import { page } from '$app/state';
 	import { CircleCheck, MessageCircle, Printer, Wallet } from '@lucide/svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
-	import QrCode from '$lib/components/QrCode.svelte';
-	import { Badge } from '$lib/components/ui/badge';
+	import ReceiptDocument from '$lib/components/ReceiptDocument.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { demo } from '$lib/demo.svelte';
-	import { formatDate, formatFCFA, formatMonth, formatPhone } from '$lib/format';
-	import { methodLabel, paymentStatusLabel, paymentStatusVariant } from '$lib/labels';
 	import { leaseView } from '$lib/views';
 	import { receiptMessage, waLink } from '$lib/whatsapp';
 
@@ -39,12 +36,13 @@
 	);
 </script>
 
-<PageHeader title="Reçu" subtitle={payment?.receiptNumber} back="/encaissements" />
+<PageHeader title="Reçu" subtitle={payment?.receiptNumber} back="/encaissements" backLabel="Encaissements" />
 
 {#if !payment || !view}
 	<p class="p-4">Reçu introuvable.</p>
 {:else}
-	<main class="mx-auto max-w-lg space-y-4 px-4 pt-3">
+	<main class="page space-y-4 pt-3 md:grid md:grid-cols-[minmax(0,32rem)_20rem] md:items-start md:justify-center md:gap-6 md:space-y-0">
+		<div class="space-y-4">
 		{#if isNew}
 			<p class="flex items-center gap-2 rounded-xl bg-success-soft p-3 font-semibold text-secondary-foreground" role="status">
 				<CircleCheck class="size-6 shrink-0 text-primary" aria-hidden="true" />
@@ -52,65 +50,17 @@
 			</p>
 		{/if}
 
-		<article class="receipt space-y-3 rounded-xl border-2 border-dashed bg-white p-4 text-base" data-testid="recu">
-			<header class="flex items-start justify-between gap-3 border-b pb-3">
-				<div>
-					<p class="text-lg font-bold">{demo.data.agency.name}</p>
-					<p class="text-muted-foreground">{demo.data.agency.address}</p>
-					<p class="text-muted-foreground">{formatPhone(demo.data.agency.phone)}</p>
-				</div>
-				<Badge variant={paymentStatusVariant[payment.status]}>{paymentStatusLabel[payment.status]}</Badge>
-			</header>
+		<ReceiptDocument {payment} {view} agency={demo.data.agency} {url} />
+		</div>
 
-			<div class="text-center">
-				<p class="text-lg font-bold tracking-wide">REÇU DE LOYER{toReconcile ? ' PROVISOIRE' : ''}</p>
-				<p>N° <strong data-testid="numero-recu">{payment.receiptNumber}</strong> du {formatDate(payment.date)}</p>
-			</div>
-
-			{#if toReconcile}
-				<p class="rounded-lg bg-warning-soft p-2 text-center font-semibold text-warning-foreground">
-					Paiement Mobile Money à rapprocher
-				</p>
-			{/if}
-
-			<dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-				<dt class="text-muted-foreground">Reçu de</dt>
-				<dd class="font-medium">{view.tenant.civility} {view.tenant.name}</dd>
-				<dt class="text-muted-foreground">Logement</dt>
-				<dd>{view.property.name} — {view.unit.label}, {view.property.district}</dd>
-				<dt class="text-muted-foreground">Moyen</dt>
-				<dd>{methodLabel[payment.method]}{payment.reference ? ` — réf. ${payment.reference}` : ''}</dd>
-				<dt class="text-muted-foreground">Période</dt>
-				<dd>
-					{#each payment.allocations as a (a.rentDueId)}
-						<span class="block">{formatMonth(a.period)} : {formatFCFA(a.amount)}</span>
-					{:else}
-						Avance sur loyer
-					{/each}
-				</dd>
-			</dl>
-
-			<div class="flex items-center justify-between gap-3 border-t pt-3">
-				<div>
-					<p class="text-muted-foreground">Montant reçu</p>
-					<p class="text-2xl font-bold" data-testid="montant-recu">{formatFCFA(payment.amount)}</p>
-					<p class="text-muted-foreground">
-						{view.balanceDue > 0 ? `Reste dû : ${formatFCFA(view.balanceDue)}` : 'Locataire à jour'}
-					</p>
-				</div>
-				<div class="flex flex-col items-center gap-1">
-					<QrCode value={url} size={104} />
-					<span class="text-center text-base text-muted-foreground">Vérifier</span>
-				</div>
-			</div>
-		</article>
-
-		<div class="space-y-2 print:hidden">
+		<!-- Tablette et ordinateur : actions dans un panneau collant à droite du reçu. -->
+		<div class="space-y-2 print:hidden md:sticky md:top-20 md:rounded-xl md:border md:bg-card md:p-4">
+			<p class="hidden font-semibold md:block">Remettre le reçu</p>
 			<Button href={whatsapp} target="_blank" rel="noopener" variant="whatsapp" size="lg" class="w-full" data-testid="envoyer-whatsapp">
 				<MessageCircle class="size-6" aria-hidden="true" />
 				Envoyer sur WhatsApp
 			</Button>
-			<div class="grid grid-cols-2 gap-2">
+			<div class="grid grid-cols-2 gap-2 md:grid-cols-1">
 				<Button variant="outline" onclick={() => window.print()}>
 					<Printer aria-hidden="true" /> Imprimer
 				</Button>
@@ -127,9 +77,6 @@
 		:global(nav),
 		:global(header.sticky) {
 			display: none !important;
-		}
-		.receipt {
-			border: none;
 		}
 	}
 </style>

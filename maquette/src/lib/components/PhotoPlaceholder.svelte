@@ -12,7 +12,7 @@
 	const [bg, fg] = $derived(palettes[index % palettes.length]);
 </script>
 
-<svg viewBox="0 0 400 260" class="block h-full w-full" role="img" aria-label={`Photo ${index + 1} sur ${total} (illustration)`}>
+<svg viewBox="0 0 400 260" preserveAspectRatio="xMidYMid slice" class="block h-full w-full" role="img" aria-label={`Photo ${index + 1} sur ${total} (illustration)`}>
 	<rect width="400" height="260" fill={bg} />
 	<g fill={fg}>
 		<polygon points="120,150 200,85 280,150" />

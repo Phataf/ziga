@@ -12,7 +12,9 @@ Ce fichier est la référence permanente pour Claude Code sur ce dépôt. Lis-le
 - Un **back-office plateforme** qui active ou désactive chaque fonctionnalité pour tout le monde, pour une formule, pour une agence ou pour une personne (voir `docs/FEATURE-FLAGS.md`).
 - La plateforme **ne détient jamais les fonds**. Elle enregistre les paiements ; en phase 3, elle initie des paiements Mobile Money **vers le compte marchand de l'agence**.
 
-Documents à connaître : `docs/DECISIONS.md` (décisions prises), `docs/LOTS.md` (ordre de construction), `docs/FEATURE-FLAGS.md` (interrupteurs), `prompts/lot-XX-*.md` (le lot en cours).
+Documents à connaître : `docs/DECISIONS.md` (décisions prises), `docs/LOTS.md` (ordre de construction), `docs/FEATURE-FLAGS.md` (interrupteurs), `docs/UX.md` (profils, appareils, composants, icônes), `prompts/lot-XX-*.md` (le lot en cours).
+
+La maquette (`maquette/`) est la référence visuelle : couleurs, typographie, composants et dispositions par appareil.
 
 `docs/CADRAGE.md` donne le contexte (marché, concurrence, raisons des choix). Consulte-le en cas de doute sur une intention, mais ne l'implémente jamais directement : seuls ce fichier, les décisions et le prompt du lot définissent ce qu'il faut construire.
 
@@ -24,8 +26,8 @@ Documents à connaître : `docs/DECISIONS.md` (décisions prises), `docs/LOTS.md
 | --- | --- |
 | Monorepo | pnpm workspaces + Turborepo |
 | Langage | TypeScript partout, mode `strict` |
-| Interface (vitrine + application) | SvelteKit 2, Svelte 5 (runes), Tailwind CSS, composants shadcn-svelte, `adapter-node` |
-| PWA | Service worker via le plugin PWA de Vite pour SvelteKit |
+| Interface (vitrine + application) | SvelteKit 2, Svelte 5 (runes), Tailwind CSS, composants shadcn-svelte, icônes Lucide (`@lucide/svelte`), `adapter-node` |
+| PWA | Service worker natif de SvelteKit (`src/service-worker.ts`), sans plugin (décision D09) |
 | Local-first | PowerSync (édition libre auto-hébergée) : SQLite côté client, PostgreSQL côté serveur |
 | API | NestJS (modules par domaine), validation Zod |
 | Base de données | PostgreSQL 16, `wal_level=logical`, Row Level Security |
@@ -130,7 +132,9 @@ Une seule violation de ces règles fait échouer le lot, même si tout le reste 
 - **Migrations** : jamais modifier une migration déjà appliquée ; en créer une nouvelle. Chaque migration qui crée une table métier crée aussi sa politique RLS.
 - **Secrets** : variables d'environnement uniquement ; `.env.example` à jour ; aucun secret dans le code ni dans les tests.
 - **Performance** : JavaScript d'une page vitrine < 100 Ko compressés ; aucun appel réseau pour afficher un écran de l'application (lecture locale) ; pagination par curseur côté API.
-- **Accessibilité et ergonomie** : cibles tactiles ≥ 44 px, texte ≥ 16 px, pictogramme toujours accompagné d'un mot, barre de 4 onglets en bas de l'application (Accueil, Biens, Encaissements, Plus), clavier numérique pour les montants.
+- **Interface : suivre `docs/UX.md`.** Chaque profil a son espace et sa navigation ; chaque appareil a sa coque : barre d'onglets en bas sur téléphone, rail à gauche sur tablette, menu latéral et barre du haut sur ordinateur. Une liste de cartes sur téléphone devient un tableau sur ordinateur ; une forme différente selon l'appareil s'affiche avec `{#if}` (store `device`), jamais en doublant le composant masqué en CSS.
+- **Accessibilité et ergonomie** : cibles tactiles ≥ 44 px, texte de contenu ≥ 16 px (14 px admis pour les libellés secondaires de navigation), pictogramme toujours accompagné d'un mot, clavier numérique pour les montants, focus visible, Échap pour fermer un panneau.
+- **Icônes** : uniquement Lucide, même trait et mêmes tailles (16, 20, 24 px). **Aucune émoji**, ni comme icône ni comme décoration (test automatique).
 
 ---
 
@@ -142,6 +146,7 @@ Un lot est terminé seulement si **tout** ce qui suit est vrai :
 - [ ] Les tests listés dans le prompt du lot existent et passent, dont les tests d'accès croisé entre agences pour chaque nouvelle table.
 - [ ] Les règles du §5 concernées par le lot sont couvertes par au moins un test.
 - [ ] Les migrations s'appliquent sur une base vide **et** sur la base du lot précédent.
+- [ ] Chaque écran créé ou modifié est vérifié par Playwright sur téléphone (360 × 800), tablette (820 × 1180) et ordinateur (1440 × 900), pour chaque profil concerné, sans débordement horizontal sur téléphone (`docs/UX.md` §8).
 - [ ] Les critères d'acceptation du prompt sont vérifiés un par un et cochés dans `docs/JOURNAL-LOTS.md`.
 - [ ] Aucune fonctionnalité hors périmètre du lot n'a été ajoutée.
 

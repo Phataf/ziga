@@ -167,3 +167,41 @@ export function unitContext(data: Dataset, unitId: string) {
 export function daysLabelSince(data: Dataset, iso: string): number {
 	return daysBetween(iso, data.today);
 }
+
+/**
+ * Restreint le jeu de données à certains biens (agent de terrain, bailleur, propriétaire)
+ * ou à un bail (locataire). Préfigure les règles de synchronisation : chacun ne reçoit que ses lignes.
+ */
+export function scopeDataset(data: Dataset, scope: { propertyIds?: string[]; leaseId?: string }): Dataset {
+	let leases = data.leases;
+	let propertyIds: Set<string>;
+	if (scope.leaseId) {
+		leases = data.leases.filter((l) => l.id === scope.leaseId);
+		const unitIds = new Set(leases.map((l) => l.unitId));
+		propertyIds = new Set(data.units.filter((u) => unitIds.has(u.id)).map((u) => u.propertyId));
+	} else if (scope.propertyIds) {
+		propertyIds = new Set(scope.propertyIds);
+	} else {
+		return data;
+	}
+	const properties = data.properties.filter((p) => propertyIds.has(p.id));
+	const units = data.units.filter((u) => propertyIds.has(u.propertyId) && (!scope.leaseId || leases.some((l) => l.unitId === u.id)));
+	const unitIds = new Set(units.map((u) => u.id));
+	if (!scope.leaseId) leases = data.leases.filter((l) => unitIds.has(l.unitId));
+	const leaseIds = new Set(leases.map((l) => l.id));
+	const ownerIds = new Set(properties.map((p) => p.ownerId));
+	const mandateIds = new Set(properties.map((p) => p.mandateId));
+	const tenantIds = new Set(leases.map((l) => l.tenantId));
+	return {
+		...data,
+		owners: data.owners.filter((o) => ownerIds.has(o.id)),
+		mandates: data.mandates.filter((m) => mandateIds.has(m.id)),
+		properties,
+		units,
+		tenants: data.tenants.filter((t) => tenantIds.has(t.id)),
+		leases,
+		dues: data.dues.filter((d) => leaseIds.has(d.leaseId)),
+		payments: data.payments.filter((p) => leaseIds.has(p.leaseId)),
+		expenses: scope.leaseId ? [] : data.expenses.filter((e) => propertyIds.has(e.propertyId))
+	};
+}

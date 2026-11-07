@@ -15,8 +15,8 @@
 
 <PageHeader title="Propriétaires" subtitle="{rows.length} propriétaires, sans compte" back="/plus" backLabel="Plus" />
 
-<main class="mx-auto max-w-lg px-4 pt-3">
-	<ul class="divide-y rounded-xl border bg-card" data-testid="liste-proprietaires">
+<main class="page pt-3">
+	<ul class="divide-y rounded-xl border bg-card md:grid md:grid-cols-2 md:divide-y-0 md:gap-px md:overflow-hidden md:bg-border" data-testid="liste-proprietaires">
 		{#each rows as r (r.owner.id)}
 			<li>
 				<a href="/proprietaires/{r.owner.id}/releve" class="flex min-h-16 items-center gap-3 p-3 hover:bg-accent">

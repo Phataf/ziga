@@ -7,18 +7,27 @@ import { buildDataset, receiptNumber } from './fixtures';
 import { isoToday } from './format';
 import { allocateOldestFirst, initialStatus, publicationBlockers } from './rules';
 import type { Dataset, Payment, PaymentMethod, Visibility } from './types';
-import { leaseView } from './views';
+import { profiles, type ProfileId } from './profiles';
+import { arrears, leaseView, scopeDataset } from './views';
 
 const STORAGE_KEY = 'immo-demo-v1';
+const PROFILE_KEY = 'immo-demo-profil';
+
+/** Périmètres de la démo : biens affectés à l'agent, logements du bailleur, biens du propriétaire. */
+export const FIELD_AGENT_PROPERTIES = ['p3', 'p4', 'p9'];
+export const LANDLORD_OWNER_ID = 'o3';
+export const OWNER_PORTAL_ID = 'o1';
 
 interface DemoLog {
 	payments: Payment[];
 	visibility: Record<string, Visibility>;
 	sentStatements: Record<string, string>;
 	reminders: Record<string, string>;
+	/** Encaissements « à valider » validés par un gestionnaire pendant la démo. */
+	validations: Record<string, string>;
 }
 
-const emptyLog = (): DemoLog => ({ payments: [], visibility: {}, sentStatements: {}, reminders: {} });
+const emptyLog = (): DemoLog => ({ payments: [], visibility: {}, sentStatements: {}, reminders: {}, validations: {} });
 
 function load(): DemoLog {
 	try {
@@ -27,6 +36,15 @@ function load(): DemoLog {
 		return { ...emptyLog(), ...(JSON.parse(raw) as Partial<DemoLog>) };
 	} catch {
 		return emptyLog();
+	}
+}
+
+function loadProfile(): ProfileId {
+	try {
+		const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(PROFILE_KEY) : null;
+		return raw && raw in profiles ? (raw as ProfileId) : 'manager';
+	} catch {
+		return 'manager';
 	}
 }
 
@@ -50,15 +68,65 @@ class DemoStore {
 
 	base = $derived(buildDataset(this.today));
 
-	data: Dataset = $derived.by(() => {
+	profileId = $state<ProfileId>(loadProfile());
+	profile = $derived(profiles[this.profileId]);
+
+	/** Toutes les données de l'agence, sans restriction de profil. */
+	full: Dataset = $derived.by(() => {
 		const base = this.base;
 		const log = this.log;
 		return {
 			...base,
 			units: base.units.map((u) => ({ ...u, visibility: log.visibility[u.id] ?? u.visibility })),
-			payments: [...base.payments, ...log.payments]
+			payments: [...base.payments, ...log.payments].map((p) =>
+				p.status === 'to_validate' && log.validations[p.id] ? { ...p, status: 'validated' as const } : p
+			)
 		};
 	});
+
+	/** Bail du locataire de la démo : le premier en retard, sinon le premier bail. */
+	tenantLeaseId = $derived(arrears(this.full)[0]?.lease.id ?? this.full.leases[0].id);
+
+	/** Données vues par le profil actif (préfigure les règles de synchronisation). */
+	data: Dataset = $derived.by(() => {
+		const full = this.full;
+		switch (this.profileId) {
+			case 'field_agent':
+				return scopeDataset(full, { propertyIds: FIELD_AGENT_PROPERTIES });
+			case 'landlord':
+				return scopeDataset(full, { propertyIds: full.properties.filter((p) => p.ownerId === LANDLORD_OWNER_ID).map((p) => p.id) });
+			case 'owner':
+				return scopeDataset(full, { propertyIds: full.properties.filter((p) => p.ownerId === OWNER_PORTAL_ID).map((p) => p.id) });
+			case 'tenant':
+				return scopeDataset(full, { leaseId: this.tenantLeaseId });
+			default:
+				return full;
+		}
+	});
+
+	/** Nom affiché en tête de l'espace de travail. */
+	workspaceName = $derived.by(() => {
+		if (this.profileId === 'landlord') {
+			const o = this.full.owners.find((x) => x.id === LANDLORD_OWNER_ID)!;
+			return `${o.civility} ${o.name}`;
+		}
+		return this.full.agency.name;
+	});
+
+	setProfile(id: ProfileId) {
+		this.profileId = id;
+		try {
+			localStorage.setItem(PROFILE_KEY, id);
+		} catch {
+			// navigation privée : le profil reste en mémoire
+		}
+	}
+
+	/** Le gestionnaire ou le directeur valide un encaissement saisi par un agent de terrain. */
+	validate(paymentId: string) {
+		this.log.validations[paymentId] = this.today;
+		this.persist();
+	}
 
 	private persist() {
 		save($state.snapshot(this.log) as DemoLog);
@@ -71,7 +139,7 @@ class DemoStore {
 		const open = view.dues.filter((d) => d.balance > 0);
 		const { allocations } = allocateOldestFirst(input.amount, open);
 		const year = this.today.slice(0, 4);
-		const last = this.data.payments
+		const last = this.full.payments
 			.map((p) => Number(p.receiptNumber.split('-')[2]))
 			.reduce((a, b) => Math.max(a, b), 0);
 		const payment: Payment = {
@@ -81,7 +149,7 @@ class DemoStore {
 			amount: input.amount,
 			method: input.method,
 			reference: input.reference?.trim() || undefined,
-			status: initialStatus(input.method),
+			status: initialStatus(input.method, this.profileId === 'field_agent'),
 			receiptNumber: receiptNumber(year, last + 1),
 			allocations
 		};

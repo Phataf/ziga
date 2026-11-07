@@ -1,62 +1,23 @@
 <script lang="ts">
-	import { Search } from '@lucide/svelte';
+	import { Keyboard, Wallet } from '@lucide/svelte';
+	import TenantPicker from '$lib/components/agency/TenantPicker.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
-	import { Input } from '$lib/components/ui/input';
-	import { demo } from '$lib/demo.svelte';
-	import { formatDate, formatFCFA } from '$lib/format';
-	import { collectList } from '$lib/views';
-
-	let query = $state('');
-
-	const normalize = (s: string) =>
-		s
-			.toLowerCase()
-			.normalize('NFD')
-			.replace(/[̀-ͯ]/g, '');
-
-	const list = $derived.by(() => {
-		const q = normalize(query.trim());
-		const all = collectList(demo.data);
-		if (!q) return all;
-		return all.filter((v) =>
-			normalize(`${v.tenant.name} ${v.unit.label} ${v.property.name} ${v.property.district}`).includes(q)
-		);
-	});
+	import { device } from '$lib/device.svelte';
 </script>
 
-<PageHeader title="Encaisser" subtitle="Étape 1 : choisir le locataire" back="/encaissements" />
+<PageHeader title="Encaisser" subtitle="Étape 1 : choisir le locataire" back="/encaissements" backLabel="Encaissements" />
 
-<main class="mx-auto max-w-lg space-y-3 px-4 pt-3">
-	<label class="relative block">
-		<span class="sr-only">Chercher un locataire</span>
-		<Search class="pointer-events-none absolute top-1/2 left-3 size-5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-		<Input type="search" placeholder="Nom, logement ou quartier" class="pl-10" bind:value={query} />
-	</label>
-
-	<ul class="space-y-2" data-testid="liste-locataires">
-		{#each list as v (v.lease.id)}
-			<li>
-				<a
-					href="/encaisser/{v.lease.id}"
-					class="flex min-h-16 items-center gap-3 rounded-xl border bg-card p-3 hover:bg-accent active:bg-accent"
-				>
-					<div class="min-w-0 flex-1">
-						<p class="truncate font-semibold">{v.tenant.civility} {v.tenant.name}</p>
-						<p class="truncate text-base text-muted-foreground">{v.property.name} — {v.unit.label}</p>
-					</div>
-					<div class="shrink-0 text-right">
-						{#if v.balanceDue > 0}
-							<p class="font-semibold {v.overdueAmount > 0 ? 'text-destructive' : ''}">{formatFCFA(v.balanceDue)}</p>
-							<p class="text-base text-muted-foreground">{v.overdueAmount > 0 ? 'en retard' : 'dû aujourd’hui'}</p>
-						{:else}
-							<p class="font-semibold text-primary">À jour</p>
-							{#if v.nextDue}<p class="text-base text-muted-foreground">le {formatDate(v.nextDue.dueDate).slice(0, 5)}</p>{/if}
-						{/if}
-					</div>
-				</a>
-			</li>
-		{:else}
-			<li class="rounded-xl border bg-card p-4 text-base text-muted-foreground">Aucun locataire ne correspond.</li>
-		{/each}
-	</ul>
+<main class="page pt-3 lg:grid lg:grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)] lg:items-start lg:gap-6">
+	<TenantPicker autofocus />
+	<!-- Tablette et ordinateur : le formulaire s'ouvrira à droite, sans quitter la liste. -->
+	{#if device.twoPane}
+	<section class="sticky top-20 rounded-xl border border-dashed bg-card p-8 text-center" aria-label="Formulaire d’encaissement">
+		<Wallet class="mx-auto size-10 text-muted-foreground" aria-hidden="true" />
+		<p class="mt-3 text-lg font-semibold">Choisissez un locataire</p>
+		<p class="text-muted-foreground">Le formulaire s’ouvre ici, montant déjà rempli.</p>
+		<p class="mt-4 hidden items-center justify-center gap-2 text-muted-foreground xl:flex">
+			<Keyboard class="size-5" aria-hidden="true" /> Tapez un nom puis Entrée pour aller plus vite.
+		</p>
+	</section>
+	{/if}
 </main>

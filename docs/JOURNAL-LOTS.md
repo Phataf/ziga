@@ -73,3 +73,22 @@ Claude Code complète ce fichier à la fin de chaque lot. Le porteur le relit av
 3. **Hébergement de la maquette** : Cloudflare Pages est recommandé (gratuit, cohérent avec la pile). Le déploiement demande l'accès au compte du porteur.
 4. **Plugin PWA pour le lot 01** : attendre une version stable de `@vite-pwa/sveltekit`, ou garder le service worker natif de SvelteKit ? Une décision écrite dans `docs/DECISIONS.md` est nécessaire si la pile change.
 5. **Réseau de l'environnement de développement** : ouvrir l'accès à `shadcn-svelte.com` pour que le lot 01 utilise le CLI shadcn-svelte.
+
+## Lot 00 bis — Maquette multiprofil et multiplateforme — 07/11/2026
+
+Demande du porteur après test de la maquette : une expérience adaptée à chaque profil et à chaque appareil, et non un écran de téléphone étiré ; icônes professionnelles, aucune émoji. Décision D11, spécification `docs/UX.md`.
+
+### Fait
+- **Évaluation** : sur tablette et ordinateur, la maquette affichait l'écran du téléphone sur une colonne de 512 px avec la barre d'onglets ; un seul profil (gestionnaire). Les icônes étaient déjà toutes Lucide, sans émoji.
+- **7 profils** (`src/lib/profiles.ts`) avec espace, navigation et périmètre de données propres (`scopeDataset`, qui préfigure les règles de synchronisation) : directeur, gestionnaire, agent de terrain (3 biens affectés, espèces « à valider »), bailleur particulier, propriétaire, locataire, visiteur ou acheteur. Sélecteur « Voir en tant que » pour la démonstration.
+- **3 coques** (`src/lib/components/shell/`) : téléphone (onglets en bas), tablette (rail à gauche), ordinateur (menu latéral par sections, barre du haut, recherche Ctrl+K). Store `device` et rendu conditionnel, sans doubler les composants.
+- **Écrans repensés par appareil** : tableau de bord en grille d'indicateurs et tableaux ; encaissements et impayés en tableaux avec sélection multiple, validation groupée et relances en série ; menus d'actions par ligne (clavier : flèches, Entrée, Échap) ; vues liste-détail pour les biens et l'encaissement dès 1024 px ; reçu et relevé avec panneau d'actions collant ; feuille du bas sur téléphone, boîte de dialogue sur tablette, tiroir sur ordinateur.
+- **Nouveaux espaces** : propriétaire (revenus, biens, relevés), locataire (solde, échéances, reçus, contact et signalement, paiement Mobile Money affiché désactivé), vitrine avec Louer et Acheter, filtres et annonce en deux colonnes.
+- **Tests** : 40 tests Vitest (dont `scopeDataset`, type d'appareil et test anti-émoji) ; 24 tests Playwright, dont `e2e/08-multiplateforme.spec.ts` (ordinateur 1440 × 900, tablette 820 × 1180 et 1180 × 820, profils, absence de débordement horizontal sur téléphone). Les 15 tests d'origine passent sans modification.
+
+### Écarts
+- Le back-office plateforme n'est pas maquetté : il relève du lot 04 (ordinateur d'abord).
+- Les biens à vendre (`src/lib/sales.ts`) sont des fiches simples, sans lien avec le registre.
+
+### Questions ouvertes pour le porteur
+- Le libellé « Bailleur particulier » et son périmètre (formule Découverte, sans équipe) conviennent-ils ? À vérifier en entretien.

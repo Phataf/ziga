@@ -90,3 +90,68 @@
 		touch-action: manipulation;
 	}
 }
+
+/*
+ * Conteneurs de page responsives (docs/UX.md §3).
+ * Téléphone : une colonne de 32 rem. Tablette : pleine largeur avec marges. Ordinateur : 80 rem au plus.
+ */
+@utility page {
+	margin-inline: auto;
+	width: 100%;
+	max-width: 32rem;
+	padding-inline: 1rem;
+	@media (width >= 48rem) {
+		max-width: none;
+		padding-inline: 1.5rem;
+	}
+	@media (width >= 80rem) {
+		max-width: 80rem;
+		padding-inline: 2rem;
+	}
+}
+
+/* Formulaires et documents : restent lisibles, sans s'étirer sur grand écran. */
+@utility page-narrow {
+	margin-inline: auto;
+	width: 100%;
+	max-width: 32rem;
+	padding-inline: 1rem;
+	@media (width >= 48rem) {
+		max-width: 48rem;
+		padding-inline: 1.5rem;
+	}
+}
+
+@layer base {
+	/* Tableaux de l'ordinateur et de la tablette : en-têtes collants, lignes survolables, texte ≥ 16 px. */
+	table.data {
+		width: 100%;
+		border-collapse: separate;
+		border-spacing: 0;
+	}
+	table.data th {
+		position: sticky;
+		top: 0;
+		background: var(--color-muted);
+		font-weight: 600;
+		text-align: left;
+		color: var(--color-muted-foreground);
+		padding: 0.625rem 0.75rem;
+		border-bottom: 1px solid var(--color-border);
+	}
+	table.data td {
+		padding: 0.75rem;
+		border-bottom: 1px solid var(--color-border);
+		vertical-align: middle;
+	}
+	table.data tbody tr:hover {
+		background: var(--color-accent);
+	}
+	table.data tbody tr:last-child td {
+		border-bottom: 0;
+	}
+	:focus-visible {
+		outline: 3px solid color-mix(in oklch, var(--color-ring) 55%, transparent);
+		outline-offset: 2px;
+	}
+}

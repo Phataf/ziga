@@ -55,9 +55,13 @@ export function allocateOldestFirst(
 	return { allocations, advance: rest };
 }
 
-/** Un Mobile Money déclaré à la main reste « à rapprocher » ; les espèces saisies par le gestionnaire sont validées. */
-export function initialStatus(method: PaymentMethod): Payment['status'] {
-	return method === 'orange_money' || method === 'moov_money' ? 'to_reconcile' : 'validated';
+/**
+ * Un Mobile Money déclaré à la main reste « à rapprocher » ; les espèces saisies par un agent de terrain
+ * restent « à valider » ; celles saisies par un gestionnaire sont validées.
+ */
+export function initialStatus(method: PaymentMethod, enteredByFieldAgent = false): Payment['status'] {
+	if (method === 'orange_money' || method === 'moov_money') return 'to_reconcile';
+	return enteredByFieldAgent ? 'to_validate' : 'validated';
 }
 
 export function isMandateActive(mandate: Mandate, today: string): boolean {

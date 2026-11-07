@@ -2,11 +2,13 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { Banknote, Check, Landmark, Smartphone } from '@lucide/svelte';
+	import TenantPicker from '$lib/components/agency/TenantPicker.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import { Input } from '$lib/components/ui/input';
 	import { demo } from '$lib/demo.svelte';
+	import { device } from '$lib/device.svelte';
 	import { formatFCFA, formatMonth, formatPhone, parseAmount } from '$lib/format';
 	import { methodLabel } from '$lib/labels';
 	import { allocateOldestFirst } from '$lib/rules';
@@ -51,12 +53,25 @@
 	}
 </script>
 
-<PageHeader title="Encaisser" subtitle="Étape 2 : vérifier et valider" back="/encaisser" />
+<div class="page md:pt-2 lg:grid lg:grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)] lg:items-start lg:gap-6 lg:pt-6">
+{#if device.twoPane}
+<aside class="sticky top-20 max-h-[calc(100dvh-6rem)] overflow-y-auto pr-1" aria-label="Choisir un autre locataire">
+	<TenantPicker activeId={view?.lease.id} testid="liste-locataires-panneau" />
+</aside>
+{/if}
+
+<div class="min-w-0">
+<PageHeader flush class="-mx-4 md:mx-0" title="Encaisser" subtitle="Étape 2 : vérifier et valider" back="/encaisser" backLabel="Choisir le locataire" />
 
 {#if !view}
 	<p class="p-4">Locataire introuvable.</p>
 {:else}
-	<form class="mx-auto max-w-lg space-y-4 px-4 pt-3 pb-32" onsubmit={submit}>
+	<form class="max-w-2xl space-y-4 pt-3 pb-32 md:rounded-xl md:border md:bg-card md:p-6 md:pb-6" onsubmit={submit}>
+		{#if demo.profileId === 'field_agent'}
+			<p class="rounded-lg bg-info-soft p-3 text-base text-info-foreground">
+				Vos encaissements en espèces restent « à valider » jusqu’au contrôle du gestionnaire.
+			</p>
+		{/if}
 		<Card.Root>
 			<Card.Content class="space-y-1">
 				<p class="text-lg font-semibold" data-testid="locataire">{view.tenant.civility} {view.tenant.name}</p>
@@ -115,7 +130,7 @@
 
 		<fieldset class="space-y-2">
 			<legend class="mb-2 text-lg font-semibold">Moyen de paiement</legend>
-			<div class="grid grid-cols-2 gap-2">
+			<div class="grid grid-cols-2 gap-2 xl:grid-cols-4">
 				{#each methods as m (m.id)}
 					<label
 						class={cn(
@@ -150,9 +165,10 @@
 			</div>
 		{/if}
 
-		<div class="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 border-t bg-background/95 p-3 backdrop-blur">
-			<div class="mx-auto max-w-lg">
-				<Button type="submit" size="lg" class="w-full text-xl" disabled={!canSubmit}>
+		<!-- Téléphone : bouton fixé au-dessus des onglets. Tablette et ordinateur : en bas du formulaire. -->
+		<div class="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 border-t bg-background/95 p-3 backdrop-blur md:static md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
+			<div class="mx-auto max-w-lg md:mx-0 md:max-w-none md:flex md:justify-end">
+				<Button type="submit" size="lg" class="w-full text-xl md:w-auto" disabled={!canSubmit}>
 					<Check class="size-6" aria-hidden="true" />
 					Valider {amount ? formatFCFA(amount) : ''}
 				</Button>
@@ -160,3 +176,5 @@
 		</div>
 	</form>
 {/if}
+</div>
+</div>

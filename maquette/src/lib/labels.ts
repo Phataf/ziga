@@ -30,10 +30,12 @@ export const methodLabel: Record<PaymentMethod, string> = {
 
 export const paymentStatusLabel: Record<PaymentStatus, string> = {
 	validated: 'Validé',
-	to_reconcile: 'À rapprocher'
+	to_reconcile: 'À rapprocher',
+	to_validate: 'À valider'
 };
 
 export const paymentStatusVariant: Record<PaymentStatus, BadgeVariant> = {
 	validated: 'success',
-	to_reconcile: 'warning'
+	to_reconcile: 'warning',
+	to_validate: 'info'
 };

@@ -60,6 +60,8 @@ describe('statut initial d’un paiement', () => {
 	});
 	it('espèces saisies par le gestionnaire → validé', () => {
 		expect(initialStatus('cash')).toBe('validated');
+		expect(initialStatus('cash', true)).toBe('to_validate');
+		expect(initialStatus('orange_money', true)).toBe('to_reconcile');
 	});
 });
 
