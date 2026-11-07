@@ -24,8 +24,8 @@ Documents à connaître : `docs/DECISIONS.md` (décisions prises), `docs/LOTS.md
 | --- | --- |
 | Monorepo | pnpm workspaces + Turborepo |
 | Langage | TypeScript partout, mode `strict` |
-| Interface (vitrine + application) | SvelteKit 2, Svelte 5 (runes), Tailwind CSS, composants shadcn-svelte, `adapter-node` |
-| PWA | Service worker via le plugin PWA de Vite pour SvelteKit |
+| Interface (vitrine + application) | SvelteKit 2, Svelte 5 (runes), Tailwind CSS, composants shadcn-svelte, `adapter-node` — passage à SvelteKit 3 : question ouverte avant le lot 01 (`docs/DECISIONS.md`) |
+| PWA | Service worker natif de SvelteKit (`src/service-worker.ts`), manifeste statique, sans plugin PWA (D09) |
 | Local-first | PowerSync (édition libre auto-hébergée) : SQLite côté client, PostgreSQL côté serveur |
 | API | NestJS (modules par domaine), validation Zod |
 | Base de données | PostgreSQL 16, `wal_level=logical`, Row Level Security |
@@ -63,6 +63,7 @@ infra/
   powersync/               règles de synchronisation
   k6/                      scénarios de charge
 docs/                  décisions, lots, spécifications, journal des lots
+maquette/              maquette cliquable du lot 00 : projet autonome, hors workspaces, jamais modifié (D10)
 prompts/               un prompt par lot
 ```
 
