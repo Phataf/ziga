@@ -32,6 +32,8 @@
 	} = $props();
 </script>
 
+<svelte:head><title>{fr.app.pageTitle(title)}</title></svelte:head>
+
 <header
 	class="sticky top-0 z-30 border-b bg-background/95 backdrop-blur md:static md:border-b-0 md:bg-transparent md:backdrop-blur-none {className}"
 >

@@ -1,6 +1,6 @@
-# Plateforme de gestion immobilière — Burkina Faso
+# Ziga — gestion locative au Burkina Faso
 
-Registre de gestion locative multi-organisations (agences et bailleurs particuliers), avec vitrine publique, pour Ouagadougou et Saaba.
+**Ziga** (ziga.com) : registre de gestion locative multi-organisations (agences et bailleurs particuliers), avec vitrine publique, pour Ouagadougou et Saaba.
 
 - `CLAUDE.md` : règles du dépôt (à lire en premier).
 - `docs/` : cadrage, décisions, lots, interrupteurs de fonctionnalités, expérience utilisateur, journal des lots.
@@ -9,7 +9,7 @@ Registre de gestion locative multi-organisations (agences et bailleurs particuli
 
 ## Démarrer depuis un clone neuf
 
-Prérequis : **Node.js 22.17 ou plus**, **pnpm 10** (`corepack enable` suffit : la version est fixée dans `package.json`) et **Docker** avec Docker Compose.
+Prérequis : **Node.js 22.17 ou plus**, Git Bash sous Windows, **pnpm 10** (`corepack enable` suffit : la version est fixée dans `package.json`) et **Docker** avec Docker Compose.
 
 ```bash
 pnpm install
@@ -31,7 +31,7 @@ pnpm db:migrate
 pnpm dev
 ```
 
-- `pnpm infra:up` démarre PostgreSQL 16 (`wal_level=logical`), Redis et SeaweedFS (stockage S3), attend qu'ils soient sains et crée le compartiment `ziga-dev`.
+- `pnpm infra:up` démarre PostgreSQL 16 (`wal_level=logical`, sur le port **55432** de la machine pour ne pas heurter un PostgreSQL déjà installé), Redis et SeaweedFS (stockage S3), attend qu'ils soient sains et crée le compartiment `ziga-dev`.
 - `pnpm db:migrate` crée les rôles `app_api` (sans `BYPASSRLS`) et `app_admin`, la fonction `current_organization_id()`, et fixe leurs mots de passe à partir de `.env`.
 - `pnpm dev` lance les services, puis l'API (http://localhost:3000), le worker des tâches de fond et l'application web (http://localhost:5173). Sans Docker, avec PostgreSQL et Redis déjà démarrés sur la machine : `pnpm dev:apps`, et `STORAGE_DRIVER=local` dans `.env`.
 

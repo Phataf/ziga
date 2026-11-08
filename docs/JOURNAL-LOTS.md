@@ -257,7 +257,7 @@ Prompt : `prompts/lot-01-socle.md`. Décisions du porteur avant le lot : porte 0
 - `app_admin` n'a pas encore de politiques ni de journalisation de ses accès : lot 04.
 - `pnpm db:seed` n'a rien à semer avant les tables métier (lot 03).
 - La recherche globale (Ctrl+K) de la maquette n'est pas reprise : elle arrivera avec les premiers écrans métier.
-- Nom de l'application (« Gestion locative ») provisoire, dans `i18n/fr.ts` et le manifeste.
+- ~~Nom de l'application provisoire~~ : réglé par D28 (Ziga).
 - Le test d'intégration du worker vérifie le traitement ; l'attente des tâches en cours à l'arrêt est couverte par les tests unitaires de l'arrêt et par le comportement de BullMQ, pas par un test de bout en bout.
 
 ### Questions ouvertes pour le porteur

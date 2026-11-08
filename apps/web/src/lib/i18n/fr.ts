@@ -3,7 +3,10 @@
  */
 export const fr = {
 	app: {
-		name: 'Gestion locative',
+		name: 'Ziga',
+		tagline: 'Gestion locative',
+		/** Titre de l'onglet du navigateur : « Biens et unités — Ziga ». */
+		pageTitle: (screen?: string) => (screen ? `${screen} — Ziga` : 'Ziga — Gestion locative'),
 		mainNav: 'Navigation principale',
 		breadcrumb: 'Fil d’Ariane',
 		back: 'Retour',

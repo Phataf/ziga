@@ -167,6 +167,7 @@ test.describe('Ordinateur (1440 × 900)', () => {
 		await page.goto('/espace/locataire/caution');
 		await expect(mainNav(page).getByRole('link', { name: 'Caution et décompte' })).toHaveAttribute('aria-current', 'page');
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Caution et décompte');
+		await expect(page).toHaveTitle('Caution et décompte — Ziga');
 	});
 });
 
@@ -227,7 +228,13 @@ test.describe('Installation (PWA)', () => {
 		await page.goto('/app');
 		const href = await page.locator('link[rel="manifest"]').getAttribute('href');
 		const manifest = await (await request.get(href!)).json();
-		expect(manifest).toMatchObject({ lang: 'fr', display: 'standalone', start_url: '/app' });
+		expect(manifest).toMatchObject({
+			name: 'Ziga — Gestion locative',
+			short_name: 'Ziga',
+			lang: 'fr',
+			display: 'standalone',
+			start_url: '/app'
+		});
 		const sizes = manifest.icons.map((i: { sizes: string }) => i.sizes);
 		expect(sizes).toEqual(expect.arrayContaining(['192x192', '512x512']));
 		expect(manifest.icons.some((i: { purpose?: string }) => i.purpose === 'maskable')).toBe(true);
