@@ -4,6 +4,7 @@
  */
 import { passwordSchema } from '@ziga/shared/auth';
 import { ROLE_LABELS } from '@ziga/shared/organizations';
+import { PLATFORM_ROLE_LABELS } from '@ziga/shared/permissions';
 import { formatPhone } from '@ziga/shared/phone';
 import { createDatabase, createPool } from './database.js';
 import { DEMO_ORGANIZATIONS, DEMO_PEOPLE, seedDemo } from './seed.js';
@@ -27,8 +28,12 @@ if (!password.success) {
 }
 
 const pool = createPool({ url, max: 2, connectionTimeoutMs: 5_000, applicationName: 'ziga-seed' });
+// Formules et abonnements : connexion du back-office (app_admin), seule autorisée à les écrire.
+const adminUrl = process.env.DATABASE_ADMIN_URL;
+const adminPool = adminUrl ? createPool({ url: adminUrl, max: 1, connectionTimeoutMs: 5_000, applicationName: 'ziga-seed' }) : null;
 try {
-	const result = await seedDemo(createDatabase(pool), password.data);
+	const result = await seedDemo(createDatabase(pool), password.data, adminPool ? createDatabase(adminPool) : undefined);
+	if (!adminPool) process.stdout.write('DATABASE_ADMIN_URL absente : formules et abonnements de démonstration non créés.\n');
 	process.stdout.write(`Démonstration : ${result.people} personne(s) et ${result.organizations} organisation(s) créées.\n`);
 	process.stdout.write('Comptes (mot de passe : SEED_DEMO_PASSWORD) :\n');
 	for (const p of DEMO_PEOPLE) {
@@ -41,8 +46,10 @@ try {
 						: `${ROLE_LABELS[m.role].toLowerCase()} chez ${o.tradeName ?? o.legalName}`
 				)
 		);
+		if (p.platformRole) roles.push(`équipe de la plateforme (${PLATFORM_ROLE_LABELS[p.platformRole].toLowerCase()})`);
 		process.stdout.write(`  ${formatPhone(p.phone)}  ${p.name}${roles.length ? ` — ${roles.join(', ')}` : ' — sans organisation'}\n`);
 	}
 } finally {
 	await pool.end();
+	await adminPool?.end();
 }

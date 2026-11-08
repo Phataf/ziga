@@ -16,6 +16,8 @@ export interface OrganizationScope {
 	organizationType: OrganizationType;
 	role: OrganizationRole;
 	memberId: string;
+	planId: string;
+	verificationStatus: 'pending' | 'verified' | 'suspended';
 }
 
 export interface RequestStore {

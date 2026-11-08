@@ -33,12 +33,49 @@ async function userId(client: Client): Promise<string> {
 	return ((await client.call('GET', '/me')).body as { id: string }).id;
 }
 
-/** Une personne inscrite crée une organisation (elle en devient directrice). */
-export async function createOrg(t: TestApp, type: OrganizationType = 'agency', name = 'Agence de test'): Promise<Org> {
+/**
+ * Formule de test posée directement en base (propriétaire du schéma) : avec un abonnement payé en cours, pour que
+ * les tests invitent sans buter sur le quota de la formule Découverte (1 utilisateur).
+ */
+export async function setPlan(
+	organizationId: string,
+	planId: 'discovery' | 'essential' | 'pro' | 'custom',
+	withPaidSubscription = true
+): Promise<void> {
+	const owner = new pg.Client({ connectionString: process.env.DATABASE_MIGRATION_URL });
+	await owner.connect();
+	try {
+		await owner.query('BEGIN');
+		await owner.query(`select set_config('app.organization_id', $1, true)`, [organizationId]);
+		await owner.query(`update organizations set plan_id = $2 where id = $1`, [organizationId, planId]);
+		if (withPaidSubscription && planId !== 'discovery') {
+			await owner.query(
+				`insert into subscriptions (id, organization_id, plan_id, starts_on, ends_on, amount, payment_status, payment_reference, paid_on, recorded_by)
+				 select $1, $2, $3, current_date - 1, current_date + 60, 35000, 'paid', 'TEST-0001', current_date, created_by from organizations where id = $2`,
+				[newId(), organizationId, planId]
+			);
+		}
+		await owner.query('COMMIT');
+	} catch (error) {
+		await owner.query('ROLLBACK');
+		throw error;
+	} finally {
+		await owner.end();
+	}
+}
+
+/** Une personne inscrite crée une organisation (elle en devient directrice). Agence : formule Pro, sauf demande. */
+export async function createOrg(
+	t: TestApp,
+	type: OrganizationType = 'agency',
+	name = 'Agence de test',
+	plan: 'discovery' | 'essential' | 'pro' | 'custom' = type === 'agency' ? 'pro' : 'discovery'
+): Promise<Org> {
 	const { client, phone } = await signedUp(t);
 	const id = newId();
 	const r = await client.call('POST', '/organizations', { id, type, legalName: name, phone: '+22625300000', commune: 'Ouagadougou' });
 	if (r.status !== 201) throw new Error(`création : ${r.status} ${JSON.stringify(r.body)}`);
+	if (plan !== 'discovery') await setPlan(id, plan);
 	const uid = await userId(client);
 	const members = await client.call<{ id: string; userId: string }[]>('GET', '/organization/members', undefined, {
 		'x-organization-id': id

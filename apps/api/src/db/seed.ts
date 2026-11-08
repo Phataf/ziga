@@ -4,6 +4,7 @@
  * jamais les deux à la fois). Rejouable : ce qui existe déjà est laissé tel quel.
  * Écrit avec le rôle app_api, dans le contexte de chaque organisation : la RLS s'applique au seed aussi.
  */
+import { addDays, toIsoDate } from '@ziga/shared/dates';
 import { newId } from '@ziga/shared/ids';
 import type { OrganizationRole, OrganizationType } from '@ziga/shared/permissions';
 import { eq } from 'drizzle-orm';
@@ -11,11 +12,13 @@ import { hashPassword } from '../modules/identity/passwords.js';
 import { withOrganization, type Database } from './database.js';
 import { users } from './schema/identity.js';
 import { auditLog, organizationMembers, organizations } from './schema/organizations.js';
+import { subscriptions } from './schema/platform.js';
 
 export interface DemoPerson {
 	key: string;
 	phone: string;
 	name: string;
+	platformRole?: 'support' | 'sales' | 'finance';
 }
 
 export interface DemoOrganization {
@@ -26,6 +29,9 @@ export interface DemoOrganization {
 	phone: string;
 	commune: string;
 	members: { person: string; role: OrganizationRole }[];
+	plan: 'discovery' | 'essential' | 'pro';
+	/** Abonnement de démonstration : payé et en cours, ou échu (délai de grâce). */
+	subscription?: 'paid' | 'expired';
 }
 
 /** Personnes de démonstration (numéros fictifs +226 70 0x xx xx). */
@@ -38,7 +44,11 @@ export const DEMO_PEOPLE: DemoPerson[] = [
 	{ key: 'b.manager', phone: '+22670020002', name: 'Boukary Compaoré' },
 	{ key: 'b.field_agent', phone: '+22670020003', name: 'Adama Ilboudo' },
 	{ key: 'b.viewer', phone: '+22670020004', name: 'Rasmata Kinda' },
-	{ key: 'person', phone: '+22670090001', name: 'Moussa Nikiéma' }
+	{ key: 'person', phone: '+22670090001', name: 'Moussa Nikiéma' },
+	// Équipe de la plateforme (lot 04) ; le super administrateur, lui, se crée par la ligne de commande seulement.
+	{ key: 'platform.support', phone: '+22670030001', name: 'Aïcha Sanogo', platformRole: 'support' },
+	{ key: 'platform.sales', phone: '+22670030002', name: 'Yacouba Ouattara', platformRole: 'sales' },
+	{ key: 'platform.finance', phone: '+22670030003', name: 'Delphine Somé', platformRole: 'finance' }
 ];
 
 export const DEMO_ORGANIZATIONS: DemoOrganization[] = [
@@ -49,6 +59,8 @@ export const DEMO_ORGANIZATIONS: DemoOrganization[] = [
 		tradeName: 'Faso Immobilier',
 		phone: '+22625300101',
 		commune: 'Ouagadougou',
+		plan: 'pro',
+		subscription: 'paid',
 		members: [
 			{ person: 'a.director', role: 'director' },
 			{ person: 'a.manager', role: 'manager' },
@@ -63,6 +75,8 @@ export const DEMO_ORGANIZATIONS: DemoOrganization[] = [
 		tradeName: 'Sahel Habitat',
 		phone: '+22625300202',
 		commune: 'Ouagadougou',
+		plan: 'essential',
+		subscription: 'expired',
 		members: [
 			{ person: 'b.director', role: 'director' },
 			{ person: 'b.manager', role: 'manager' },
@@ -78,11 +92,15 @@ export const DEMO_ORGANIZATIONS: DemoOrganization[] = [
 		tradeName: null,
 		phone: '+22670010002',
 		commune: 'Saaba',
+		plan: 'discovery',
 		members: [{ person: 'a.manager', role: 'director' }]
 	}
 ];
 
-export async function seedDemo(db: Database, password: string): Promise<{ people: number; organizations: number }> {
+/**
+ * `admin` : connexion app_admin (DATABASE_ADMIN_URL) pour la formule et les abonnements, que app_api ne peut pas écrire.
+ */
+export async function seedDemo(db: Database, password: string, admin?: Database): Promise<{ people: number; organizations: number }> {
 	const passwordHash = await hashPassword(password);
 	const ids = new Map<string, string>();
 	let createdPeople = 0;
@@ -93,7 +111,15 @@ export async function seedDemo(db: Database, password: string): Promise<{ people
 			continue;
 		}
 		const id = newId();
-		await db.insert(users).values({ id, phone: p.phone, name: p.name, passwordHash, status: 'active', phoneVerifiedAt: new Date() });
+		await db.insert(users).values({
+			id,
+			phone: p.phone,
+			name: p.name,
+			passwordHash,
+			status: 'active',
+			phoneVerifiedAt: new Date(),
+			platformRole: p.platformRole ?? null
+		});
 		ids.set(p.key, id);
 		createdPeople += 1;
 	}
@@ -141,6 +167,34 @@ export async function seedDemo(db: Database, password: string): Promise<{ people
 			}
 			createdOrgs += 1;
 		});
+		if (admin && o.plan !== 'discovery') await seedPlan(admin, o, ids.get(o.members[0]!.person)!);
 	}
 	return { people: createdPeople, organizations: createdOrgs };
+}
+
+/** Formule et abonnement de démonstration (rejouable : rien n'est ajouté si un abonnement existe déjà). */
+async function seedPlan(admin: Database, o: DemoOrganization, recordedBy: string): Promise<void> {
+	await withOrganization(admin, o.id, { statementTimeoutMs: 15_000 }, async (tx) => {
+		await tx.update(organizations).set({ planId: o.plan }).where(eq(organizations.id, o.id));
+		const existing = await tx.select({ id: subscriptions.id }).from(subscriptions).where(eq(subscriptions.organizationId, o.id)).limit(1);
+		if (existing.length) return;
+		const today = toIsoDate();
+		const amount = o.plan === 'pro' ? 35_000 : 15_000;
+		const period =
+			o.subscription === 'expired'
+				? { startsOn: addDays(today, -40), endsOn: addDays(today, -10) }
+				: { startsOn: addDays(today, -10), endsOn: addDays(today, 50) };
+		await tx.insert(subscriptions).values({
+			id: newId(),
+			organizationId: o.id,
+			planId: o.plan,
+			...period,
+			amount,
+			paymentStatus: 'paid',
+			paymentReference: `DEMO-${o.plan.toUpperCase()}`,
+			paidOn: period.startsOn,
+			recordedBy,
+			paymentRecordedBy: recordedBy
+		});
+	});
 }

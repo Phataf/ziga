@@ -3,6 +3,7 @@ import { createBullBoard } from '@bull-board/api';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { ExpressAdapter } from '@bull-board/express';
 import { getQueueToken } from '@nestjs/bullmq';
+import type { Type } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import type { Queue } from 'bullmq';
@@ -16,8 +17,13 @@ import { RequestContext } from './common/request-context.js';
 export const JOBS_DASHBOARD_PATH = '/admin/queues';
 
 /** Construit l'application HTTP (utilisé par main.ts et par les tests d'intégration). */
-export async function createApp(config: AppConfig, options: { logStream?: DestinationStream } = {}): Promise<NestExpressApplication> {
-	const app = await NestFactory.create<NestExpressApplication>(AppModule.forRoot(config, options.logStream), { bufferLogs: true });
+export async function createApp(
+	config: AppConfig,
+	options: { logStream?: DestinationStream; extraModules?: Type[] } = {}
+): Promise<NestExpressApplication> {
+	const app = await NestFactory.create<NestExpressApplication>(AppModule.forRoot(config, options.logStream, options.extraModules), {
+		bufferLogs: true
+	});
 	app.useLogger(app.get(Logger));
 	app.disable('x-powered-by');
 	app.set('trust proxy', 1);

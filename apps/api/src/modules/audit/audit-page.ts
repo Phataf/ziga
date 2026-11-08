@@ -38,7 +38,9 @@ export async function auditPage(
 			objectId: a.objectId,
 			before: a.before,
 			after: a.after,
-			origin: a.origin
+			origin: a.origin,
+			organizationId: a.organizationId,
+			subjectUserId: a.subjectUserId
 		})),
 		next: rows.length > limit ? (page.at(-1)?.a.id ?? null) : null
 	};

@@ -41,6 +41,46 @@ export default ts.config(
 		rules: { '@typescript-eslint/consistent-type-imports': 'off' }
 	},
 	{
+		// Lot 04 (CLAUDE.md §8) : aucune lecture des tables d'interrupteurs hors du module features, et la connexion
+		// app_admin (back-office) n'est utilisée que par le module admin. Vérifié aussi par test/architecture.test.ts.
+		files: ['apps/api/src/**/*.ts'],
+		ignores: ['apps/api/src/modules/features/**'],
+		rules: {
+			'no-restricted-imports': [
+				'error',
+				{
+					patterns: [
+						{
+							group: ['**/db/schema/features', '**/db/schema/features.js', '**/schema/features.js'],
+							message: 'Tables d’interrupteurs : passer par FeaturesService (module features).'
+						},
+						{
+							group: ['**/admin/admin-database.service', '**/admin/admin-database.service.js', './admin-database.service.js'],
+							message: 'Connexion app_admin réservée au module admin.'
+						}
+					]
+				}
+			]
+		}
+	},
+	{
+		// Le module admin, lui, détient sa connexion ; il passe toujours par le module features pour les interrupteurs.
+		files: ['apps/api/src/modules/admin/**/*.ts'],
+		rules: {
+			'no-restricted-imports': [
+				'error',
+				{
+					patterns: [
+						{
+							group: ['**/db/schema/features', '**/db/schema/features.js'],
+							message: 'Tables d’interrupteurs : passer par FeaturesService (module features).'
+						}
+					]
+				}
+			]
+		}
+	},
+	{
 		files: ['scripts/**', '**/scripts/**', '**/*.config.{js,ts}', '**/test/**', '**/e2e/**'],
 		rules: { 'no-console': 'off' }
 	}

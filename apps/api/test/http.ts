@@ -1,5 +1,6 @@
 /** Outils des tests d'intégration : application démarrée sur un port libre, client HTTP avec cookies. */
 import { Writable } from 'node:stream';
+import type { Type } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { createApp } from '../src/app.factory.js';
 import { parseConfig } from '../src/config/env.js';
@@ -16,7 +17,7 @@ export interface TestApp {
 	close(): Promise<void>;
 }
 
-export async function startApp(overrides: Record<string, string> = {}): Promise<TestApp> {
+export async function startApp(overrides: Record<string, string> = {}, extraModules: Type[] = []): Promise<TestApp> {
 	const logs: string[] = [];
 	const logStream = new Writable({
 		write(chunk, _enc, cb) {
@@ -24,7 +25,7 @@ export async function startApp(overrides: Record<string, string> = {}): Promise<
 			cb();
 		}
 	});
-	const app = await createApp(parseConfig({ ...process.env, LOG_LEVEL: 'trace', ...overrides }), { logStream });
+	const app = await createApp(parseConfig({ ...process.env, LOG_LEVEL: 'trace', ...overrides }), { logStream, extraModules });
 	await app.listen(0, '127.0.0.1');
 	return { app, url: await app.getUrl(), sms: app.get<MemorySmsSender>(SMS_SENDER), logs, close: () => app.close() };
 }

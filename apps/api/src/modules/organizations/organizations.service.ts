@@ -13,6 +13,7 @@ import {
 	type MemberView,
 	type MembershipView,
 	type OrganizationView,
+	type PaymentMethod,
 	type Representative,
 	type UpdateOrganizationInput
 } from '@ziga/shared/organizations';
@@ -30,6 +31,8 @@ import { users } from '../../db/schema/identity.js';
 import { organizationInvitations, organizationLogos, organizationMembers, organizations } from '../../db/schema/organizations.js';
 import { auditPage } from '../audit/audit-page.js';
 import { AuditService, diff } from '../audit/audit.service.js';
+import { FeaturesService } from '../features/features.service.js';
+import { QuotasService } from '../features/quotas.service.js';
 import { sha256 } from '../identity/secrets.js';
 
 type OrganizationRow = typeof organizations.$inferSelect;
@@ -90,7 +93,9 @@ export class OrganizationsService {
 	constructor(
 		private readonly database: DatabaseService,
 		private readonly audit: AuditService,
-		@Inject(APP_CONFIG) private readonly config: AppConfig
+		@Inject(APP_CONFIG) private readonly config: AppConfig,
+		private readonly features: FeaturesService,
+		private readonly quotas: QuotasService
 	) {}
 
 	private actor() {
@@ -216,6 +221,8 @@ export class OrganizationsService {
 			...settingsOf(org),
 			verificationStatus: org.verificationStatus,
 			logo: this.logoView(shown ?? null),
+			planId: org.planId,
+			acceptedPaymentMethods: org.acceptedPaymentMethods,
 			createdAt: org.createdAt.toISOString(),
 			updatedAt: org.updatedAt.toISOString()
 		};
@@ -402,6 +409,16 @@ export class OrganizationsService {
 			.where(and(eq(users.phone, phone), eq(organizationMembers.status, 'active')))
 			.limit(1);
 		if (already) throw new AppError('ALREADY_MEMBER', 'Cette personne est déjà membre de l’organisation.', 409);
+		// Agent de terrain : fonctionnalité liée aux formules (Essentiel, Pro), vérifiée côté serveur.
+		if (role === 'field_agent') {
+			await this.features.assertEnabled(
+				'field_agents',
+				RequestContext.get()!.userId!,
+				await this.features.organizationContext(scope.organizationId, scope.planId, tx)
+			);
+		}
+		// Quota d'utilisateurs de la formule : membres actifs et invitations en attente (sauf celle de ce numéro, remplacée).
+		await this.quotas.assert(scope.organizationId, scope.planId, 'users', await this.seatsUsed(tx, phone));
 		const actor = this.actor();
 		const now = new Date();
 		// Une seule invitation en cours par numéro : la précédente est révoquée.
@@ -441,6 +458,46 @@ export class OrganizationsService {
 			invitation: { id, phone, role, invitedBy: inviter?.name ?? '', expiresAt: expiresAt.toISOString(), createdAt: now.toISOString() },
 			token
 		};
+	}
+
+	/** Places occupées : membres actifs et invitations en attente encore valables (hors `exceptPhone`). */
+	private async seatsUsed(tx: Tx, exceptPhone?: string): Promise<number> {
+		const [members] = await tx
+			.select({ n: sql<number>`count(*)::int` })
+			.from(organizationMembers)
+			.where(eq(organizationMembers.status, 'active'));
+		const [pending] = await tx
+			.select({ n: sql<number>`count(*)::int` })
+			.from(organizationInvitations)
+			.where(
+				and(
+					isNull(organizationInvitations.acceptedAt),
+					isNull(organizationInvitations.revokedAt),
+					gt(organizationInvitations.expiresAt, new Date()),
+					exceptPhone ? sql`${organizationInvitations.phone} <> ${exceptPhone}` : undefined
+				)
+			);
+		return (members?.n ?? 0) + (pending?.n ?? 0);
+	}
+
+	/** Moyens de paiement acceptés (D18) : réglage de l'organisation, au moins un actif (contrainte en base aussi). */
+	async setPaymentMethods(methods: PaymentMethod[]): Promise<OrganizationView> {
+		const tx = RequestContext.tx();
+		const scope = RequestContext.organization();
+		const org = await this.row(tx);
+		if (JSON.stringify(org.acceptedPaymentMethods) !== JSON.stringify(methods)) {
+			await tx.update(organizations).set({ acceptedPaymentMethods: methods, updatedAt: new Date() }).where(eq(organizations.id, org.id));
+			await this.audit.record(tx, {
+				actor: this.actor(),
+				organizationId: scope.organizationId,
+				action: 'organization.payment_methods',
+				objectType: 'organization',
+				objectId: org.id,
+				before: { acceptedPaymentMethods: org.acceptedPaymentMethods },
+				after: { acceptedPaymentMethods: methods }
+			});
+		}
+		return this.view(tx);
 	}
 
 	async revokeInvitation(invitationId: string): Promise<void> {
@@ -557,6 +614,112 @@ export class OrganizationsService {
 			});
 			return { organizationId, type: o.type, name: o.tradeName ?? o.legalName, role: i.role, verificationStatus: o.verificationStatus };
 		});
+	}
+
+	// ------------------------------------------------------------ back-office (transaction app_admin fournie par le module admin)
+
+	/** Annuaire des organisations : compte seulement (fonction platform_organization_directory). */
+	async directory(tx: Tx) {
+		const result = await tx.execute(sql`select * from platform_organization_directory() order by created_at desc`);
+		return (result.rows as Record<string, unknown>[]).map((r) => ({
+			id: r.id as string,
+			type: r.type as OrganizationType,
+			legalName: r.legal_name as string,
+			name: ((r.trade_name as string | null) ?? r.legal_name) as string,
+			phone: r.phone as string,
+			commune: r.commune as string,
+			verificationStatus: r.verification_status as 'pending' | 'verified' | 'suspended',
+			suspendedReason: (r.suspended_reason as string | null) ?? null,
+			planId: r.plan_id as string,
+			members: Number(r.members),
+			createdAt: new Date(r.created_at as string).toISOString()
+		}));
+	}
+
+	async directoryMembers(tx: Tx, organizationId: string) {
+		const result = await tx.execute(sql`select * from platform_organization_members(${organizationId}::uuid)`);
+		return (result.rows as Record<string, unknown>[]).map((r) => ({
+			userId: r.user_id as string,
+			name: r.name as string,
+			phone: r.phone as string,
+			role: r.role as OrganizationRole,
+			joinedAt: new Date(r.joined_at as string).toISOString()
+		}));
+	}
+
+	async membershipsOfPerson(tx: Tx, userId: string) {
+		const result = await tx.execute(sql`select * from platform_user_memberships(${userId}::uuid)`);
+		return (result.rows as Record<string, unknown>[]).map((r) => ({
+			organizationId: r.organization_id as string,
+			name: r.name as string,
+			type: r.type as OrganizationType,
+			role: r.role as OrganizationRole,
+			planId: r.plan_id as string
+		}));
+	}
+
+	/** Validation, suspension, réintégration (transaction app_admin dans le contexte de l'organisation). */
+	async setVerification(
+		tx: Tx,
+		actor: { type: 'user'; userId: string; role: string },
+		organizationId: string,
+		status: 'verified' | 'suspended' | 'reinstated',
+		reason: string | null
+	) {
+		const [org] = await tx.select().from(organizations).where(eq(organizations.id, organizationId)).limit(1).for('update');
+		if (!org) throw new AppError('NOT_FOUND', 'Organisation introuvable.', 404);
+		const now = new Date();
+		let values: Partial<typeof organizations.$inferInsert>;
+		if (status === 'verified') {
+			if (org.verificationStatus === 'suspended')
+				throw new AppError('ORGANIZATION_SUSPENDED', 'Réintégrez d’abord l’organisation suspendue.', 409);
+			if (org.type === 'agency' && (!org.rccm || !org.ifu)) {
+				throw new AppError(
+					'VERIFICATION_INCOMPLETE',
+					'Une agence n’est vérifiée qu’avec son RCCM et son IFU, à renseigner dans ses paramètres.',
+					409
+				);
+			}
+			values = { verificationStatus: 'verified', verifiedAt: now };
+		} else if (status === 'suspended') {
+			values = { verificationStatus: 'suspended', suspendedAt: now, suspendedReason: reason };
+		} else {
+			if (org.verificationStatus !== 'suspended') throw new AppError('NOT_SUSPENDED', 'Cette organisation n’est pas suspendue.', 409);
+			values = { verificationStatus: org.verifiedAt ? 'verified' : 'pending', suspendedAt: null, suspendedReason: null };
+		}
+		await tx
+			.update(organizations)
+			.set({ ...values, updatedAt: now })
+			.where(eq(organizations.id, organizationId));
+		await this.audit.record(tx, {
+			actor,
+			organizationId,
+			action: status === 'verified' ? 'organization.verify' : status === 'suspended' ? 'organization.suspend' : 'organization.reinstate',
+			objectType: 'organization',
+			objectId: organizationId,
+			before: { verificationStatus: org.verificationStatus },
+			after: { verificationStatus: values.verificationStatus, ...(reason ? { reason } : {}) },
+			origin: 'admin'
+		});
+	}
+
+	/** Changement de formule (rôle sales), journalisé chez l'organisation. */
+	async setPlan(tx: Tx, actor: { type: 'user'; userId: string; role: string }, organizationId: string, planId: string, reason: string) {
+		const [org] = await tx.select().from(organizations).where(eq(organizations.id, organizationId)).limit(1).for('update');
+		if (!org) throw new AppError('NOT_FOUND', 'Organisation introuvable.', 404);
+		if (org.planId === planId) return false;
+		await tx.update(organizations).set({ planId, updatedAt: new Date() }).where(eq(organizations.id, organizationId));
+		await this.audit.record(tx, {
+			actor,
+			organizationId,
+			action: 'organization.change_plan',
+			objectType: 'organization',
+			objectId: organizationId,
+			before: { planId: org.planId },
+			after: { planId, reason },
+			origin: 'admin'
+		});
+		return true;
 	}
 
 	// ------------------------------------------------------------ journal

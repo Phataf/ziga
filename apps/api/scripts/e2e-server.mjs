@@ -93,7 +93,9 @@ await createDatabase(pool)
 	});
 // Démonstration du lot 03 : agences A et B (un membre par rôle) et un bailleur particulier.
 const { seedDemo } = await import(join(api, 'dist/db/seed.js'));
-await seedDemo(createDatabase(pool), base.E2E_DEMO_PASSWORD || 'demo-de-test-e2e');
+const adminPool = createPool({ url: env.DATABASE_ADMIN_URL, max: 1, connectionTimeoutMs: 5_000, applicationName: 'ziga-e2e' });
+await seedDemo(createDatabase(pool), base.E2E_DEMO_PASSWORD || 'demo-de-test-e2e', createDatabase(adminPool));
+await adminPool.end();
 await pool.end();
 
 // API HTTP et worker (logos traités par sharp) : deux processus, comme en production.

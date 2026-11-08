@@ -14,7 +14,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { AUTH_MESSAGES, type MeResponse, type OtpPurpose, type PlatformRole, type TokenResponse } from '@ziga/shared/auth';
 import { newId } from '@ziga/shared/ids';
 import { formatPhone } from '@ziga/shared/phone';
-import { and, desc, eq, gt, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
 import { PinoLogger } from 'nestjs-pino';
 import { AppError } from '../../common/app-error.js';
 import { APP_CONFIG } from '../../config/config.module.js';
@@ -557,6 +557,57 @@ export class AuthService {
 			});
 		await this.sms.send(user.phone, AUTH_MESSAGES.phoneChangedSms(formatPhone(input.phone)));
 		return toMe(updated);
+	}
+
+	// ---------------------------------------------------------------- back-office (transaction app_admin fournie)
+
+	/** Recherche par nom ou par numéro : colonnes du compte seulement (jamais le mot de passe). */
+	async searchPeople(tx: Tx, q: string) {
+		const term = q.trim();
+		const digits = term.replace(/\D/g, '');
+		const columns = {
+			id: users.id,
+			name: users.name,
+			phone: users.phone,
+			status: users.status,
+			platformRole: users.platformRole,
+			createdAt: users.createdAt
+		};
+		const rows = await tx
+			.select(columns)
+			.from(users)
+			.where(
+				term
+					? sql`${users.name} ilike ${'%' + term + '%'} or (${digits.length >= 4} and ${users.phone} like ${'%' + digits + '%'})`
+					: undefined
+			)
+			.orderBy(desc(users.createdAt))
+			.limit(50);
+		return rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() }));
+	}
+
+	async person(tx: Tx, id: string) {
+		const [row] = await tx
+			.select({
+				id: users.id,
+				name: users.name,
+				phone: users.phone,
+				status: users.status,
+				platformRole: users.platformRole,
+				createdAt: users.createdAt
+			})
+			.from(users)
+			.where(eq(users.id, id))
+			.limit(1);
+		if (!row) throw new AppError('NOT_FOUND', 'Personne introuvable.', 404);
+		return { ...row, createdAt: row.createdAt.toISOString() };
+	}
+
+	async namesOf(tx: Tx, ids: string[]): Promise<Map<string, string>> {
+		const unique = [...new Set(ids.filter(Boolean))];
+		if (!unique.length) return new Map();
+		const rows = await tx.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, unique));
+		return new Map(rows.map((r) => [r.id, r.name]));
 	}
 
 	// ---------------------------------------------------------------- personne et appareils

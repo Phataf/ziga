@@ -63,8 +63,19 @@ export const envSchema = z
 		SMS_DRIVER: z.enum(['console', 'file', 'memory']).default('console'),
 		SMS_FILE: z.string().min(1).optional(),
 
-		/** Rôle `app_api`, sans BYPASSRLS : seule connexion utilisée par l'API et le worker. */
+		/** Rôle `app_api`, sans BYPASSRLS : connexion de toutes les routes, sauf celles du back-office. */
 		DATABASE_URL: postgresUrl,
+		/**
+		 * Rôle `app_admin`, sans BYPASSRLS : connexion distincte, réservée aux routes /admin (module admin).
+		 * Facultative en développement (back-office indisponible sans elle), obligatoire en production.
+		 */
+		DATABASE_ADMIN_URL: optional(postgresUrl),
+		DATABASE_ADMIN_POOL_MAX: z.coerce.number().int().min(1).max(20).default(3),
+		/** Abonnement échu (lot 04) : rappel N jours avant la fin, puis délai de grâce avant le blocage des créations. */
+		SUBSCRIPTION_REMINDER_DAYS: z.coerce.number().int().min(0).max(60).default(7),
+		SUBSCRIPTION_GRACE_DAYS: z.coerce.number().int().min(0).max(90).default(15),
+		/** Durée de la copie locale des interrupteurs ; la propagation reste sous 30 secondes. */
+		FEATURES_CACHE_TTL_SECONDS: z.coerce.number().int().min(1).max(25).default(15),
 		DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(200),
 		DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(100).max(600_000),
 		DATABASE_CONNECTION_TIMEOUT_MS: z.coerce.number().int().min(100).default(5_000),
@@ -111,6 +122,8 @@ export const envSchema = z
 					message: 'obligatoire en production (pnpm --filter @ziga/api auth:keygen)'
 				});
 			if (!env.AUTH_OTP_SECRET) ctx.addIssue({ code: 'custom', path: ['AUTH_OTP_SECRET'], message: 'obligatoire en production' });
+			if (!env.DATABASE_ADMIN_URL)
+				ctx.addIssue({ code: 'custom', path: ['DATABASE_ADMIN_URL'], message: 'obligatoire en production (back-office)' });
 			// Pas encore de prestataire SMS réel (question ouverte) : la production ne démarre pas avec un faux SMS.
 			ctx.addIssue({ code: 'custom', path: ['SMS_DRIVER'], message: `« ${env.SMS_DRIVER} » est réservé au développement et aux tests` });
 		}

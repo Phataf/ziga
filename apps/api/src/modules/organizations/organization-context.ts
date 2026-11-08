@@ -42,6 +42,46 @@ export function assertCan(role: OrganizationRole, action: Action): void {
 	if (!can(role, action)) throw new AppError('FORBIDDEN_ACTION', 'Votre rôle ne permet pas cette action.', 403, { action });
 }
 
+/**
+ * Appartenance active de la personne à l'organisation, avec la formule et le statut de celle-ci, lue en contexte
+ * personnel (RLS own_memberships et own_organizations). Service public du module organizations.
+ */
+export async function loadMembershipScope(
+	database: DatabaseService,
+	userId: string,
+	organizationId: string
+): Promise<OrganizationScope | null> {
+	const [membership] = await database.withUser(userId, (tx) =>
+		tx
+			.select({
+				memberId: organizationMembers.id,
+				role: organizationMembers.role,
+				type: organizations.type,
+				planId: organizations.planId,
+				verificationStatus: organizations.verificationStatus
+			})
+			.from(organizationMembers)
+			.innerJoin(organizations, eq(organizations.id, organizationMembers.organizationId))
+			.where(
+				and(
+					eq(organizationMembers.organizationId, organizationId),
+					eq(organizationMembers.userId, userId),
+					eq(organizationMembers.status, 'active')
+				)
+			)
+			.limit(1)
+	);
+	if (!membership) return null;
+	return {
+		organizationId,
+		organizationType: membership.type as OrganizationType,
+		role: membership.role as OrganizationRole,
+		memberId: membership.memberId,
+		planId: membership.planId,
+		verificationStatus: membership.verificationStatus
+	};
+}
+
 @Injectable()
 export class OrganizationGuard implements CanActivate {
 	constructor(
@@ -58,28 +98,17 @@ export class OrganizationGuard implements CanActivate {
 		if (!organizationId || !isUuid(organizationId)) {
 			throw new AppError('ORGANIZATION_REQUIRED', 'Choisissez d’abord une organisation.', 400);
 		}
-		// Contexte personnel : la personne ne lit que ses propres appartenances (RLS own_memberships).
-		const [membership] = await this.database.withUser(userId, (tx) =>
-			tx
-				.select({ memberId: organizationMembers.id, role: organizationMembers.role, type: organizations.type })
-				.from(organizationMembers)
-				.innerJoin(organizations, eq(organizations.id, organizationMembers.organizationId))
-				.where(
-					and(
-						eq(organizationMembers.organizationId, organizationId),
-						eq(organizationMembers.userId, userId),
-						eq(organizationMembers.status, 'active')
-					)
-				)
-				.limit(1)
-		);
-		if (!membership) throw new AppError('NOT_A_MEMBER', 'Vous n’êtes pas membre de cette organisation.', 403);
-		request.organization = {
-			organizationId,
-			organizationType: membership.type as OrganizationType,
-			role: membership.role as OrganizationRole,
-			memberId: membership.memberId
-		};
+		const scope = await loadMembershipScope(this.database, userId, organizationId);
+		if (!scope) throw new AppError('NOT_A_MEMBER', 'Vous n’êtes pas membre de cette organisation.', 403);
+		// Organisation suspendue : consultation et export seulement, ni création ni modification.
+		if (scope.verificationStatus === 'suspended' && request.method !== 'GET') {
+			throw new AppError(
+				'ORGANIZATION_SUSPENDED',
+				'Organisation suspendue : la consultation et l’export restent possibles, pas les modifications.',
+				403
+			);
+		}
+		request.organization = scope;
 		const action = this.reflector.getAllAndOverride<Action | undefined>(CAN, [context.getHandler(), context.getClass()]);
 		if (action) assertCan(request.organization.role, action);
 		return true;

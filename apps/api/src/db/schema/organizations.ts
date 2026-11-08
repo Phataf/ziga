@@ -29,7 +29,14 @@ export const organizations = pgTable('organizations', {
 	repIdIssuedOn: date('rep_id_issued_on', { mode: 'string' }),
 	repIdIssuedBy: text('rep_id_issued_by'),
 	verificationStatus: text('verification_status', { enum: ['pending', 'verified', 'suspended'] }).notNull(),
-	planId: uuid('plan_id'),
+	planId: text('plan_id').notNull().default('discovery'),
+	acceptedPaymentMethods: text('accepted_payment_methods', { enum: ['cash', 'mobile_money_manual', 'bank_transfer'] })
+		.array()
+		.notNull()
+		.default(['cash', 'mobile_money_manual', 'bank_transfer']),
+	verifiedAt: tstz('verified_at'),
+	suspendedAt: tstz('suspended_at'),
+	suspendedReason: text('suspended_reason'),
 	logoId: uuid('logo_id'),
 	createdBy: uuid('created_by').notNull(),
 	createdAt: tstz('created_at').notNull().defaultNow(),

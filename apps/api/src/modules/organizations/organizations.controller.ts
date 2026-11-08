@@ -9,11 +9,13 @@ import {
 	changeRoleSchema,
 	createOrganizationSchema,
 	inviteMemberSchema,
+	paymentMethodsSchema,
 	updateOrganizationSchema
 } from '@ziga/shared/organizations';
 import type { Request, Response } from 'express';
 import { AppError } from '../../common/app-error.js';
 import { STORAGE, type StorageAdapter } from '../../storage/storage.js';
+import { Creation } from '../features/feature.guards.js';
 import { Auth, Public } from '../identity/auth.guard.js';
 import { counterKey } from '../identity/secrets.js';
 import { ThrottleService } from '../identity/throttle.service.js';
@@ -100,6 +102,13 @@ export class OrganizationController {
 		return this.logos.upload(req.headers['content-type'], await readBody(req, LOGO_MAX_BYTES));
 	}
 
+	/** Moyens de paiement acceptés (D18) : un réglage, pas un interrupteur ; au moins un reste actif. */
+	@Put('payment-methods')
+	@Can('settings.update')
+	paymentMethods(@Body() body: unknown) {
+		return this.organizations.setPaymentMethods(paymentMethodsSchema.parse(body).methods);
+	}
+
 	@Get('members')
 	@Can('member.read')
 	members() {
@@ -127,6 +136,7 @@ export class OrganizationController {
 
 	@Post('invitations')
 	@Can('member.invite')
+	@Creation()
 	@HttpCode(201)
 	async invite(@Auth() claims: AccessClaims, @Body() body: unknown) {
 		const input = inviteMemberSchema.parse(body);
