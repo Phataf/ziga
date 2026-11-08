@@ -10,3 +10,11 @@ export interface ExampleJobResult {
 	length: number;
 	processedBy: number;
 }
+
+/** Logos des organisations (lot 03) : versions WebP (web) et PNG (PDF, pdf-lib) produites par sharp. */
+export const LOGO_QUEUE = 'organization-logos';
+
+export interface LogoJobData {
+	organizationId: string;
+	logoId: string;
+}

@@ -90,6 +90,9 @@ await createDatabase(pool)
 		status: 'active',
 		phoneVerifiedAt: new Date()
 	});
+// Démonstration du lot 03 : agences A et B (un membre par rôle) et un bailleur particulier.
+const { seedDemo } = await import(join(api, 'dist/db/seed.js'));
+await seedDemo(createDatabase(pool), base.E2E_DEMO_PASSWORD || 'demo-de-test-e2e');
 await pool.end();
 
 const child = spawn(process.execPath, [join(api, 'dist/main.js')], { env, stdio: 'inherit' });

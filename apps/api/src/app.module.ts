@@ -9,7 +9,9 @@ import type { AppConfig } from './config/env.js';
 import { DatabaseModule } from './db/database.module.js';
 import { HealthModule } from './health/health.module.js';
 import { JobsModule } from './jobs/jobs.module.js';
+import { AuditModule } from './modules/audit/audit.module.js';
 import { IdentityModule } from './modules/identity/identity.module.js';
+import { OrganizationsModule } from './modules/organizations/organizations.module.js';
 import { NotificationsModule } from './modules/notifications/notifications.module.js';
 import { RedisModule } from './redis/redis.module.js';
 import { StorageModule } from './storage/storage.module.js';
@@ -28,7 +30,9 @@ export class AppModule {
 				StorageModule,
 				JobsModule.register('producer'),
 				NotificationsModule,
+				AuditModule,
 				IdentityModule,
+				OrganizationsModule,
 				HealthModule
 			],
 			providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }]

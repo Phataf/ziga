@@ -61,7 +61,8 @@ export async function withUser<T>(db: Database, userId: string, options: Transac
 		throw new AppError('INVALID_USER', 'Personne invalide.', 400);
 	}
 	return withTransaction(db, options, async (tx) => {
-		await tx.execute(sql`select set_config('app.user_id', ${userId}, true)`);
+		// Contexte personnel : jamais d'organisation dans la même transaction (db/README.md).
+		await tx.execute(sql`select set_config('app.user_id', ${userId}, true), set_config('app.organization_id', '', true)`);
 		return fn(tx);
 	});
 }
@@ -80,7 +81,8 @@ export async function withOrganization<T>(
 		throw new AppError('INVALID_ORGANIZATION', 'Organisation invalide.', 400);
 	}
 	return withTransaction(db, options, async (tx) => {
-		await tx.execute(sql`select set_config('app.organization_id', ${organizationId}, true)`);
+		// Contexte d'organisation : jamais de personne dans la même transaction (db/README.md).
+		await tx.execute(sql`select set_config('app.organization_id', ${organizationId}, true), set_config('app.user_id', '', true)`);
 		return fn(tx);
 	});
 }

@@ -13,6 +13,7 @@ import { randomBytes } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { AUTH_MESSAGES, type MeResponse, type OtpPurpose, type PlatformRole, type TokenResponse } from '@ziga/shared/auth';
 import { newId } from '@ziga/shared/ids';
+import { formatPhone } from '@ziga/shared/phone';
 import { and, desc, eq, gt, isNull, sql } from 'drizzle-orm';
 import { PinoLogger } from 'nestjs-pino';
 import { AppError } from '../../common/app-error.js';
@@ -27,6 +28,7 @@ import { dummyPasswordHash, hashPassword, verifyPassword } from './passwords.js'
 import { counterKey, hashOtp, newOtpCode, newRefreshToken, refreshTokenUser, sameHash, sha256 } from './secrets.js';
 import { ThrottleService } from './throttle.service.js';
 import { TokenService } from './token.service.js';
+import { AuditService } from '../audit/audit.service.js';
 
 type User = typeof users.$inferSelect;
 
@@ -59,7 +61,8 @@ export class AuthService {
 		private readonly tokens: TokenService,
 		private readonly throttle: ThrottleService,
 		@Inject(SMS_SENDER) private readonly sms: SmsSender,
-		private readonly logger: PinoLogger
+		private readonly logger: PinoLogger,
+		private readonly audit: AuditService
 	) {
 		logger.setContext(AuthService.name);
 		// Sans secret configuré (développement, tests) : secret éphémère ; les codes en cours expirent au redémarrage.
@@ -72,6 +75,27 @@ export class AuthService {
 
 	private refreshTtlMs(): number {
 		return this.config.AUTH_REFRESH_TTL_DAYS * 24 * 60 * MINUTE;
+	}
+
+	// ---------------------------------------------------------------- journal
+
+	/** Événement de plateforme (sans organisation), dans la transaction personnelle de la personne concernée. */
+	private event(
+		tx: Tx,
+		user: { id: string; platformRole?: string | null },
+		action: string,
+		objectId: string | null,
+		data: { before?: unknown; after?: unknown; system?: boolean } = {}
+	): Promise<void> {
+		return this.audit.record(tx, {
+			actor: data.system ? { type: 'system' } : { type: 'user', userId: user.id, role: user.platformRole ?? null },
+			subjectUserId: user.id,
+			action,
+			objectType: objectId ? 'session' : 'user',
+			objectId: objectId ?? user.id,
+			before: data.before,
+			after: data.after
+		});
 	}
 
 	// ---------------------------------------------------------------- limites
@@ -105,7 +129,7 @@ export class AuthService {
 
 	// ---------------------------------------------------------------- codes SMS
 
-	private async issueOtp(phone: string, purpose: OtpPurpose): Promise<void> {
+	private async issueOtp(phone: string, purpose: OtpPurpose, userId?: string): Promise<void> {
 		const code = newOtpCode();
 		const now = new Date();
 		await this.db.transaction(async (tx) => {
@@ -118,6 +142,8 @@ export class AuthService {
 				id: newId(),
 				phone,
 				purpose,
+				// Changement de numéro : le code est lié à la personne qui l'a demandé.
+				userId: purpose === 'change_phone' ? userId : null,
 				codeHash: hashOtp(this.otpSecret, phone, code),
 				expiresAt: new Date(now.getTime() + this.config.OTP_TTL_MINUTES * MINUTE)
 			});
@@ -126,12 +152,19 @@ export class AuthService {
 	}
 
 	/** Vérifie et consomme un code : 5 essais au plus, 10 minutes, usage unique. */
-	private async consumeOtp(phone: string, purpose: OtpPurpose, code: string): Promise<boolean> {
+	private async consumeOtp(phone: string, purpose: OtpPurpose, code: string, userId?: string): Promise<boolean> {
 		return this.db.transaction(async (tx) => {
 			const [otp] = await tx
 				.select()
 				.from(otpCodes)
-				.where(and(eq(otpCodes.phone, phone), eq(otpCodes.purpose, purpose), isNull(otpCodes.consumedAt)))
+				.where(
+					and(
+						eq(otpCodes.phone, phone),
+						eq(otpCodes.purpose, purpose),
+						isNull(otpCodes.consumedAt),
+						purpose === 'change_phone' ? eq(otpCodes.userId, userId ?? '00000000-0000-0000-0000-000000000000') : undefined
+					)
+				)
 				.orderBy(desc(otpCodes.createdAt))
 				.limit(1)
 				.for('update');
@@ -161,19 +194,29 @@ export class AuthService {
 		return token;
 	}
 
-	/** Ouvre une session (un appareil) pour une personne active. */
-	private async openSession(user: User, client: ClientInfo): Promise<IssuedSession> {
+	/** Ouvre une session (un appareil) pour une personne active ; `before` s'exécute dans la même transaction. */
+	private async openSession(
+		user: User,
+		client: ClientInfo,
+		action: 'auth.login' | 'auth.account_created' | 'auth.password_reset',
+		before?: (tx: Tx) => Promise<User>
+	): Promise<IssuedSession> {
 		const sessionId = newId();
+		const device = deviceLabel(client.userAgent);
+		let current = user;
 		const refreshToken = await this.database.withUser(user.id, async (tx) => {
+			if (before) current = await before(tx);
 			await tx.insert(sessions).values({
 				id: sessionId,
 				userId: user.id,
-				deviceLabel: deviceLabel(client.userAgent),
+				deviceLabel: device,
 				expiresAt: new Date(Date.now() + this.refreshTtlMs())
 			});
-			return this.insertToken(tx, user.id, sessionId);
+			const token = await this.insertToken(tx, user.id, sessionId);
+			await this.event(tx, current, action, sessionId, { after: { device } });
+			return token;
 		});
-		return { body: await this.tokenBody(user, sessionId), refreshToken };
+		return { body: await this.tokenBody(current, sessionId), refreshToken };
 	}
 
 	private async tokenBody(user: User, sessionId: string): Promise<TokenResponse> {
@@ -181,14 +224,19 @@ export class AuthService {
 		return { accessToken, expiresIn: this.tokens.ttlSeconds, user: toMe(user) };
 	}
 
-	/** Révoque toutes les sessions encore ouvertes d'une personne. */
-	private async revokeAll(userId: string, reason: 'password_reset' | 'reuse_detected'): Promise<void> {
-		await this.database.withUser(userId, (tx) =>
-			tx
-				.update(sessions)
-				.set({ revokedAt: new Date(), revokedReason: reason })
-				.where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt)))
-		);
+	/** Révoque les sessions encore ouvertes d'une personne (sauf `keep`), dans la transaction donnée. */
+	async revokeAllIn(
+		tx: Tx,
+		userId: string,
+		reason: 'password_reset' | 'password_change' | 'reuse_detected',
+		keep?: string
+	): Promise<number> {
+		const revoked = await tx
+			.update(sessions)
+			.set({ revokedAt: new Date(), revokedReason: reason })
+			.where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt), keep ? sql`${sessions.id} <> ${keep}` : undefined))
+			.returning({ id: sessions.id });
+		return revoked.length;
 	}
 
 	// ---------------------------------------------------------------- inscription
@@ -227,12 +275,14 @@ export class AuthService {
 		const ok = await this.consumeOtp(input.phone, 'verify_phone', input.code);
 		if (!ok || !user || user.status !== 'pending') throw new AppError('INVALID_CODE', AUTH_MESSAGES.invalidCode, 400);
 		const now = new Date();
-		const [active] = await this.db
-			.update(users)
-			.set({ status: 'active', phoneVerifiedAt: now, updatedAt: now })
-			.where(eq(users.id, user.id))
-			.returning();
-		return this.openSession(active!, client);
+		return this.openSession(user, client, 'auth.account_created', async (tx) => {
+			const [active] = await tx
+				.update(users)
+				.set({ status: 'active', phoneVerifiedAt: now, updatedAt: now })
+				.where(eq(users.id, user.id))
+				.returning();
+			return active!;
+		});
 	}
 
 	// ---------------------------------------------------------------- connexion
@@ -264,7 +314,7 @@ export class AuthService {
 			);
 			throw new AppError('PHONE_NOT_VERIFIED', 'Vérifiez d’abord votre numéro avec le code reçu par SMS.', 403);
 		}
-		return this.openSession(user, client);
+		return this.openSession(user, client, 'auth.login');
 	}
 
 	// ---------------------------------------------------------------- rafraîchissement
@@ -310,7 +360,10 @@ export class AuthService {
 		if (outcome.kind === 'conflict') throw new AppError('REFRESH_CONFLICT', 'Session déjà renouvelée. Réessayez.', 409);
 		if (outcome.kind === 'reuse') {
 			this.logger.warn({ userId }, 'Jeton de rafraîchissement réutilisé : toutes les sessions sont révoquées');
-			await this.revokeAll(userId, 'reuse_detected');
+			await this.database.withUser(userId, async (tx) => {
+				const count = await this.revokeAllIn(tx, userId, 'reuse_detected');
+				await this.event(tx, { id: userId }, 'auth.refresh_reuse_detected', null, { system: true, after: { revokedSessions: count } });
+			});
 			throw invalid();
 		}
 		if (outcome.kind === 'invalid') throw invalid();
@@ -330,10 +383,12 @@ export class AuthService {
 				.where(eq(refreshTokens.tokenHash, sha256(token)))
 				.limit(1);
 			if (row) {
-				await tx
+				const revoked = await tx
 					.update(sessions)
 					.set({ revokedAt: new Date(), revokedReason: 'logout' })
-					.where(and(eq(sessions.id, row.sessionId), isNull(sessions.revokedAt)));
+					.where(and(eq(sessions.id, row.sessionId), isNull(sessions.revokedAt)))
+					.returning({ id: sessions.id });
+				if (revoked.length) await this.event(tx, { id: userId }, 'auth.logout', row.sessionId);
 			}
 		});
 	}
@@ -355,15 +410,115 @@ export class AuthService {
 		const ok = await this.consumeOtp(input.phone, 'reset_password', input.code);
 		if (!ok || !user || user.status !== 'active') throw new AppError('INVALID_CODE', AUTH_MESSAGES.invalidCode, 400);
 		const now = new Date();
-		const [updated] = await this.db
-			.update(users)
-			.set({ passwordHash: await hashPassword(input.password), passwordChangedAt: now, updatedAt: now })
-			.where(eq(users.id, user.id))
-			.returning();
-		await this.revokeAll(user.id, 'password_reset');
+		const passwordHash = await hashPassword(input.password);
 		// Le code SMS prouve la possession du numéro : les délais d'échec de connexion sont remis à zéro.
 		await this.throttle.clear(counterKey('fail-phone', input.phone));
-		return this.openSession(updated!, client);
+		// Nouveau mot de passe, révocation de toutes les sessions, nouvelle session et journal : une seule transaction.
+		return this.openSession(user, client, 'auth.password_reset', async (tx) => {
+			const [updated] = await tx
+				.update(users)
+				.set({ passwordHash, passwordChangedAt: now, updatedAt: now })
+				.where(eq(users.id, user.id))
+				.returning();
+			await this.revokeAllIn(tx, user.id, 'password_reset');
+			return updated!;
+		});
+	}
+
+	// ---------------------------------------------------------------- Mon compte (lot 03)
+
+	private async activeUser(userId: string): Promise<User> {
+		const [user] = await this.db.select().from(users).where(eq(users.id, userId)).limit(1);
+		if (!user || user.status !== 'active') throw new AppError('SESSION_INVALID', 'Session expirée. Reconnectez-vous.', 401);
+		return user;
+	}
+
+	/** Vérifie le mot de passe actuel, avec le même délai progressif qu'à la connexion. */
+	private async checkPassword(user: User, password: string, client: ClientInfo): Promise<void> {
+		const key = counterKey('fail-phone', user.phone);
+		await this.limitIp(client.ip);
+		const wait = await this.throttle.waitFor(key);
+		if (wait > 0)
+			throw new AppError('RETRY_LATER', AUTH_MESSAGES.retryLater(wait), 429, { retryAfter: wait }, { 'Retry-After': String(wait) });
+		if (!(await verifyPassword(user.passwordHash, password))) {
+			await this.throttle.recordFailure(key, 0, PHONE_FAILURE_WINDOW_MS);
+			throw new AppError('WRONG_PASSWORD', 'Mot de passe incorrect.', 403);
+		}
+		await this.throttle.clear(key);
+	}
+
+	async updateName(userId: string, name: string): Promise<MeResponse> {
+		const user = await this.activeUser(userId);
+		if (user.name === name) return toMe(user);
+		const updated = await this.database.withUser(userId, async (tx) => {
+			const [row] = await tx.update(users).set({ name, updatedAt: new Date() }).where(eq(users.id, userId)).returning();
+			await this.event(tx, user, 'auth.profile_update', null, { before: { name: user.name }, after: { name } });
+			return row!;
+		});
+		return toMe(updated);
+	}
+
+	/** Nouveau mot de passe : l'ancien est exigé ; les autres appareils sont déconnectés, celui-ci reste connecté. */
+	async changePassword(
+		userId: string,
+		sessionId: string,
+		input: { currentPassword: string; newPassword: string },
+		client: ClientInfo
+	): Promise<void> {
+		const user = await this.activeUser(userId);
+		await this.checkPassword(user, input.currentPassword, client);
+		const passwordHash = await hashPassword(input.newPassword);
+		await this.database.withUser(userId, async (tx) => {
+			const now = new Date();
+			await tx.update(users).set({ passwordHash, passwordChangedAt: now, updatedAt: now }).where(eq(users.id, userId));
+			const count = await this.revokeAllIn(tx, userId, 'password_change', sessionId);
+			await this.event(tx, user, 'auth.password_change', null, { after: { otherSessionsRevoked: count } });
+		});
+	}
+
+	/**
+	 * Changement de numéro, étape 1 : mot de passe exigé, code envoyé au nouveau numéro. Même réponse si le numéro
+	 * appartient déjà à un compte (son titulaire reçoit alors le SMS « Un compte Ziga existe déjà », sans code).
+	 */
+	async requestPhoneChange(userId: string, input: { phone: string; password: string }, client: ClientInfo): Promise<void> {
+		const user = await this.activeUser(userId);
+		await this.checkPassword(user, input.password, client);
+		if (input.phone === user.phone) throw new AppError('SAME_PHONE', 'C’est déjà le numéro de votre compte.', 400);
+		await this.limitSms(input.phone);
+		const owner = await this.userByPhone(input.phone);
+		if (owner) {
+			await this.sms.send(input.phone, AUTH_MESSAGES.accountExistsSms);
+			return;
+		}
+		await this.issueOtp(input.phone, 'change_phone', userId);
+	}
+
+	/** Étape 2 : le code reçu au nouveau numéro le confirme ; l'ancien numéro est prévenu par SMS. */
+	async confirmPhoneChange(userId: string, input: { phone: string; code: string }, client: ClientInfo): Promise<MeResponse> {
+		await this.limitIp(client.ip);
+		const user = await this.activeUser(userId);
+		if (!(await this.consumeOtp(input.phone, 'change_phone', input.code, userId))) {
+			throw new AppError('INVALID_CODE', AUTH_MESSAGES.invalidCode, 400);
+		}
+		const updated = await this.database
+			.withUser(userId, async (tx) => {
+				const now = new Date();
+				const [row] = await tx
+					.update(users)
+					.set({ phone: input.phone, phoneVerifiedAt: now, updatedAt: now })
+					.where(eq(users.id, userId))
+					.returning();
+				await this.event(tx, user, 'auth.phone_change', null, { before: { phone: user.phone }, after: { phone: input.phone } });
+				return row!;
+			})
+			.catch((error: unknown) => {
+				// Numéro pris entre-temps par une inscription : même réponse qu'un code invalide.
+				if ((error as { cause?: { code?: string } }).cause?.code === '23505')
+					throw new AppError('INVALID_CODE', AUTH_MESSAGES.invalidCode, 400);
+				throw error;
+			});
+		await this.sms.send(user.phone, AUTH_MESSAGES.phoneChangedSms(formatPhone(input.phone)));
+		return toMe(updated);
 	}
 
 	// ---------------------------------------------------------------- personne et appareils
@@ -393,13 +548,14 @@ export class AuthService {
 
 	/** Déconnecte un appareil. Celui d'une autre personne est invisible (RLS) : 404. */
 	async revokeSession(userId: string, sessionId: string): Promise<void> {
-		const revoked = await this.database.withUser(userId, (tx) =>
-			tx
+		await this.database.withUser(userId, async (tx) => {
+			const revoked = await tx
 				.update(sessions)
 				.set({ revokedAt: new Date(), revokedReason: 'user' })
 				.where(and(eq(sessions.id, sessionId), isNull(sessions.revokedAt)))
-				.returning({ id: sessions.id })
-		);
-		if (!revoked.length) throw new AppError('NOT_FOUND', 'Appareil introuvable.', 404);
+				.returning({ id: sessions.id, deviceLabel: sessions.deviceLabel });
+			if (!revoked.length) throw new AppError('NOT_FOUND', 'Appareil introuvable.', 404);
+			await this.event(tx, { id: userId }, 'auth.session_revoked', sessionId, { after: { device: revoked[0]!.deviceLabel } });
+		});
 	}
 }

@@ -11,6 +11,6 @@ import { TokenService } from './token.service.js';
 @Module({
 	controllers: [AuthController, MeController],
 	providers: [AuthService, TokenService, ThrottleService, { provide: APP_GUARD, useClass: AuthGuard }],
-	exports: [AuthService, TokenService]
+	exports: [AuthService, TokenService, ThrottleService]
 })
 export class IdentityModule {}

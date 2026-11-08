@@ -5,6 +5,7 @@ import { ConfigModule } from './config/config.module.js';
 import type { AppConfig } from './config/env.js';
 import { DatabaseModule } from './db/database.module.js';
 import { JobsModule } from './jobs/jobs.module.js';
+import { AuditModule } from './modules/audit/audit.module.js';
 import { RedisModule } from './redis/redis.module.js';
 import { StorageModule } from './storage/storage.module.js';
 
@@ -20,6 +21,7 @@ export class WorkerModule {
 				DatabaseModule,
 				RedisModule,
 				StorageModule,
+				AuditModule,
 				JobsModule.register('worker')
 			]
 		};

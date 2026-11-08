@@ -3,3 +3,4 @@
  * dans la même migration (CLAUDE.md §6) et un test d'accès croisé entre organisations (règle 1).
  */
 export * from './identity.js';
+export * from './organizations.js';

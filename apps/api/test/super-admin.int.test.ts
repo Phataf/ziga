@@ -39,11 +39,13 @@ describe('super administrateur', () => {
 		const { client } = await signedUp(t);
 		expect((await client.call('GET', '/me')).body).toMatchObject({ platformRole: null });
 		for (const [method, path] of [
-			['PATCH', '/me'],
 			['POST', '/admin/users'],
 			['PUT', '/me/role']
 		] as const) {
 			expect((await client.call(method, path, { platformRole: 'super_admin' })).status).toBe(404);
 		}
+		// « Mon compte » ne change que le nom : le rôle envoyé est ignoré.
+		const patched = await client.call('PATCH', '/me', { name: 'Nouveau Nom', platformRole: 'super_admin' });
+		expect(patched).toMatchObject({ status: 200, body: { name: 'Nouveau Nom', platformRole: null } });
 	});
 });

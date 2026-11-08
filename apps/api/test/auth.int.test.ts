@@ -377,12 +377,18 @@ describe('garde global', () => {
 			'POST /auth/refresh',
 			'POST /auth/logout',
 			'POST /auth/password/forgot',
-			'POST /auth/password/reset'
+			'POST /auth/password/reset',
+			// Lot 03 : aperçu d'une invitation (le secret du lien suffit) et logos publics (versions traitées).
+			'GET /invitations/:token',
+			'GET /logos/:organizationId/:logoId/:variant'
 		]);
+		const listed = new Set(routes.map((r) => `${r.method} ${r.path}`));
+		for (const p of publicRoutes) expect(listed.has(p), p).toBe(true);
 		const protectedRoutes = routes.filter((r) => !publicRoutes.has(`${r.method} ${r.path}`));
-		expect(protectedRoutes.map((r) => `${r.method} ${r.path}`).sort()).toEqual(['DELETE /sessions/:id', 'GET /me', 'GET /sessions']);
+		// Routes des lots 02 et 03, au moins : la liste grandit à chaque lot, chacune doit répondre 401 sans jeton.
+		expect(protectedRoutes.length).toBeGreaterThanOrEqual(20);
 		for (const r of protectedRoutes) {
-			const res = await fetch(`${t.url}${r.path.replace(':id', '01a1bc57-187b-7030-be02-8c1b98a5f924')}`, { method: r.method });
+			const res = await fetch(`${t.url}${r.path.replace(/:\w+/g, '01a1bc57-187b-7030-be02-8c1b98a5f924')}`, { method: r.method });
 			expect(res.status, `${r.method} ${r.path}`).toBe(401);
 		}
 	});

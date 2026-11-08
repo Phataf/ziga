@@ -28,7 +28,7 @@ export const sessions = pgTable('sessions', {
 	lastUsedAt: tstz('last_used_at').notNull().defaultNow(),
 	expiresAt: tstz('expires_at').notNull(),
 	revokedAt: tstz('revoked_at'),
-	revokedReason: text('revoked_reason', { enum: ['logout', 'user', 'password_reset', 'reuse_detected'] })
+	revokedReason: text('revoked_reason', { enum: ['logout', 'user', 'password_reset', 'password_change', 'reuse_detected'] })
 });
 
 export const refreshTokens = pgTable('refresh_tokens', {
@@ -43,7 +43,8 @@ export const refreshTokens = pgTable('refresh_tokens', {
 export const otpCodes = pgTable('otp_codes', {
 	id: uuid('id').primaryKey(),
 	phone: text('phone').notNull(),
-	purpose: text('purpose', { enum: ['verify_phone', 'reset_password'] }).notNull(),
+	purpose: text('purpose', { enum: ['verify_phone', 'reset_password', 'change_phone'] }).notNull(),
+	userId: uuid('user_id'),
 	codeHash: bytea('code_hash').notNull(),
 	expiresAt: tstz('expires_at').notNull(),
 	attempts: integer('attempts').notNull().default(0),

@@ -9,6 +9,7 @@ import type { Request, Response } from 'express';
 import { PinoLogger } from 'nestjs-pino';
 import { ZodError } from 'zod';
 import { AppError, type ErrorBody } from './app-error.js';
+import { fromDatabaseError } from './db-errors.js';
 
 const HTTP_CODES: Record<number, string> = {
 	400: 'BAD_REQUEST',
@@ -38,6 +39,8 @@ const HTTP_MESSAGES: Record<number, string> = {
 
 /** Convertit n'importe quelle erreur en statut HTTP et corps uniforme. */
 export function toErrorResponse(error: unknown): { status: number; body: ErrorBody } {
+	const fromDb = fromDatabaseError(error);
+	if (fromDb) error = fromDb;
 	if (error instanceof AppError) {
 		return {
 			status: error.status,
