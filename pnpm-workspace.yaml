@@ -6,3 +6,6 @@ onlyBuiltDependencies:
   - '@swc/core'
   - esbuild
   - msgpackr-extract
+# Avant chaque `pnpm <script>`, les dépendances sont réinstallées si le fichier de verrouillage a changé
+# (après un `git pull`, par exemple) : plus d'erreur « Cannot find module » sur une dépendance ajoutée.
+verifyDepsBeforeRun: install
