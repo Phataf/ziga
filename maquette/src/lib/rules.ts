@@ -3,6 +3,7 @@
  * Elles préfigurent ce qui vivra dans packages/shared.
  */
 import { daysBetween } from './format';
+import { dimensionsOf, technicalLabel } from './unit-status';
 import type { Allocation, Mandate, Payment, PaymentMethod, RentDue, Unit } from './types';
 
 export interface DueState extends RentDue {
@@ -68,13 +69,19 @@ export function isMandateActive(mandate: Mandate, today: string): boolean {
 	return mandate.startDate <= today && today <= mandate.endDate;
 }
 
-/** Enregistrer n'est jamais publier (CLAUDE.md §5.7) : renvoie les conditions non remplies. */
+/**
+ * Enregistrer n'est jamais publier (CLAUDE.md §5.7) : renvoie les conditions non remplies.
+ * L'unité doit être disponible (règle 13) : fiche active, libre ou en préavis, et prête.
+ */
 export function publicationBlockers(unit: Unit, mandate: Mandate, today: string): string[] {
 	const reasons: string[] = [];
-	if (unit.status === 'rented') reasons.push('L’unité est louée.');
-	else if (unit.status !== 'free') reasons.push('L’unité n’est pas libre.');
-	if (!isMandateActive(mandate, today)) reasons.push('Le mandat n’est pas actif.');
-	else if (!mandate.canPublish) reasons.push('Le mandat n’autorise pas la publication.');
+	const d = dimensionsOf(unit);
+	if (d.record !== 'active') reasons.push('La fiche de l’unité n’est pas active.');
+	if (d.occupancy === 'occupied') reasons.push('L’unité est louée.');
+	else if (d.occupancy === 'reserved') reasons.push('L’unité n’est pas libre.');
+	if (d.technical !== 'ready') reasons.push(`L’unité n’est pas prête (${technicalLabel[d.technical].toLowerCase()}).`);
+	if (!mandate.selfManaged && !isMandateActive(mandate, today)) reasons.push('Le mandat n’est pas actif.');
+	else if (!mandate.selfManaged && !mandate.canPublish) reasons.push('Le mandat n’autorise pas la publication.');
 	if (unit.photos < 3) reasons.push(`Il faut au moins 3 photos (${unit.photos} actuellement).`);
 	if (!(unit.rent > 0)) reasons.push('Le loyer n’est pas renseigné.');
 	return reasons;

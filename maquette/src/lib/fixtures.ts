@@ -8,12 +8,15 @@
  */
 import { isoDate } from './format';
 import { allocateOldestFirst, dueStates } from './rules';
+import { withUnitStatus } from './unit-status';
 import type {
 	Agency,
 	Dataset,
+	DepositMovement,
 	Expense,
 	Lease,
 	Mandate,
+	Notice,
 	Owner,
 	Payment,
 	PaymentMethod,
@@ -25,6 +28,7 @@ import type {
 
 export const agency: Agency = {
 	id: 'agency-demo',
+	kind: 'agency',
 	name: 'Immo Démo',
 	phone: '+22670123456',
 	address: 'Avenue Kwame Nkrumah, Ouagadougou'
@@ -54,7 +58,11 @@ export const properties: Property[] = [
 	{ id: 'p12', ownerId: 'o6', mandateId: 'm6', name: 'Villa Somgandé', kind: 'Villa', city: 'Ouagadougou', district: 'Somgandé', address: 'Secteur 23, rue 23.18' }
 ];
 
-type UnitSeed = Omit<Unit, 'visibility' | 'charges' | 'features' | 'description'> &
+/**
+ * Le statut indiqué dans chaque graine n'est qu'un rappel pour la lecture : l'occupation est
+ * recalculée à partir des baux par `withUnitStatus` (D14, règle 13).
+ */
+export type UnitSeed = Omit<Unit, 'visibility' | 'charges' | 'features' | 'description'> &
 	Partial<Pick<Unit, 'visibility' | 'charges' | 'features' | 'description'>>;
 
 const unitSeeds: UnitSeed[] = [
@@ -101,13 +109,17 @@ const unitSeeds: UnitSeed[] = [
 	}
 ];
 
-export const units: Unit[] = unitSeeds.map((u) => ({
-	charges: 0,
-	visibility: 'internal',
-	features: [],
-	description: '',
-	...u
-}));
+export function unitsFrom(seeds: UnitSeed[]): Unit[] {
+	return seeds.map((u) => ({
+		charges: 0,
+		visibility: 'internal',
+		features: [],
+		description: '',
+		...u
+	}));
+}
+
+export const units: Unit[] = unitsFrom(unitSeeds);
 
 export const tenants: Tenant[] = [
 	{ id: 't1', civility: 'M.', name: 'Jean-Baptiste Ilboudo', phone: '+22670214455' },
@@ -132,7 +144,7 @@ export const tenants: Tenant[] = [
  * 1 = payé, 0 = impayé, 0.5 = moitié payée.
  * `dueToday` force l'échéance du mois en cours à tomber aujourd'hui (non payée).
  */
-interface LeaseSeed {
+export interface LeaseSeed {
 	id: string;
 	unitId: string;
 	tenantId: string;
@@ -140,6 +152,10 @@ interface LeaseSeed {
 	dueDay: number | 'today';
 	pattern: [number, number, number];
 	method: PaymentMethod;
+	/** Caution convenue, si elle n'est pas de deux mois de loyer. */
+	deposit?: number;
+	/** Préavis en cours, calculé à partir de la date du jour. */
+	notice?: (today: string) => Notice;
 }
 
 const leaseSeeds: LeaseSeed[] = [
@@ -156,31 +172,51 @@ const leaseSeeds: LeaseSeed[] = [
 	{ id: 'l11', unitId: 'u14', tenantId: 't11', startDate: '2024-09-01', dueDay: 1, pattern: [1, 1, 1], method: 'transfer' },
 	{ id: 'l12', unitId: 'u15', tenantId: 't12', startDate: '2025-05-01', dueDay: 1, pattern: [1, 1, 0], method: 'cash' },
 	{ id: 'l13', unitId: 'u16', tenantId: 't13', startDate: '2025-08-01', dueDay: 5, pattern: [1, 1, 1], method: 'orange_money' },
-	{ id: 'l14', unitId: 'u17', tenantId: 't14', startDate: '2024-12-01', dueDay: 15, pattern: [1, 1, 1], method: 'cash' },
+	{
+		// Bail en préavis (lot 00 ter) : caution de 100 000 FCFA, l'exemple du porteur pour la sortie.
+		id: 'l14', unitId: 'u17', tenantId: 't14', startDate: '2024-12-01', dueDay: 15, pattern: [1, 1, 1], method: 'cash',
+		deposit: 100000,
+		notice: (today) => {
+			const end = shiftMonth(today, 0);
+			const given = shiftMonth(today, -3);
+			return {
+				givenOn: dateIn(given.year, given.month0, 31),
+				by: 'tenant',
+				reason: 'Mutation professionnelle à Bobo-Dioulasso',
+				effectiveDate: dateIn(end.year, end.month0, 31)
+			};
+		}
+	},
 	{ id: 'l15', unitId: 'u18', tenantId: 't15', startDate: '2025-03-01', dueDay: 10, pattern: [1, 1, 1], method: 'cash' }
+];
+
+/** Baux signés qui commencent plus tard : ce sont eux qui rendent les unités u12 et u20 « réservées ». */
+export const upcomingTenants: Tenant[] = [
+	{ id: 'tu1', civility: 'M.', name: 'Moussa Kafando', phone: '+22670846612' },
+	{ id: 'tu2', civility: 'Mme', name: 'Odile Zida', phone: '+22676415590' }
 ];
 
 function daysInMonth(year: number, month0: number): number {
 	return new Date(year, month0 + 1, 0).getDate();
 }
 
-function shiftMonth(today: string, delta: number): { year: number; month0: number; period: string } {
+export function shiftMonth(today: string, delta: number): { year: number; month0: number; period: string } {
 	const d = new Date(+today.slice(0, 4), +today.slice(5, 7) - 1 + delta, 1);
 	const year = d.getFullYear();
 	const month0 = d.getMonth();
 	return { year, month0, period: `${year}-${String(month0 + 1).padStart(2, '0')}` };
 }
 
-function dateIn(year: number, month0: number, day: number): string {
+export function dateIn(year: number, month0: number, day: number): string {
 	return isoDate(new Date(year, month0, Math.min(day, daysInMonth(year, month0))));
 }
 
-function addDays(iso: string, days: number): string {
+export function addDays(iso: string, days: number): string {
 	const d = new Date(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10) + days);
 	return isoDate(d);
 }
 
-function addYears(iso: string, years: number): string {
+export function addYears(iso: string, years: number): string {
 	return `${+iso.slice(0, 4) + years}${iso.slice(4)}`;
 }
 
@@ -193,6 +229,86 @@ const REFERENCES: Record<PaymentMethod, string> = {
 
 export function receiptNumber(year: string, n: number): string {
 	return `R-${year}-${String(n).padStart(5, '0')}`;
+}
+
+export interface LedgerSeed {
+	leaseId: string;
+	pattern: [number, number, number];
+	method: PaymentMethod;
+	/** L'échéance du mois en cours tombe aujourd'hui et n'est pas encore payée. */
+	dueToday?: boolean;
+}
+
+/**
+ * Trois mois d'échéances (M-2, M-1, mois en cours) pour chaque bail, et les paiements historiques
+ * imputés sur l'échéance la plus ancienne, numérotés sans trou à partir de `firstReceipt`.
+ * Un bail terminé avant ces trois mois n'a pas d'échéance générée.
+ */
+export function buildLedger(today: string, leases: Lease[], seeds: LedgerSeed[], firstReceipt: number): { dues: RentDue[]; payments: Payment[] } {
+	const months = [-2, -1, 0].map((delta) => shiftMonth(today, delta));
+	const dues: RentDue[] = [];
+	for (const lease of leases) {
+		for (const m of months) {
+			const dueDate = dateIn(m.year, m.month0, lease.dueDay);
+			if (lease.endDate && lease.endDate < `${m.period}-01`) continue;
+			if (lease.startDate > dueDate) continue;
+			dues.push({
+				id: `${lease.id}-${m.period}`,
+				leaseId: lease.id,
+				period: m.period,
+				dueDate,
+				amount: lease.rent + lease.charges
+			});
+		}
+	}
+
+	const drafts: Omit<Payment, 'receiptNumber'>[] = [];
+	seeds.forEach((seed, li) => {
+		const lease = leases.find((l) => l.id === seed.leaseId)!;
+		const leaseDues = dues.filter((d) => d.leaseId === lease.id);
+		seed.pattern.forEach((ratio, mi) => {
+			if (ratio === 0) return;
+			const due = leaseDues[mi];
+			if (!due) return;
+			if (due.dueDate > today) return; // pas encore échue : pas encore payée
+			if (seed.dueToday && mi === 2) return; // échéance du jour, en attente
+			const amount = ratio === 1 ? due.amount : Math.round((due.amount * ratio) / 5000) * 5000;
+			let date = addDays(due.dueDate, (li + mi) % 3);
+			if (date > today) date = today;
+			const paidSoFar = drafts.filter((p) => p.leaseId === lease.id);
+			const states = dueStates(leaseDues, paidSoFar as Payment[]);
+			const { allocations } = allocateOldestFirst(amount, states);
+			const isMobile = seed.method === 'orange_money' || seed.method === 'moov_money';
+			drafts.push({
+				id: `pay-${lease.id}-${due.period}`,
+				leaseId: lease.id,
+				date,
+				amount,
+				method: seed.method,
+				reference: seed.method === 'cash' ? undefined : `${REFERENCES[seed.method]}${String(li + 1).padStart(2, '0')}${mi}.${due.period.slice(5)}`,
+				// Le Mobile Money du mois en cours n'est pas encore rapproché.
+				status: isMobile && mi === 2 ? 'to_reconcile' : 'validated',
+				allocations
+			});
+		});
+	});
+
+	drafts.sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+	const year = today.slice(0, 4);
+	const payments: Payment[] = drafts.map((p, i) => ({ ...p, receiptNumber: receiptNumber(year, firstReceipt + i) }));
+	return { dues, payments };
+}
+
+/** Versement de chaque caution, à l'entrée dans les lieux (ou à la signature, pour un bail qui commence plus tard). */
+export function depositReceipts(leases: Lease[], today?: string): DepositMovement[] {
+	return leases.map((l) => ({
+		id: `${l.id}-mvt-0`,
+		leaseId: l.id,
+		date: today && l.startDate > today ? addDays(today, -6) : l.startDate,
+		kind: 'received',
+		amount: l.deposit,
+		label: 'Versement de la caution à l’entrée'
+	}));
 }
 
 /** Construit le jeu de données de la démo pour une date donnée (« aaaa-mm-jj »). */
@@ -220,61 +336,30 @@ export function buildDataset(today: string): Dataset {
 			startDate: s.startDate,
 			rent: unit.rent,
 			charges: unit.charges,
-			deposit: unit.rent * 2,
-			dueDay: s.dueDay === 'today' ? todayDay : s.dueDay
+			deposit: s.deposit ?? unit.rent * 2,
+			dueDay: s.dueDay === 'today' ? todayDay : s.dueDay,
+			term: 'open',
+			depositHolder: 'agency',
+			...(s.notice ? { notice: s.notice(today) } : {})
 		};
 	});
 
-	const months = [-2, -1, 0].map((delta) => shiftMonth(today, delta));
-	const dues: RentDue[] = [];
-	for (const lease of leases) {
-		for (const m of months) {
-			dues.push({
-				id: `${lease.id}-${m.period}`,
-				leaseId: lease.id,
-				period: m.period,
-				dueDate: dateIn(m.year, m.month0, lease.dueDay),
-				amount: lease.rent + lease.charges
-			});
-		}
-	}
+	const next = shiftMonth(today, 1);
+	const later = shiftMonth(today, 2);
+	const upcomingLeases: Lease[] = [
+		{ id: 'lu1', unitId: 'u12', tenantId: 'tu1', startDate: `${next.period}-01`, rent: 35000, charges: 0, deposit: 70000, dueDay: 1, term: 'open', depositHolder: 'agency' },
+		{ id: 'lu2', unitId: 'u20', tenantId: 'tu2', startDate: `${later.period}-01`, rent: 200000, charges: 0, deposit: 400000, dueDay: 1, term: 'fixed', depositHolder: 'owner' }
+	];
 
-	// Paiements historiques, imputés sur l'échéance la plus ancienne.
-	const drafts: Omit<Payment, 'receiptNumber'>[] = [];
-	leaseSeeds.forEach((seed, li) => {
-		const lease = leases[li];
-		const leaseDues = dues.filter((d) => d.leaseId === lease.id);
-		seed.pattern.forEach((ratio, mi) => {
-			if (ratio === 0) return;
-			const due = leaseDues[mi];
-			if (due.dueDate > today) return; // pas encore échue : pas encore payée
-			if (seed.dueDay === 'today' && mi === 2) return; // échéance du jour, en attente
-			const amount = ratio === 1 ? due.amount : Math.round((due.amount * ratio) / 5000) * 5000;
-			let date = addDays(due.dueDate, (li + mi) % 3);
-			if (date > today) date = today;
-			const paidSoFar = drafts.filter((p) => p.leaseId === lease.id);
-			const states = dueStates(leaseDues, paidSoFar as Payment[]);
-			const { allocations } = allocateOldestFirst(amount, states);
-			const isMobile = seed.method === 'orange_money' || seed.method === 'moov_money';
-			drafts.push({
-				id: `pay-${lease.id}-${due.period}`,
-				leaseId: lease.id,
-				date,
-				amount,
-				method: seed.method,
-				reference: seed.method === 'cash' ? undefined : `${REFERENCES[seed.method]}${String(li + 1).padStart(2, '0')}${mi}.${due.period.slice(5)}`,
-				// Le Mobile Money du mois en cours n'est pas encore rapproché.
-				status: isMobile && mi === 2 ? 'to_reconcile' : 'validated',
-				allocations
-			});
-		});
-	});
-
-	drafts.sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
-	const year = today.slice(0, 4);
 	// Numérotation continue : les reçus d'avant le jeu de données vont jusqu'à 117.
-	const payments: Payment[] = drafts.map((p, i) => ({ ...p, receiptNumber: receiptNumber(year, 118 + i) }));
+	const { dues, payments } = buildLedger(
+		today,
+		leases,
+		leaseSeeds.map((s) => ({ leaseId: s.id, pattern: s.pattern, method: s.method, dueToday: s.dueDay === 'today' })),
+		118
+	);
 
+	const months = [-2, -1, 0].map((delta) => shiftMonth(today, delta));
 	const prev = months[1];
 	const cur = months[2];
 	const expenses: Expense[] = [
@@ -287,7 +372,7 @@ export function buildDataset(today: string): Dataset {
 		{ id: 'e7', propertyId: 'p5', date: dateIn(cur.year, cur.month0, Math.min(2, todayDay)), label: 'Débouchage canalisation', amount: 10000 }
 	];
 
-	return {
+	return withUnitStatus({
 		today,
 		agency,
 		owners,
@@ -298,6 +383,9 @@ export function buildDataset(today: string): Dataset {
 		leases,
 		dues,
 		payments,
-		expenses
-	};
+		expenses,
+		upcomingLeases,
+		upcomingTenants,
+		depositMovements: depositReceipts([...leases, ...upcomingLeases], today)
+	});
 }

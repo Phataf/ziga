@@ -3,6 +3,7 @@
  */
 import { daysBetween } from './format';
 import { commissionOf, dueStates, lateDays, statementTotals, type DueState, type StatementLine } from './rules';
+import { isLeaseCurrent, isLeaseEnded } from './unit-status';
 import type { Dataset, Expense, Lease, Owner, Payment, Property, Tenant, Unit } from './types';
 
 export interface LeaseView {
@@ -58,8 +59,9 @@ export function leaseView(data: Dataset, leaseId: string): LeaseView | undefined
 	};
 }
 
+/** Baux en cours (les baux terminés restent consultables, mais ne sont plus à encaisser ni à relancer). */
 export function allLeaseViews(data: Dataset): LeaseView[] {
-	return data.leases.map((l) => leaseView(data, l.id)!);
+	return data.leases.filter((l) => !isLeaseEnded(l, data.today)).map((l) => leaseView(data, l.id)!);
 }
 
 /** Locataires à encaisser : d'abord ceux qui doivent, du plus gros solde au plus petit. */
@@ -106,8 +108,9 @@ export function propertyUnits(data: Dataset, propertyId: string): Unit[] {
 	return data.units.filter((u) => u.propertyId === propertyId);
 }
 
+/** Bail en cours d'une unité (un seul par unité, règle 8). */
 export function activeLeaseOfUnit(data: Dataset, unitId: string): Lease | undefined {
-	return data.leases.find((l) => l.unitId === unitId);
+	return data.leases.find((l) => l.unitId === unitId && isLeaseCurrent(l, data.today));
 }
 
 export interface OwnerStatement {
@@ -189,6 +192,8 @@ export function scopeDataset(data: Dataset, scope: { propertyIds?: string[]; lea
 	const unitIds = new Set(units.map((u) => u.id));
 	if (!scope.leaseId) leases = data.leases.filter((l) => unitIds.has(l.unitId));
 	const leaseIds = new Set(leases.map((l) => l.id));
+	const upcomingLeases = scope.leaseId ? [] : (data.upcomingLeases ?? []).filter((l) => unitIds.has(l.unitId));
+	const upcomingTenantIds = new Set(upcomingLeases.map((l) => l.tenantId));
 	const ownerIds = new Set(properties.map((p) => p.ownerId));
 	const mandateIds = new Set(properties.map((p) => p.mandateId));
 	const tenantIds = new Set(leases.map((l) => l.tenantId));
@@ -202,6 +207,10 @@ export function scopeDataset(data: Dataset, scope: { propertyIds?: string[]; lea
 		leases,
 		dues: data.dues.filter((d) => leaseIds.has(d.leaseId)),
 		payments: data.payments.filter((p) => leaseIds.has(p.leaseId)),
-		expenses: scope.leaseId ? [] : data.expenses.filter((e) => propertyIds.has(e.propertyId))
+		expenses: scope.leaseId ? [] : data.expenses.filter((e) => propertyIds.has(e.propertyId)),
+		upcomingLeases,
+		upcomingTenants: (data.upcomingTenants ?? []).filter((t) => upcomingTenantIds.has(t.id)),
+		depositMovements: (data.depositMovements ?? []).filter((m) => leaseIds.has(m.leaseId)),
+		settlements: (data.settlements ?? []).filter((x) => leaseIds.has(x.leaseId))
 	};
 }
