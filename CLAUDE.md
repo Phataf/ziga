@@ -39,6 +39,7 @@ La maquette (`maquette/`) est la référence visuelle : couleurs, typographie, c
 | PDF | pdf-lib (reçus, relevés) |
 | Contrats | docxtemplater, cœur sous licence MIT (remplissage du modèle Word de l'organisation) ; Gotenberg, image `gotenberg/gotenberg:8-libreoffice`, licence MIT (conversion en PDF) — décision D23 |
 | Identifiants | UUIDv7 par la bibliothèque `uuid` |
+| Authentification | Mots de passe hachés en argon2id par `@node-rs/argon2` ; jetons d'accès JWT signés en EdDSA par `jose`, clés publiques publiées en JWKS avec identifiant de clé (`/.well-known/jwks.json`) |
 | Journalisation | pino (JSON) ; Sentry pour les erreurs |
 | Tests | Vitest (unitaires et intégration ; `unplugin-swc` et `@swc/core` pour les décorateurs de NestJS), Playwright (bout en bout), k6 (charge) |
 | CDN | Cloudflare devant la vitrine et les médias |
