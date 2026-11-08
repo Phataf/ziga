@@ -26,20 +26,21 @@ La maquette (`maquette/`) est la référence visuelle : couleurs, typographie, c
 | Couche | Choix |
 | --- | --- |
 | Monorepo | pnpm workspaces + Turborepo |
-| Langage | TypeScript partout, mode `strict` |
-| Interface (vitrine + application) | SvelteKit 2, Svelte 5 (runes), Tailwind CSS, composants shadcn-svelte, icônes Lucide (`@lucide/svelte`), `adapter-node` |
-| PWA | Service worker natif de SvelteKit (`src/service-worker.ts`), sans plugin (décision D09) |
+| Langage | TypeScript 6 partout, mode `strict` (D26) ; Node.js 22.17 au moins |
+| Interface (vitrine + application) | SvelteKit 3 (configuration dans `vite.config.ts`, alias `#lib`), Svelte 5 (runes), Tailwind CSS, composants shadcn-svelte, icônes Lucide (`@lucide/svelte`), `adapter-node` (D26) |
+| PWA | Service worker natif de SvelteKit (`src/service-worker/index.ts`), sans plugin (décisions D09, D26) |
 | Local-first | PowerSync (édition libre auto-hébergée) : SQLite côté client, PostgreSQL côté serveur |
-| API | NestJS (modules par domaine), validation Zod |
-| Base de données | PostgreSQL 16, `wal_level=logical`, Row Level Security |
+| API | NestJS sur Express (modules par domaine), validation Zod ; deux processus : HTTP (`main.ts`) et worker BullMQ (`worker.ts`), sans état |
+| Base de données | PostgreSQL 16, `wal_level=logical`, Row Level Security ; pilote `pg` |
 | ORM / migrations | Drizzle ORM + drizzle-kit (migrations SQL versionnées) |
-| Files de tâches | BullMQ + Redis |
-| Stockage de fichiers | Compatible S3 (MinIO en développement) |
+| Files de tâches | BullMQ + Redis (client `ioredis`) ; tableau de bord `@bull-board/api` et `@bull-board/express`, coupé en production |
+| Stockage de fichiers | Compatible S3 par `@aws-sdk/client-s3` (SeaweedFS en développement, D27) |
 | Images | sharp (redimensionnement WebP) |
 | PDF | pdf-lib (reçus, relevés) |
 | Contrats | docxtemplater, cœur sous licence MIT (remplissage du modèle Word de l'organisation) ; Gotenberg, image `gotenberg/gotenberg:8-libreoffice`, licence MIT (conversion en PDF) — décision D23 |
+| Identifiants | UUIDv7 par la bibliothèque `uuid` |
 | Journalisation | pino (JSON) ; Sentry pour les erreurs |
-| Tests | Vitest (unitaires et intégration), Playwright (bout en bout), k6 (charge) |
+| Tests | Vitest (unitaires et intégration ; `unplugin-swc` et `@swc/core` pour les décorateurs de NestJS), Playwright (bout en bout), k6 (charge) |
 | CDN | Cloudflare devant la vitrine et les médias |
 
 **Versions** : avant d'installer une bibliothèque, vérifie sa documentation actuelle et sa version stable. N'ajoute **aucune dépendance** hors de cette liste sans la proposer d'abord, avec sa raison.
@@ -64,7 +65,7 @@ packages/
   shared/              schémas Zod, types, matrice de permissions, catalogue des fonctionnalités,
                        utilitaires (montants FCFA, téléphones +226, dates)
 infra/
-  docker-compose.dev.yml   postgres, redis, minio, powersync
+  docker-compose.dev.yml   postgres, redis, seaweedfs (S3), puis powersync et gotenberg
   powersync/               règles de synchronisation
   k6/                      scénarios de charge
 docs/                  décisions, lots, spécifications, journal des lots
@@ -199,12 +200,14 @@ Interdits pour « faire passer » un test : le désactiver, l'affaiblir, contour
 
 ```
 pnpm install
-pnpm dev            # infra docker + api + web
+cp .env.example .env
+pnpm infra:up       # PostgreSQL, Redis et SeaweedFS (Docker), puis le compartiment S3
 pnpm db:migrate     # applique les migrations
-pnpm db:seed        # démonstration : 2 agences et 1 bailleur particulier ; un propriétaire présent dans les 3, un locataire passé de l'une à l'autre
+pnpm dev            # infra docker + api (HTTP et worker) + web
+pnpm db:seed        # démonstration : 2 agences et 1 bailleur particulier ; un propriétaire présent dans les 3, un locataire passé de l'une à l'autre (tables à partir du lot 03)
 pnpm lint
 pnpm typecheck
-pnpm test           # unitaires + intégration
+pnpm test           # unitaires + intégration (base ziga_test recréée à chaque exécution)
 pnpm test:e2e       # Playwright
 pnpm k6:vitrine     # charge (lot 13)
 ```
