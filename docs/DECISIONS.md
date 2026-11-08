@@ -28,6 +28,7 @@ Journal des décisions structurantes. Une décision ne change que par une nouvel
 | D22 | 08/11/2026 | **Registre de documents** avec une matrice de confidentialité par type : l'organisation peut restreindre, jamais élargir. Aucun document d'une organisation n'est visible par une autre ; le locataire et le propriétaire voient les documents dont ils sont parties. | Module `documents` au lot 07, étendu au lot 08 bis ; matrice dans `docs/UX.md` §10. |
 | D23 | 08/11/2026 | Génération des contrats avec **docxtemplater** (cœur sous licence MIT, sans module payant) et **Gotenberg** (licence MIT, image `8-libreoffice`) pour la conversion en PDF. | Pile technique de `CLAUDE.md` ; service Gotenberg ajouté à `infra/docker-compose.dev.yml` au lot 08 bis. |
 | D24 | 08/11/2026 | Le contrat **désigne le bailleur** : le propriétaire représenté par l'organisation, ou l'organisation en son nom (cas du modèle d'une agence pilote). Préavis et indemnités, reconduction, jour d'échéance, pénalité de retard et son bénéficiaire, garantie des factures et délai de restitution sont des **paramètres du bail** issus du contrat, avec les valeurs légales par défaut. | Lot 08 (paramètres, deux dépôts) ; lot 10 bis (préavis selon le bail) ; lot 06 (`can_sign_leases`). |
+| D25 | 08/11/2026 | La plateforme fournit un **modèle de contrat par défaut**, conforme à la loi n° 103-2015/CNT portant bail d'habitation privée. Toute organisation qui n'a pas son propre modèle l'utilise, dont deux des trois agences pilotes et les bailleurs particuliers. Les paramètres du bail prennent alors les valeurs prévues par la loi. Le texte est relu par un juriste avant la première signature réelle, sans bloquer le développement. | Lot 08 bis ; liste des clauses dans `prompts/lot-08bis-contrats.md` ; question ouverte « relecture du modèle par défaut ». |
 
 ## Questions ouvertes (à trancher avant le lot indiqué)
 
@@ -43,6 +44,6 @@ Journal des décisions structurantes. Une décision ne change que par une nouvel
 | Reconduction tacite pour une durée égale : compatible avec le passage légal à durée indéterminée ? Intérêts de retard au profit de l'agence, préavis réduit à un mois, indemnité de départ anticipé : clauses valables ? | 08 | Juriste |
 | Délai et coût de la légalisation et de l'enregistrement ; qui s'en charge en pratique | 08 bis | Juriste, agences pilotes |
 | Durée de conservation des copies de pièces d'identité après la fin du bail | 07 | Juriste |
-| Modèles de contrat des deux autres agences pilotes (couverture du catalogue de champs) | 08 bis | Agences pilotes |
+| Relecture du modèle de contrat par défaut (D25) ; nombre d'exemplaires et mentions exigés par la loi | 08 bis, avant la première signature réelle | Juriste |
 | Prestataire SMS réel pour les codes de vérification (coût par SMS, couverture Orange et Moov) | 10 ter | Grilles des prestataires |
 | Agrégateur de paiement retenu (CinetPay, Ligdicash, PayDunya…) : frais, KYC, plafonds, notifications | 14 | Grilles et documentation des prestataires |

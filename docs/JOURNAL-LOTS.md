@@ -172,3 +172,7 @@ Demande du porteur : une vraie gestion contractuelle intégrée à la gestion lo
 
 ### Questions ouvertes
 Agence qui signe comme bailleur ; reconduction tacite et clauses de pénalité et de préavis ; délai et coût de la légalisation ; conservation des pièces d'identité ; modèles des deux autres pilotes.
+
+### Décision ajoutée le 08/11/2026
+- **D25** : modèle de contrat par défaut conforme à la loi n° 103-2015/CNT, pour toute organisation sans modèle (deux des trois pilotes, bailleurs particuliers) ; relu par un juriste avant la première signature réelle. Clauses listées dans `prompts/lot-08bis-contrats.md`.
+- Les écrans de contrats ajoutés au prompt du lot 00 ter après sa réalisation ne sont pas maquettés ; ils le seront au lot 08 bis ou dans une reprise de la maquette si le porteur la demande.

@@ -1,6 +1,6 @@
 # Audit fonctionnel et UX/UI — Plateforme immobilière (avant lot 01)
 
-Rapport d'audit du 08/11/2026, mis à jour avec les décisions du porteur. Version de travail partagée : https://claude.ai/artifact/WNYWg6QEaXPttoDzifpkyE. Les décisions qui font foi sont dans `docs/DECISIONS.md` (D12 à D24).
+Rapport d'audit du 08/11/2026, mis à jour avec les décisions du porteur. Version de travail partagée : https://claude.ai/artifact/WNYWg6QEaXPttoDzifpkyE. Les décisions qui font foi sont dans `docs/DECISIONS.md` (D12 à D25).
 
 ## Synthèse
 
