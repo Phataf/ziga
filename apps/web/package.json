@@ -1,0 +1,41 @@
+{
+	"name": "@ziga/web",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"imports": {
+		"#lib": "./src/lib/index.ts",
+		"#lib/*": "./src/lib/*"
+	},
+	"scripts": {
+		"dev": "vite dev --port ${WEB_PORT:-5173}",
+		"build": "vite build",
+		"preview": "node build/index.js",
+		"prepare": "svelte-kit sync || echo ''",
+		"lint": "svelte-kit sync && eslint . && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
+		"typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && tsc -p src/service-worker/tsconfig.json --noEmit",
+		"test": "vitest run",
+		"test:unit": "vitest run",
+		"test:e2e": "playwright test --trace off"
+	},
+	"dependencies": {
+		"@ziga/shared": "workspace:*"
+	},
+	"devDependencies": {
+		"@lucide/svelte": "1.70.0",
+		"@playwright/test": "1.63.0",
+		"@sveltejs/adapter-node": "6.0.1",
+		"@sveltejs/kit": "3.1.1",
+		"@sveltejs/vite-plugin-svelte": "7.3.1",
+		"@tailwindcss/vite": "4.3.5",
+		"clsx": "2.1.1",
+		"svelte": "5.57.3",
+		"svelte-check": "4.7.8",
+		"tailwind-merge": "3.7.0",
+		"tailwind-variants": "4.0.1",
+		"tailwindcss": "4.3.5",
+		"typescript": "6.0.3",
+		"vite": "8.3.6",
+		"vitest": "5.1.0"
+	}
+}

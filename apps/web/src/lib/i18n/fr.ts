@@ -1,0 +1,110 @@
+/**
+ * Textes de l'interface, en français (CLAUDE.md §6). Aucun texte visible n'est écrit ailleurs.
+ */
+export const fr = {
+	app: {
+		name: 'Gestion locative',
+		mainNav: 'Navigation principale',
+		breadcrumb: 'Fil d’Ariane',
+		back: 'Retour',
+		close: 'Fermer',
+		actions: 'Actions',
+		today: (date: string) => `Aujourd’hui, ${date}`,
+		emptyScreen: 'Cet écran est prévu, il sera construit au lot',
+		emptyScreenNoLot: 'Cet écran est prévu dans un prochain lot.',
+		notFound: 'Écran introuvable.',
+		switchSpace: 'Changer d’espace',
+		more: 'Plus',
+		profilePreview: 'Aperçu du profil (avant l’authentification du lot 02)',
+		phoneOnlyAdmin: 'Le back-office est conçu pour l’ordinateur.'
+	},
+	spaces: {
+		agency: 'Espace agence',
+		landlord: 'Espace bailleur',
+		owner: 'Espace propriétaire',
+		tenant: 'Espace locataire',
+		public: 'Vitrine',
+		admin: 'Back-office plateforme'
+	},
+	profiles: {
+		director: 'Directeur d’agence',
+		manager: 'Gestionnaire',
+		field_agent: 'Agent de terrain',
+		landlord: 'Bailleur particulier',
+		owner: 'Propriétaire',
+		tenant: 'Locataire',
+		visitor: 'Visiteur ou acheteur',
+		admin: 'Administrateur plateforme'
+	},
+	sections: {
+		steering: 'Pilotage',
+		management: 'Gestion',
+		control: 'Contrôle',
+		agency: 'Agence',
+		field: 'Terrain',
+		myHomes: 'Mes logements',
+		myAssets: 'Mon patrimoine',
+		mySpace: 'Mon espace',
+		platform: 'Plateforme'
+	},
+	nav: {
+		dashboard: 'Tableau de bord',
+		home: 'Accueil',
+		properties: 'Biens',
+		propertiesLong: 'Biens et unités',
+		payments: 'Encaissements',
+		arrears: 'Impayés',
+		owners: 'Propriétaires',
+		toValidate: 'À valider',
+		team: 'Équipe',
+		round: 'Tournée',
+		myRound: 'Ma tournée',
+		myProperties: 'Mes biens',
+		myPayments: 'Mes encaissements',
+		late: 'Retards',
+		homes: 'Logements',
+		myHomes: 'Mes logements',
+		rents: 'Loyers',
+		rentsReceived: 'Loyers reçus',
+		assets: 'Patrimoine',
+		myAssets: 'Mon patrimoine',
+		income: 'Revenus',
+		statements: 'Relevés',
+		payouts: 'Reversements',
+		approvals: 'Approbations',
+		housing: 'Logement',
+		myHousing: 'Mon logement',
+		history: 'Historique',
+		receipts: 'Reçus',
+		deposit: 'Caution',
+		depositLong: 'Caution et décompte',
+		requests: 'Signalements',
+		notice: 'Préavis',
+		organizations: 'Organisations',
+		plans: 'Abonnements',
+		plansLong: 'Formules et abonnements',
+		features: 'Fonctionnalités',
+		journal: 'Journal',
+		support: 'Accès d’assistance',
+		rent: 'Louer',
+		buy: 'Acheter'
+	},
+	spaceChoice: {
+		title: 'Choisir un espace',
+		subtitle: 'Vous avez plusieurs espaces. Chacun ne montre que ses propres données.',
+		owner: 'Mon patrimoine',
+		ownerHint: 'Propriétaire : tous vos biens, quelle que soit l’organisation qui les gère',
+		tenant: 'Mon logement',
+		tenantHint: 'Locataire : votre logement et tout votre historique',
+		landlord: 'Mes logements',
+		landlordHint: 'Bailleur particulier : les logements que vous gérez vous-même',
+		agency: 'Mon agence',
+		agencyHint: 'Membre d’une agence : la gestion de son portefeuille',
+		privacy:
+			'Un écran de gestion n’affiche jamais deux organisations à la fois ; seuls vos espaces personnels les regroupent, en lecture seule.'
+	},
+	vitrine: {
+		title: 'Trouver un logement à Ouagadougou et Saaba',
+		subtitle: 'Les annonces des agences et des bailleurs, toujours à jour.'
+	}
+} as const;
