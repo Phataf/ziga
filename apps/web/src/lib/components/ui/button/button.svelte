@@ -2,8 +2,9 @@
 	import type { HTMLAnchorAttributes, HTMLButtonAttributes } from 'svelte/elements';
 	import { tv, type VariantProps } from 'tailwind-variants';
 
+	// Un libellé long passe à la ligne plutôt que de déborder de l'écran (téléphone de 360 px) : jamais de nowrap ici.
 	export const buttonVariants = tv({
-		base: 'inline-flex shrink-0 items-center justify-center gap-2 rounded-lg font-semibold whitespace-nowrap transition-colors outline-none select-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*="size-"])]:size-5 active:scale-[0.98]',
+		base: 'inline-flex max-w-full shrink-0 items-center justify-center gap-2 rounded-lg text-center font-semibold transition-colors outline-none select-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*="size-"])]:size-5 active:scale-[0.98]',
 		variants: {
 			variant: {
 				default: 'bg-primary text-primary-foreground hover:bg-primary/90',

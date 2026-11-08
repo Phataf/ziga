@@ -3,7 +3,7 @@
  * hors connexion (correction b), appareils, mot de passe oublié, gardes des espaces, trois appareils.
  */
 import { expect, test, type Page } from '@playwright/test';
-import { accounts, API_URL, lastCode, newNational, signIn } from './support';
+import { accounts, API_URL, expectNoHorizontalOverflow, lastCode, newNational, signIn } from './support';
 
 const phone = { viewport: { width: 360, height: 800 }, isMobile: true, hasTouch: true };
 const tablet = { viewport: { width: 820, height: 1180 }, isMobile: true, hasTouch: true };
@@ -199,7 +199,7 @@ for (const [name, device] of [
 			for (const path of ['/connexion', '/inscription', '/mot-de-passe-oublie', '/verification?numero=%2B22670123456']) {
 				await page.goto(path);
 				await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-				expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth), path).toBeLessThanOrEqual(0);
+				await expectNoHorizontalOverflow(page, path);
 				for (const h of await page
 					.locator('form button, form input')
 					.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height))) {
@@ -208,7 +208,7 @@ for (const [name, device] of [
 			}
 			await signIn(page, 'person', '/espace/appareils');
 			await expect(page.getByTestId('appareil-courant')).toBeVisible();
-			expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
+			await expectNoHorizontalOverflow(page, '/espace/appareils');
 		});
 
 		test('le compte est accessible depuis la coque', async ({ page }) => {

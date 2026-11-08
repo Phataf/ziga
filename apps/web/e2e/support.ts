@@ -90,3 +90,24 @@ export async function signInWith(page: Page, who: { national: string; password: 
 	await page.getByLabel('Mot de passe', { exact: true }).fill(who.password);
 	await page.getByRole('button', { name: 'Se connecter' }).click();
 }
+
+/**
+ * Débordement horizontal, en pixels. En émulation de téléphone, la fenêtre (`innerWidth`) s'élargit avec un contenu
+ * trop large et le navigateur dézoome : il faut comparer la largeur du contenu à la largeur de l'écran (`clientWidth`),
+ * et lister ce qui dépasse pour un message utile.
+ */
+export async function horizontalOverflow(page: Page): Promise<{ px: number; culprits: string[] }> {
+	return page.evaluate(() => {
+		const width = document.documentElement.clientWidth;
+		const culprits = [...document.querySelectorAll('body *')]
+			.filter((e) => e.getBoundingClientRect().right > width + 0.5)
+			.map((e) => `${e.tagName.toLowerCase()} « ${(e.textContent ?? '').trim().slice(0, 40)} »`)
+			.slice(0, 5);
+		return { px: document.documentElement.scrollWidth - width, culprits };
+	});
+}
+
+export async function expectNoHorizontalOverflow(page: Page, label: string): Promise<void> {
+	const o = await horizontalOverflow(page);
+	expect(o.px, `${label} : ${o.culprits.join(' ; ')}`).toBeLessThanOrEqual(0);
+}

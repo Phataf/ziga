@@ -3,7 +3,7 @@
  * et aucune autre ; aucun débordement horizontal sur téléphone ; application installable.
  */
 import { expect, test, type Page } from '@playwright/test';
-import { openOrganization, signIn, type Account } from './support';
+import { type Account, expectNoHorizontalOverflow, openOrganization, signIn } from './support';
 
 const phone = { viewport: { width: 360, height: 800 }, isMobile: true, hasTouch: true };
 const tablet = { viewport: { width: 820, height: 1180 }, isMobile: true, hasTouch: true };
@@ -186,8 +186,7 @@ test.describe('Téléphone (360 × 800)', () => {
 		]) {
 			await page.goto(path);
 			await expect(page.locator('h1').first()).toBeVisible();
-			const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-			expect(overflow, path).toBeLessThanOrEqual(0);
+			await expectNoHorizontalOverflow(page, path);
 		}
 	});
 
@@ -196,7 +195,7 @@ test.describe('Téléphone (360 × 800)', () => {
 		for (const path of ['/admin', '/admin/fonctionnalites']) {
 			await page.goto(path);
 			await expect(page.locator('h1').first()).toBeVisible();
-			expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth), path).toBeLessThanOrEqual(0);
+			await expectNoHorizontalOverflow(page, path);
 		}
 	});
 });
