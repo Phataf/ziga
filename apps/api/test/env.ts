@@ -15,6 +15,12 @@ function withDatabase(url: string, name: string): string {
 	return u.toString();
 }
 
+function withRedisDb(url: string, db: number): string {
+	const u = new URL(url);
+	u.pathname = `/${db}`;
+	return u.toString();
+}
+
 export function integrationEnv(): Record<string, string> {
 	// Les variables déjà définies (CI) l'emportent sur le fichier .env (développement).
 	const file = join(root, '.env');
@@ -38,6 +44,15 @@ export function integrationEnv(): Record<string, string> {
 		STORAGE_DRIVER: 'local',
 		STORAGE_LOCAL_DIR: join(tmpdir(), 'ziga-test-storage'),
 		JOBS_DASHBOARD: 'false',
+		// Base Redis à part (n° 1), vidée à chaque exécution : les compteurs de débit repartent de zéro.
+		REDIS_URL: withRedisDb(base.REDIS_URL!, 1),
+		API_PUBLIC_URL: base.API_PUBLIC_URL || 'http://localhost:3000',
+		CORS_ORIGINS: 'http://localhost:5173',
+		AUTH_JWT_KEYS: '',
+		AUTH_OTP_SECRET: 'secret-des-codes-pour-les-tests-uniquement',
+		SMS_DRIVER: 'memory',
+		OTP_SEND_INTERVAL_SECONDS: '0',
+		OTP_SEND_PER_PHONE_PER_HOUR: '50',
 		SENTRY_DSN: '',
 		TEST_DATABASE_NAME: name
 	};

@@ -5,9 +5,11 @@
  */
 import { Controller, Get, HttpCode, Res } from '@nestjs/common';
 import type { Response } from 'express';
+import { Public } from '../modules/identity/auth.guard.js';
 import { HealthService } from './health.service.js';
 
 @Controller('health')
+@Public()
 export class HealthController {
 	constructor(private readonly health: HealthService) {}
 

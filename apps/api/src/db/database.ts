@@ -53,6 +53,20 @@ export async function withTransaction<T>(db: Database, options: TransactionOptio
 }
 
 /**
+ * Ouvre une transaction dans le contexte d'une personne : `SET LOCAL app.user_id`.
+ * Les règles d'accès (RLS) de `sessions` et `refresh_tokens` lisent ce réglage par `current_user_id()`.
+ */
+export async function withUser<T>(db: Database, userId: string, options: TransactionOptions, fn: (tx: Tx) => Promise<T>): Promise<T> {
+	if (!isUuid(userId)) {
+		throw new AppError('INVALID_USER', 'Personne invalide.', 400);
+	}
+	return withTransaction(db, options, async (tx) => {
+		await tx.execute(sql`select set_config('app.user_id', ${userId}, true)`);
+		return fn(tx);
+	});
+}
+
+/**
  * Ouvre une transaction dans le contexte d'une organisation : `SET LOCAL app.organization_id`.
  * Les politiques RLS lisent ce réglage par `current_organization_id()`. Toute requête métier passe par ici.
  */

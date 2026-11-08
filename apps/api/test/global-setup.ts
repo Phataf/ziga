@@ -1,4 +1,5 @@
 /** Recrée la base de test, vide, puis applique toutes les migrations : les tests partent toujours de zéro. */
+import { Redis } from 'ioredis';
 import pg from 'pg';
 import { runMigrations } from '../src/db/migrate.js';
 import { integrationEnv } from './env.js';
@@ -17,5 +18,8 @@ export default async function setup(): Promise<void> {
 	} finally {
 		await client.end();
 	}
+	const redis = new Redis(env.REDIS_URL!);
+	await redis.flushdb();
+	redis.disconnect();
 	await runMigrations({ migrationUrl: env.DATABASE_MIGRATION_URL!, roleUrls: [env.DATABASE_URL!, env.DATABASE_ADMIN_URL!] });
 }

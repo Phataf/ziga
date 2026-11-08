@@ -1,5 +1,5 @@
 /**
- * Schéma Drizzle. Aucune table métier au lot 01 : chaque lot ajoute ses tables ici, avec leur politique RLS
+ * Schéma Drizzle. Les tables métier (à partir du lot 03) portent `organization_id`, leur politique RLS
  * dans la même migration (CLAUDE.md §6) et un test d'accès croisé entre organisations (règle 1).
  */
-export {};
+export * from './identity.js';

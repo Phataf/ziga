@@ -7,6 +7,7 @@ import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import type { Queue } from 'bullmq';
 import { Logger } from 'nestjs-pino';
+import type { DestinationStream } from 'pino';
 import { AppModule } from './app.module.js';
 import type { AppConfig } from './config/env.js';
 import { EXAMPLE_QUEUE } from './jobs/queues.js';
@@ -14,11 +15,20 @@ import { EXAMPLE_QUEUE } from './jobs/queues.js';
 export const JOBS_DASHBOARD_PATH = '/admin/queues';
 
 /** Construit l'application HTTP (utilisé par main.ts et par les tests d'intégration). */
-export async function createApp(config: AppConfig): Promise<NestExpressApplication> {
-	const app = await NestFactory.create<NestExpressApplication>(AppModule.forRoot(config), { bufferLogs: true });
+export async function createApp(config: AppConfig, options: { logStream?: DestinationStream } = {}): Promise<NestExpressApplication> {
+	const app = await NestFactory.create<NestExpressApplication>(AppModule.forRoot(config, options.logStream), { bufferLogs: true });
 	app.useLogger(app.get(Logger));
 	app.disable('x-powered-by');
 	app.set('trust proxy', 1);
+	// CORS (D28) : seules les origines du web listées, avec les identifiants (cookie de rafraîchissement).
+	app.enableCors({
+		origin: config.CORS_ORIGINS,
+		credentials: true,
+		methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
+		allowedHeaders: ['Authorization', 'Content-Type', 'X-Request-Id'],
+		exposedHeaders: ['X-Request-Id', 'Retry-After'],
+		maxAge: 600
+	});
 
 	// Tableau de bord des files : développement seulement (forcé à faux en production par la configuration).
 	if (config.JOBS_DASHBOARD) {

@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ConfigError, loadConfigOrExit, parseConfig } from './env.js';
+import { ConfigError, jobsDashboard, loadConfigOrExit, parseConfig } from './env.js';
 
 const valid = {
 	NODE_ENV: 'development',
 	API_PORT: '3000',
+	API_PUBLIC_URL: 'http://localhost:3000',
+	CORS_ORIGINS: 'http://localhost:5173, http://localhost:4173/',
 	DATABASE_URL: 'postgres://app_api:x@localhost:5432/ziga',
 	DATABASE_POOL_MAX: '10',
 	DATABASE_STATEMENT_TIMEOUT_MS: '15000',
@@ -41,6 +43,10 @@ describe('configuration', () => {
 
 	it('exige les paramètres S3 avec le stockage S3, et refuse le stockage local en production', () => {
 		expect(() => parseConfig({ ...valid, STORAGE_DRIVER: 's3' })).toThrow(/S3_BUCKET/);
+		expect(() => parseConfig({ ...valid, NODE_ENV: 'production' })).toThrow(/STORAGE_DRIVER/);
+	});
+
+	it('refuse la production sans clés de signature, sans secret des codes, et tant qu’aucun vrai prestataire SMS n’existe', () => {
 		const s3 = {
 			S3_ENDPOINT: 'https://s3.example.com',
 			S3_REGION: 'eu',
@@ -48,22 +54,28 @@ describe('configuration', () => {
 			S3_ACCESS_KEY_ID: 'a',
 			S3_SECRET_ACCESS_KEY: 'b'
 		};
-		expect(() => parseConfig({ ...valid, NODE_ENV: 'production' })).toThrow(/STORAGE_DRIVER/);
-		expect(parseConfig({ ...valid, ...s3, NODE_ENV: 'production', STORAGE_DRIVER: 's3' }).STORAGE_DRIVER).toBe('s3');
+		try {
+			parseConfig({ ...valid, ...s3, NODE_ENV: 'production', STORAGE_DRIVER: 's3' });
+			expect.unreachable();
+		} catch (e) {
+			const problems = (e as ConfigError).problems.join('\n');
+			expect(problems).toContain('AUTH_JWT_KEYS');
+			expect(problems).toContain('AUTH_OTP_SECRET');
+			expect(problems).toContain('SMS_DRIVER : « console » est réservé au développement et aux tests');
+		}
+	});
+
+	it('lit les origines autorisées et traite une variable vide comme absente', () => {
+		const c = parseConfig({ ...valid, AUTH_OTP_SECRET: '', AUTH_JWT_KEYS: '' });
+		expect(c.CORS_ORIGINS).toEqual(['http://localhost:5173', 'http://localhost:4173']);
+		expect(c.AUTH_OTP_SECRET).toBeUndefined();
+		expect(c.AUTH_REFRESH_COOKIE).toBe('__Host-ziga_rt');
+		expect(c.RATE_LIMIT_PER_IP_PER_MINUTE).toBe(300);
 	});
 
 	it('coupe toujours le tableau de bord des files en production', () => {
-		const s3 = {
-			S3_ENDPOINT: 'https://s3.example.com',
-			S3_REGION: 'eu',
-			S3_BUCKET: 'ziga',
-			S3_ACCESS_KEY_ID: 'a',
-			S3_SECRET_ACCESS_KEY: 'b'
-		};
 		expect(parseConfig({ ...valid, JOBS_DASHBOARD: 'true' }).JOBS_DASHBOARD).toBe(true);
-		expect(parseConfig({ ...valid, ...s3, STORAGE_DRIVER: 's3', NODE_ENV: 'production', JOBS_DASHBOARD: 'true' }).JOBS_DASHBOARD).toBe(
-			false
-		);
+		expect(jobsDashboard('production', true)).toBe(false);
 	});
 
 	it('au démarrage, écrit les problèmes et quitte avec le code 1', () => {

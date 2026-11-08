@@ -15,7 +15,9 @@
 		"test:integration": "vitest run --config vitest.integration.config.ts",
 		"db:migrate": "nest build && node --env-file-if-exists=../../.env dist/db/migrate.cli.js",
 		"db:seed": "nest build && node --env-file-if-exists=../../.env dist/db/seed.cli.js",
-		"db:generate": "drizzle-kit generate"
+		"db:generate": "drizzle-kit generate",
+		"auth:keygen": "nest build && node dist/modules/identity/keygen.cli.js",
+		"admin:create-super-admin": "nest build && node --env-file-if-exists=../../.env dist/modules/identity/create-super-admin.cli.js"
 	},
 	"dependencies": {
 		"@aws-sdk/client-s3": "3.1164.0",
@@ -25,11 +27,13 @@
 		"@nestjs/common": "12.4.0",
 		"@nestjs/core": "12.4.0",
 		"@nestjs/platform-express": "12.4.0",
+		"@node-rs/argon2": "2.2.2",
 		"@sentry/nestjs": "11.11.0",
 		"@ziga/shared": "workspace:*",
 		"bullmq": "6.7.2",
 		"drizzle-orm": "0.45.4",
 		"ioredis": "6.0.0",
+		"jose": "6.2.16",
 		"nestjs-pino": "5.3.1",
 		"pg": "8.23.1",
 		"pino": "10.4.0",

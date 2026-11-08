@@ -76,6 +76,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 			this.logger.error({ err: error, path: request.url }, 'Erreur inattendue');
 			Sentry.captureException(error);
 		}
+		if (error instanceof AppError && error.headers) for (const [k, v] of Object.entries(error.headers)) response.setHeader(k, v);
 		response.status(status).json(body);
 	}
 }

@@ -2,7 +2,7 @@ import { Global, Inject, Injectable, Module, type OnApplicationShutdown } from '
 import type pg from 'pg';
 import { APP_CONFIG } from '../config/config.module.js';
 import type { AppConfig } from '../config/env.js';
-import { createDatabase, createPool, withOrganization, withTransaction, type Database, type Tx } from './database.js';
+import { createDatabase, createPool, withOrganization, withTransaction, withUser, type Database, type Tx } from './database.js';
 
 export const PG_POOL = Symbol('PG_POOL');
 
@@ -24,6 +24,10 @@ export class DatabaseService implements OnApplicationShutdown {
 
 	withOrganization<T>(organizationId: string, fn: (tx: Tx) => Promise<T>): Promise<T> {
 		return withOrganization(this.db, organizationId, this.options, fn);
+	}
+
+	withUser<T>(userId: string, fn: (tx: Tx) => Promise<T>): Promise<T> {
+		return withUser(this.db, userId, this.options, fn);
 	}
 
 	withTransaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {

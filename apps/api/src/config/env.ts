@@ -7,6 +7,14 @@ import { z } from 'zod';
 
 const bool = z.enum(['true', 'false', '1', '0']).transform((v) => v === 'true' || v === '1');
 
+/** Une variable vide (« NOM= » dans .env) vaut une variable absente. */
+const optional = <T extends z.ZodType>(schema: T) => z.preprocess((v) => (v === '' ? undefined : v), schema.optional());
+
+/** Le tableau de bord des files n'est jamais ouvert en production. */
+export function jobsDashboard(nodeEnv: string, asked: boolean): boolean {
+	return nodeEnv === 'production' ? false : asked;
+}
+
 const postgresUrl = z.url({ protocol: /^postgres(ql)?$/, error: 'URL PostgreSQL attendue (postgres://…)' });
 
 export const envSchema = z
@@ -17,6 +25,43 @@ export const envSchema = z
 
 		API_HOST: z.string().min(1).default('0.0.0.0'),
 		API_PORT: z.coerce.number().int().min(0).max(65535),
+		/** Adresse publique de l'API (D28) : émetteur des jetons. */
+		API_PUBLIC_URL: z.url(),
+		/** Origines du web autorisées (CORS et vérification d'origine des routes à cookie), séparées par des virgules. */
+		CORS_ORIGINS: z
+			.string()
+			.min(1)
+			.transform((v) => v.split(',').map((o) => o.trim().replace(/\/$/, '')))
+			.pipe(z.array(z.url()).min(1)),
+
+		/** Clés de signature des jetons d'accès (Ed25519) : « kid:pkcs8-base64 », la première signe, toutes vérifient. */
+		AUTH_JWT_KEYS: optional(z.string()),
+		/** Secret des empreintes des codes SMS (HMAC-SHA256), 32 caractères au moins. */
+		AUTH_OTP_SECRET: optional(z.string().min(32)),
+		AUTH_ACCESS_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
+		AUTH_REFRESH_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
+		AUTH_REFRESH_COOKIE: z
+			.string()
+			.regex(/^[A-Za-z0-9_-]+$/)
+			.default('__Host-ziga_rt'),
+		/** Réutilisation d'un jeton juste remplacé (connexion lente, onglets) : refus simple, sans révocation. */
+		AUTH_REFRESH_REUSE_GRACE_SECONDS: z.coerce.number().int().min(0).max(60).default(10),
+		OTP_TTL_MINUTES: z.coerce.number().int().min(1).max(60).default(10),
+		OTP_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(5),
+		/** Débit : la limite principale porte sur le numéro ; le plafond par adresse IP reste large (adresses partagées). */
+		RATE_LIMIT_LOGIN_PER_PHONE_PER_MINUTE: z.coerce.number().int().min(1).default(5),
+		RATE_LIMIT_PER_IP_PER_MINUTE: z.coerce.number().int().min(1).default(300),
+		OTP_SEND_INTERVAL_SECONDS: z.coerce.number().int().min(0).default(60),
+		OTP_SEND_PER_PHONE_PER_HOUR: z.coerce.number().int().min(1).default(5),
+		/** Échecs de connexion : délai qui double à chaque échec (1 s, 2 s, 4 s…), plafonné. */
+		AUTH_FAILURE_BASE_DELAY_MS: z.coerce.number().int().min(10).default(1_000),
+		AUTH_FAILURE_MAX_DELAY_MS: z.coerce.number().int().min(10).default(60_000),
+		/** Échecs tolérés par adresse IP (15 minutes) avant que son délai ne commence : beaucoup d'abonnés la partagent. */
+		AUTH_IP_FAILURE_ALLOWANCE: z.coerce.number().int().min(0).default(20),
+
+		/** SMS : console ou fichier en développement, mémoire pour les tests ; aucun en production avant le vrai prestataire. */
+		SMS_DRIVER: z.enum(['console', 'file', 'memory']).default('console'),
+		SMS_FILE: z.string().min(1).optional(),
 
 		/** Rôle `app_api`, sans BYPASSRLS : seule connexion utilisée par l'API et le worker. */
 		DATABASE_URL: postgresUrl,
@@ -58,12 +103,22 @@ export const envSchema = z
 		if (env.NODE_ENV === 'production' && env.STORAGE_DRIVER !== 's3') {
 			ctx.addIssue({ code: 'custom', path: ['STORAGE_DRIVER'], message: 'le stockage local est réservé au développement et aux tests' });
 		}
+		if (env.NODE_ENV === 'production') {
+			if (!env.AUTH_JWT_KEYS)
+				ctx.addIssue({
+					code: 'custom',
+					path: ['AUTH_JWT_KEYS'],
+					message: 'obligatoire en production (pnpm --filter @ziga/api auth:keygen)'
+				});
+			if (!env.AUTH_OTP_SECRET) ctx.addIssue({ code: 'custom', path: ['AUTH_OTP_SECRET'], message: 'obligatoire en production' });
+			// Pas encore de prestataire SMS réel (question ouverte) : la production ne démarre pas avec un faux SMS.
+			ctx.addIssue({ code: 'custom', path: ['SMS_DRIVER'], message: `« ${env.SMS_DRIVER} » est réservé au développement et aux tests` });
+		}
+		if (env.SMS_DRIVER === 'file' && !env.SMS_FILE) {
+			ctx.addIssue({ code: 'custom', path: ['SMS_FILE'], message: 'obligatoire quand SMS_DRIVER=file' });
+		}
 	})
-	.transform((env) => ({
-		...env,
-		// Le tableau de bord des files n'est jamais ouvert en production.
-		JOBS_DASHBOARD: env.NODE_ENV === 'production' ? false : env.JOBS_DASHBOARD
-	}));
+	.transform((env) => ({ ...env, JOBS_DASHBOARD: jobsDashboard(env.NODE_ENV, env.JOBS_DASHBOARD) }));
 
 export type AppConfig = z.infer<typeof envSchema>;
 
