@@ -23,6 +23,10 @@
 		"./dates": {
 			"types": "./dist/dates.d.ts",
 			"default": "./dist/dates.js"
+		},
+		"./auth": {
+			"types": "./dist/auth.d.ts",
+			"default": "./dist/auth.js"
 		}
 	},
 	"files": [
