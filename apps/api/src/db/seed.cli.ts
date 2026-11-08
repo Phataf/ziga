@@ -17,7 +17,14 @@ if (process.env.NODE_ENV === 'production') fail('Refusé : pas de données de d�
 const url = process.env.DATABASE_URL;
 if (!url) fail('DATABASE_URL manquante (copiez .env.example en .env).');
 const password = passwordSchema.safeParse(process.env.SEED_DEMO_PASSWORD ?? '');
-if (!password.success) fail('SEED_DEMO_PASSWORD manquant ou trop court (8 caractères au moins), dans .env.');
+if (!password.success) {
+	fail(
+		'SEED_DEMO_PASSWORD manquant ou trop court (8 caractères au moins).\n' +
+			'Ajoutez à la fin du fichier .env, à la racine du dépôt, une ligne comme :\n' +
+			'  SEED_DEMO_PASSWORD=demo-ziga-2026\n' +
+			'(ce sera le mot de passe de tous les comptes de démonstration), puis relancez pnpm db:seed.'
+	);
+}
 
 const pool = createPool({ url, max: 2, connectionTimeoutMs: 5_000, applicationName: 'ziga-seed' });
 try {

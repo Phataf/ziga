@@ -237,7 +237,7 @@ Prompt : `prompts/lot-01-socle.md`. Décisions du porteur avant le lot : porte 0
 - [x] `docs/JOURNAL-LOTS.md` contient l'entrée du lot.
 
 ### Écarts par rapport au prompt
-- **Porte 0** : les 3 agences pilotes sont engagées (confirmé par le porteur). Le nombre d'entretiens réalisés (10 prévus, D04) n'est toujours pas consigné : l'emplacement prévu pour le chiffre est resté vide dans les réponses du porteur aux lots 02 et 03. Si aucun entretien formel n'a eu lieu, la mention retenue sera : « aucun entretien formel ; les démonstrations aux trois agences pilotes en tiendront lieu ».
+- ~~**Porte 0**~~ : les 3 agences pilotes sont engagées. Écart clos le 08/11/2026 sur la réponse du porteur : aucun entretien formel ; les démonstrations aux trois agences pilotes en tiendront lieu (au lieu des 10 entretiens prévus par D04).
 - **SeaweedFS au lieu de MinIO** (D27), l'image MinIO n'étant plus publiée.
 - **Guide de migration vers SvelteKit 3** : svelte.dev est bloqué par le réseau de la session. La configuration suit les sources officielles distribuées par npm, et pas le site :
   - le modèle de projet de `sv` 1.3.0 ;
@@ -261,7 +261,7 @@ Prompt : `prompts/lot-01-socle.md`. Décisions du porteur avant le lot : porte 0
 - Le test d'intégration du worker vérifie le traitement ; l'attente des tâches en cours à l'arrêt est couverte par les tests unitaires de l'arrêt et par le comportement de BullMQ, pas par un test de bout en bout.
 
 ### Questions ouvertes pour le porteur
-1. Nombre d'entretiens réalisés pendant la phase 0 (pour clore l'écart sur la porte 0).
+1. ~~Nombre d'entretiens de la phase 0~~ : clos au lot 03 (aucun entretien formel ; démonstrations aux trois agences pilotes).
 2. ~~Nom de la plateforme pour le manifeste et l'interface~~ : Ziga (D28).
 3. ~~Ouvrir `svelte.dev` et `shadcn-svelte.com` dans le réseau de l'environnement en ligne~~ : fait le 08/11/2026.
 
@@ -350,7 +350,7 @@ Prompt : `prompts/lot-02-authentification.md`. Plan validé par le porteur avec 
 - Les rôles plateforme `sales` et `finance` existent sans usage avant le lot 04.
 
 ### Questions ouvertes pour le porteur
-1. Nombre d'entretiens réalisés pendant la phase 0 : l'emplacement est resté vide dans votre message (« [nombre] entretiens réalisés »). Quel est le chiffre ?
+1. ~~Nombre d'entretiens de la phase 0~~ : clos au lot 03 (aucun entretien formel ; démonstrations aux trois agences pilotes).
 2. ~~Préproduction~~ : `ziga-staging.com`, D28 inchangée (réponse du 08/11/2026).
 3. ~~Marge d'échecs par IP~~ : 20 échecs, validée (réponse du 08/11/2026).
 
@@ -480,4 +480,4 @@ Prompt : `prompts/lot-03-agences-roles-audit.md`. Plan validé par le porteur av
 - Les adresses publiques du logo passent par l'API ; en production, Cloudflare les mettra en cache (fichiers jamais réécrits).
 
 ### Questions ouvertes pour le porteur
-1. **Porte 0** : l'emplacement du nombre d'entretiens est encore vide dans votre message. Quel chiffre consigner, ou bien la mention « aucun entretien formel ; les démonstrations aux trois agences pilotes en tiendront lieu » ?
+1. ~~**Porte 0**~~ : aucun entretien formel ; les démonstrations aux trois agences pilotes en tiendront lieu (réponse du 08/11/2026).
