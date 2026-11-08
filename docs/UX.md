@@ -173,3 +173,22 @@ La maquette contient ces tests (`maquette/e2e/08-multiplateforme.spec.ts`), à r
 | Compte | Choix de l'espace ; liaison d'une fiche (code SMS, puis acceptation par l'organisation) | 10 ter |
 | Gestion | Bouton global « Créer » (bien, locataire, bail, dépense) sur tablette et ordinateur ; écran de démarrage qui guide vers l'import Excel | 07, 11 |
 | Back-office | Organisations, formules et abonnements, fonctionnalités, journal, accès d'assistance motivé | 04 |
+| Gestion | Contrats : liste (statut du bail et du contrat, alertes), génération depuis le bail, relecture avec aperçu, suivi de signature avec dépôt du scan, légalisation et enregistrement, fiche contrat (versions, avenants, documents), modèles de contrat | 08 bis |
+| Locataire, propriétaire | « Mes contrats » (en vigueur, à signer, terminés) ; contrats des biens du propriétaire ; documents autorisés | 10 ter |
+
+**Matrice de confidentialité des documents (D22)** — une organisation peut restreindre ces droits, jamais les élargir ; une autre organisation n'a jamais accès à aucun document.
+
+| Type de document | Direction, gestionnaire | Agent de terrain | Propriétaire | Locataire |
+| --- | --- | --- | --- | --- |
+| Contrat signé, annexes, avenants | Oui | Non | Oui | Oui |
+| Projet de contrat | Oui | Non | Si son accord est requis | À partir de « prêt à signer » |
+| État des lieux, inventaire | Oui | Oui, sur ses unités | Oui | Oui |
+| Justificatifs retenus sur la caution | Oui | Non | Oui | Oui |
+| Pièce d'identité du locataire | Oui | Non | Non | Oui (la sienne) |
+| Pièce d'identité du propriétaire, titre foncier, PUH, attestation | Oui | Non | Oui (les siens) | Non |
+| Mandat de gestion | Oui | Non | Oui | Non |
+| Modèle de contrat | Oui (direction pour le modifier) | Non | Non | Non |
+| Notes internes | Oui | Selon le rôle | Non | Non |
+
+**Libellés obligatoires** : un scan déposé s'affiche « Signature manuscrite, scan déposé par … le … » ; jamais « signé électroniquement » (D21). Un bail sans contrat signé porte la pastille d'alerte « Contrat non signé ».
+

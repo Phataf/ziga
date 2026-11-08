@@ -8,7 +8,7 @@ Lot 02 terminé.
 
 ## Périmètre
 1. **Tables** (module `organizations`) :
-   - `organizations` : id, type (`agency`, `landlord`), raison sociale ou nom, nom commercial, téléphone, adresse, commune, RCCM et IFU (obligatoires pour une agence vérifiée, facultatifs pour un bailleur), statut de vérification (`pending`, `verified`, `suspended`), formule (`plan_id`, la table des formules arrive au lot 04 : prévoir la colonne nullable), dates.
+   - `organizations` : id, type (`agency`, `landlord`), raison sociale ou nom, nom commercial, téléphone, adresse, commune, boîte postale, logo, RCCM et IFU (obligatoires pour une agence vérifiée, facultatifs pour un bailleur), **représentant légal** (nom, qualité, profession, domicile, nationalité, pièce d'identité : type, numéro, date, autorité ; ces champs alimenteront les contrats du lot 08 bis, D24), statut de vérification (`pending`, `verified`, `suspended`), formule (`plan_id`, la table des formules arrive au lot 04 : prévoir la colonne nullable), dates.
    - `organization_members` : `organization_id`, `user_id`, rôle, statut (`invited`, `active`, `removed`), invité par, dates. Un utilisateur peut appartenir à plusieurs organisations. Une organisation de type `landlord` a un seul membre (`director`) au MVP.
    - `organization_invitations` : téléphone invité, rôle, jeton haché, expiration.
 2. **Rôles d'agence** et **matrice de permissions** dans `packages/shared/permissions.ts` (source unique, utilisée par l'API et l'interface) :

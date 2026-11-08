@@ -9,7 +9,7 @@ Lot 05 terminé. Suis `docs/SYNC.md` pour chaque nouvelle table.
 ## Périmètre
 1. **Tables** (module `owners`), toutes avec `organization_id`, RLS, clés composites, audit, synchronisation :
    - `owners` : type (personne, société, groupe d'indivisaires avec un représentant désigné), nom, téléphone, e-mail facultatif, adresse, pays de résidence, pièce d'identité (référence de document, ajoutée au lot 07), notes internes, `user_id` facultatif (compte lié, jamais obligatoire), statut (actif, archivé).
-   - `mandates` : propriétaire, type (`rental_management`, `letting`, `sale`, `self_managed`, `other`), date de début, date de fin facultative, commission (taux en points de base, ex. 1000 = 10 %, ou montant fixe en FCFA), autorisations (`can_publish`, `can_take_photos`, `can_collect_funds`), exclusivité (information seulement), statut (`draft`, `active`, `expired`, `revoked`), motif et date de révocation, numéro de version.
+   - `mandates` : propriétaire, type (`rental_management`, `letting`, `sale`, `self_managed`, `other`), date de début, date de fin facultative, commission (taux en points de base, ex. 1000 = 10 %, ou montant fixe en FCFA), autorisations (`can_publish`, `can_take_photos`, `can_collect_funds`, `can_sign_leases` : l'organisation peut signer les baux au nom du propriétaire, D24), exclusivité (information seulement), statut (`draft`, `active`, `expired`, `revoked`), motif et date de révocation, numéro de version.
    - `mandate_scopes` : lien entre un mandat et des biens ou des unités (rempli au lot 07 ; prévoir la table et ses contraintes dès maintenant).
 2. **Versionnage des mandats** : toute modification d'un mandat actif crée une nouvelle version ; les versions précédentes restent consultables.
 3. **Règles métier** :

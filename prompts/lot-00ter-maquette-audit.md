@@ -13,8 +13,9 @@ Maquette du lot 00 bis en place. Lis `docs/UX.md` (§2, §9, §10), `docs/DECISI
 4. **Sortie du locataire** : préavis, état des lieux guidé pièce par pièce, décompte de caution avec l'exemple du porteur (100 000 FCFA, douche 10 000, porte 5 000, restitution 85 000), variante « caution imputée sur les derniers loyers » avec accord, variante « réparé par le locataire ».
 5. **Espace propriétaire** : patrimoine groupé par gestionnaire (deux agences et gestion directe), fiche bien, revenus.
 6. **Espace locataire** : historique des deux baux, caution et décompte, signalement suivi.
-7. **Back-office** (ordinateur) : liste des organisations, abonnements, interrupteurs, accès d'assistance motivé.
-8. **Choix de l'espace** pour une personne qui en a plusieurs.
+7. **Contrats** (D20 à D24) : génération depuis un bail avec le modèle d'une agence pilote (contenu fictif), relecture et figement, suivi de signature et dépôt du scan, légalisation et enregistrement suivis, avenant ; « Mes contrats » dans l'espace locataire ; alerte « Contrat non signé ».
+8. **Back-office** (ordinateur) : liste des organisations, abonnements, interrupteurs, accès d'assistance motivé.
+9. **Choix de l'espace** pour une personne qui en a plusieurs.
 
 ## Hors périmètre
 Tout code du produit (`apps/`, `packages/`), backend, nouvelles dépendances.

@@ -22,10 +22,11 @@ Lot 10 bis terminé. Questions au porteur : prestataire SMS réel (coût, couver
 3. **Espace propriétaire** (`/espace/proprietaire`, `docs/UX.md` §2 et §10) :
    - Patrimoine : tous ses biens, groupés par gestionnaire (agence A, agence B, gestion directe), avec pour chaque unité sa disponibilité, son loyer, son bail en cours (sans les coordonnées du locataire), la caution détenue et par qui.
    - Revenus : loyers encaissés, commissions, dépenses, net et reversements, par mois et par bien ; rendement simple par bien.
-   - Relevés de chaque organisation ; reversements enregistrés.
+   - Relevés de chaque organisation ; reversements enregistrés ; contrats de ses biens et documents autorisés par la matrice (D22).
    - Les biens gérés directement par lui proviennent de son organisation de bailleur, s'il en a une.
 4. **Espace locataire** (`/espace/locataire`) :
-   - Mon logement actuel : solde, prochaine échéance, contact de l'organisation, bail (PDF ou scan).
+   - Mon logement actuel : solde, prochaine échéance, contact de l'organisation.
+   - **Mes contrats** : en vigueur, à signer (projet « prêt à signer » à relire), terminés (expirés, résiliés) ; pour chacun : logement, organisation, bailleur désigné, dates, loyer, caution, statut du bail et du contrat, prochaine échéance ou reconduction ; contrat, avenants et documents autorisés par la matrice (D22), téléchargés par lien signé de courte durée.
    - Historique toutes agences confondues : chronologie unique de ses baux, échéances, reçus, cautions et décomptes, chaque élément indiquant l'organisation concernée.
    - Caution et décompte : montant versé, détenteur, lignes du décompte avec leurs justificatifs, accords, observation possible en cas de désaccord.
    - Signalements suivis (reçu, planifié, fait) et demande de préavis, transmis à l'organisation.

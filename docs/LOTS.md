@@ -17,7 +17,8 @@ Durées indicatives pour un développement à temps partiel avec Claude Code, re
 | 06 | Propriétaires et mandats | 1 | 05 | 1 semaine | `prompts/lot-06-proprietaires-mandats.md` |
 | 07 | Biens, unités, médias, documents | 1 | 06 | 1 à 2 semaines | `prompts/lot-07-biens-unites-medias.md` |
 | 08 | Locataires, baux, échéancier, comptes de caution | 1 | 07 | 1 à 2 semaines | `prompts/lot-08-baux-echeancier.md` |
-| 09 | Encaissements, imputations, reçus | 1 | 08 | 2 semaines | `prompts/lot-09-encaissements-recus.md` |
+| 08 bis | Contrats et documents contractuels : modèles Word remplis, versions, signature manuscrite, avenants, alertes | 1 | 08 | 1 à 2 semaines | `prompts/lot-08bis-contrats.md` |
+| 09 | Encaissements, imputations, reçus | 1 | 08 bis | 2 semaines | `prompts/lot-09-encaissements-recus.md` |
 | 10 | Impayés, relances, dépenses, relevés propriétaires | 1 | 09 | 1 à 2 semaines | `prompts/lot-10-impayes-releves.md` |
 | 10 bis | Sortie du locataire : préavis, états des lieux, décompte, remise en état, transfert de gestion | 1 | 10 | 1 à 2 semaines | `prompts/lot-10bis-sortie-locataire.md` |
 | 10 ter | Espaces propriétaire et locataire avec compte, regroupant toutes les organisations | 1 | 10 bis | 1 à 2 semaines | `prompts/lot-10ter-espaces-personnels.md` |

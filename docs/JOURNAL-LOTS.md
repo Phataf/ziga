@@ -111,3 +111,20 @@ Demande du porteur avant le lot 01 : un audit fonctionnel et UX/UI complet (caut
 
 ### Questions ouvertes
 Voir `docs/DECISIONS.md` : lecture juridique de la loi n° 103-2015/CNT, réparations locatives (article 25), détenteur de la caution, légalisation des baux, nouvelle loi sur les données personnelles (ARCOD), prestataire SMS.
+
+## Complément de l'audit : contrats de bail et documents — 08/11/2026
+
+Demande du porteur : une vraie gestion contractuelle intégrée à la gestion locative (`docs/AUDIT.md` §C7), analysée à partir du modèle de contrat d'une agence pilote.
+
+### Décisions validées
+- **D20** contrat = document du bail, cycle distinct ; modèle Word de l'organisation rempli automatiquement ; légalisation et enregistrement suivis sans bloquer ; bail en vigueur possible sans contrat signé, avec alerte.
+- **D21** signature manuscrite et scan au MVP ; un PDF déposé n'est jamais une signature électronique.
+- **D22** registre de documents avec matrice de confidentialité par type.
+- **D23** docxtemplater (cœur MIT) et Gotenberg (MIT) ajoutés à la pile.
+- **D24** bailleur désigné par le contrat ; préavis, reconduction, pénalité, garantie des factures et délai de restitution en paramètres du bail.
+
+### Fait (documentation seulement)
+`CLAUDE.md` (pile, module `documents`, règle 17, glossaire), `docs/DECISIONS.md`, `docs/LOTS.md`, `docs/UX.md` §10 (écrans, matrice), `docs/AUDIT.md` ; nouveau prompt `lot-08bis-contrats.md` ; prompts 00 ter, 03, 06, 07, 08, 09, 10 bis, 10 ter et 11 complétés.
+
+### Questions ouvertes
+Agence qui signe comme bailleur ; reconduction tacite et clauses de pénalité et de préavis ; délai et coût de la légalisation ; conservation des pièces d'identité ; modèles des deux autres pilotes.

@@ -13,7 +13,7 @@ Ce fichier est la référence permanente pour Claude Code sur ce dépôt. Lis-le
 - Un **back-office plateforme** qui active ou désactive chaque fonctionnalité pour tout le monde, pour une formule, pour une organisation ou pour une personne (voir `docs/FEATURE-FLAGS.md`).
 - La plateforme **ne détient jamais les fonds**. Elle enregistre les paiements ; en phase 3, elle initie des paiements Mobile Money **vers le compte marchand de l'agence**. Les abonnements payés par les organisations à la plateforme ne sont pas des loyers : la plateforme les encaisse sur son propre compte.
 
-Documents à connaître : `docs/DECISIONS.md` (décisions prises), `docs/LOTS.md` (ordre de construction), `docs/FEATURE-FLAGS.md` (interrupteurs), `docs/UX.md` (profils, appareils, composants, icônes), `prompts/lot-XX-*.md` (le lot en cours). `docs/AUDIT.md` explique les raisons des décisions D12 à D19 (contexte, pas périmètre).
+Documents à connaître : `docs/DECISIONS.md` (décisions prises), `docs/LOTS.md` (ordre de construction), `docs/FEATURE-FLAGS.md` (interrupteurs), `docs/UX.md` (profils, appareils, composants, icônes), `prompts/lot-XX-*.md` (le lot en cours). `docs/AUDIT.md` explique les raisons des décisions D12 à D24 (contexte, pas périmètre).
 
 La maquette (`maquette/`) est la référence visuelle : couleurs, typographie, composants et dispositions par appareil.
 
@@ -37,6 +37,7 @@ La maquette (`maquette/`) est la référence visuelle : couleurs, typographie, c
 | Stockage de fichiers | Compatible S3 (MinIO en développement) |
 | Images | sharp (redimensionnement WebP) |
 | PDF | pdf-lib (reçus, relevés) |
+| Contrats | docxtemplater, cœur sous licence MIT (remplissage du modèle Word de l'organisation) ; Gotenberg, image `gotenberg/gotenberg:8-libreoffice`, licence MIT (conversion en PDF) — décision D23 |
 | Journalisation | pino (JSON) ; Sentry pour les erreurs |
 | Tests | Vitest (unitaires et intégration), Playwright (bout en bout), k6 (charge) |
 | CDN | Cloudflare devant la vitrine et les médias |
@@ -83,8 +84,9 @@ Domaines de l'API (un module NestJS chacun). Un module n'accède **jamais** dire
 | `features` | catalogue, formules, interrupteurs, résolution (§8) |
 | `audit` | journal d'audit en ajout seul |
 | `owners` | propriétaires (personne, société ou groupe d'indivisaires), mandats, transferts de gestion |
-| `properties` | biens, unités, statut en quatre dimensions, médias, documents |
-| `leases` | locataires, baux, échéances, comptes de caution, préavis, états des lieux, décomptes de sortie |
+| `properties` | biens, unités, statut en quatre dimensions, médias |
+| `documents` | registre des documents privés, matrice de confidentialité par type, versions et empreintes, URL signées |
+| `leases` | locataires, baux et leurs paramètres, échéances, comptes de caution, contrats (modèles, projets, versions, signatures, avenants), préavis, états des lieux, décomptes de sortie |
 | `payments` | encaissements, imputations, reçus, adaptateurs de paiement |
 | `collections` | impayés, relances, dépenses, relevés propriétaires, reversements |
 | `listings` | annonces, visibilité, prospects, vitrine |
@@ -124,6 +126,12 @@ Une seule violation de ces règles fait échouer le lot, même si tout le reste 
 14. **Aucune retenue sur caution sans justification.** Le compte de caution est en ajout seul (versement, retenue, imputation sur loyer, restitution, complément réclamé, changement de détenteur). Une retenue doit pointer vers une ligne d'état des lieux classée « imputable au locataire », avec un montant et un justificatif. Une imputation sur loyer exige un accord écrit et daté. Le total des sorties ne dépasse jamais la caution reçue. Une caution supérieure à deux mois de loyer déclenche un avertissement journalisé (D15).
 15. **Aucune information sur un locataire ou un propriétaire ne passe d'une organisation à une autre.** Une personne voit l'ensemble de ses propres données à travers ses organisations, par le module `portals`, après vérification de son téléphone **et** acceptation du lien par chaque organisation. Aucune organisation ne voit les baux, paiements ou fiches d'une autre, ni directement, ni par attestation, ni par une liste partagée (D17).
 16. **Une dépense est un seul enregistrement.** Elle dit qui a payé le prestataire, qui la supporte au final et comment elle est récupérée (relevé du propriétaire, caution, réclamée au locataire, aucune). Une retenue sur caution renvoie à la dépense, jamais une copie. La commission de gestion n'est pas une dépense.
+17. **Contrats et documents** (D20 à D22, D24).
+   - Le contrat est le document du bail : son cycle (brouillon, vérification, prêt à signer, signé) est distinct de celui du bail. Légalisation et enregistrement sont suivis, jamais bloquants. Un bail peut être en vigueur sans contrat signé, avec une alerte.
+   - Un contrat « prêt à signer » est **figé** : toute modification crée une nouvelle version ; chaque version est un objet stocké jamais écrasé, avec son empreinte SHA-256.
+   - **Un PDF déposé n'est jamais présenté comme une signature électronique** : il est enregistré comme « signature manuscrite, scan déposé », avec qui l'a déposé et quand.
+   - Les droits de consultation d'un document viennent de la **matrice par type** (`docs/UX.md` §10) ; une organisation peut les restreindre, jamais les élargir. Aucun document d'une organisation n'est visible par une autre ; chaque téléchargement est journalisé.
+   - Le contrat désigne le bailleur (propriétaire représenté par l'organisation, ou organisation en son nom) ; préavis, reconduction, jour d'échéance, pénalité, garantie des factures et délai de restitution sont des paramètres du bail, avec les valeurs légales par défaut.
 
 ---
 
@@ -131,7 +139,7 @@ Une seule violation de ces règles fait échouer le lot, même si tout le reste 
 
 - **Identifiants** : UUIDv7 générés **côté client** (nécessaire au hors ligne). Jamais d'identifiant auto-incrémenté exposé.
 - **Code en anglais, interface en français.** Les noms de tables, colonnes, variables et fonctions sont en anglais ; les textes vus par l'utilisateur sont en français, centralisés dans `apps/web/src/lib/i18n/fr.ts`.
-- **Glossaire** : Organisation = `organization` (agence ou bailleur particulier), Agence = `agency` (type d'organisation), Personne = `user`, Propriétaire = `owner`, Mandat = `mandate`, Bien = `property`, Unité = `unit`, Locataire = `tenant`, Bail = `lease`, Échéance = `rent_due`, Caution = `deposit`, Encaissement = `payment`, Imputation = `payment_allocation`, Reçu = `receipt`, Dépense = `expense`, Relevé propriétaire = `owner_statement`, Annonce = `listing`, Prospect = `lead`, Formule = `plan`, Fonctionnalité = `feature`, Préavis = `notice`, État des lieux = `inspection`, Compte de caution = `deposit_account`, Mouvement de caution = `deposit_movement`, Décompte de sortie = `deposit_settlement`, Accord = `agreement`, Reversement = `owner_payout`, Transfert de gestion = `management_transfer`.
+- **Glossaire** : Organisation = `organization` (agence ou bailleur particulier), Agence = `agency` (type d'organisation), Personne = `user`, Propriétaire = `owner`, Mandat = `mandate`, Bien = `property`, Unité = `unit`, Locataire = `tenant`, Bail = `lease`, Échéance = `rent_due`, Caution = `deposit`, Encaissement = `payment`, Imputation = `payment_allocation`, Reçu = `receipt`, Dépense = `expense`, Relevé propriétaire = `owner_statement`, Annonce = `listing`, Prospect = `lead`, Formule = `plan`, Fonctionnalité = `feature`, Préavis = `notice`, État des lieux = `inspection`, Compte de caution = `deposit_account`, Mouvement de caution = `deposit_movement`, Décompte de sortie = `deposit_settlement`, Accord = `agreement`, Reversement = `owner_payout`, Transfert de gestion = `management_transfer`, Contrat = `lease_contract`, Version de contrat = `contract_version`, Avenant = `lease_amendment`, Modèle de contrat = `contract_template`, Document = `document`.
 - **Validation** : chaque entrée d'API passe par un schéma Zod de `packages/shared`, réutilisé par le formulaire côté client.
 - **Permissions et interrupteurs vérifiés côté serveur**, à chaque endpoint (guards NestJS). L'interface les reflète mais ne les remplace jamais.
 - **Idempotence** : toute écriture issue de la synchronisation ou d'un paiement porte une clé d'idempotence ; un rejeu ne crée pas de doublon.
