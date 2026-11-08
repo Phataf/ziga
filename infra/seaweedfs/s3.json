@@ -1,0 +1,9 @@
+{
+	"identities": [
+		{
+			"name": "ziga_dev",
+			"credentials": [{ "accessKey": "ziga_dev_access", "secretKey": "ziga_dev_secret" }],
+			"actions": ["Admin", "Read", "Write", "List", "Tagging"]
+		}
+	]
+}

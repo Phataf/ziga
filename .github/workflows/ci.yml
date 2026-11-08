@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verifier:
+    name: Lint, types, tests unitaires et d'intégration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16.15
+        # Même propriétaire du schéma que .env.example (DATABASE_MIGRATION_URL).
+        env:
+          POSTGRES_USER: ziga
+          POSTGRES_PASSWORD: ziga_dev
+          POSTGRES_DB: ziga
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U ziga -d ziga"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+      redis:
+        image: redis:7.4.12-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Les tests d'intégration lisent .env (base ziga_test recréée à chaque exécution, stockage local).
+      - run: cp .env.example .env
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  e2e:
+    name: Coque de l'application (Playwright)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @ziga/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @ziga/shared build
+      - run: pnpm --filter @ziga/web test:e2e
