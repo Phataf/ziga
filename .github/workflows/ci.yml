@@ -51,9 +51,31 @@ jobs:
       - run: pnpm test
 
   e2e:
-    name: Coque de l'application (Playwright)
+    name: Coque et authentification (Playwright, contre la vraie API)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    # L'API de test crée et migre sa propre base (ziga_e2e) et utilise la base Redis n° 2.
+    services:
+      postgres:
+        image: postgres:16.15
+        env:
+          POSTGRES_USER: ziga
+          POSTGRES_PASSWORD: ziga_dev
+          POSTGRES_DB: ziga
+        ports: ['55432:5432']
+        options: >-
+          --health-cmd "pg_isready -U ziga -d ziga"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+      redis:
+        image: redis:7.4.12-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -63,5 +85,6 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @ziga/web exec playwright install --with-deps chromium
+      - run: cp .env.example .env
       - run: pnpm --filter @ziga/shared build
       - run: pnpm --filter @ziga/web test:e2e

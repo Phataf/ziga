@@ -1,6 +1,6 @@
 /**
  * Création du premier super administrateur, en ligne de commande seulement (jamais par l'interface) :
- *   pnpm --filter @ziga/api admin:create-super-admin -- --phone "+226 70 12 34 56" --name "Nom"
+ *   pnpm --filter @ziga/api admin:create-super-admin --phone "+226 70 12 34 56" --name "Nom"
  * Le mot de passe est demandé sans écho (ou lu dans SUPER_ADMIN_PASSWORD pour un script). Une personne déjà inscrite
  * est promue super administrateur.
  */
@@ -30,7 +30,11 @@ async function askHidden(question: string): Promise<string> {
 	);
 }
 
-const { values } = parseArgs({ options: { phone: { type: 'string' }, name: { type: 'string' } } });
+// Un « -- » transmis par pnpm (habitude de npm) est ignoré.
+const { values } = parseArgs({
+	args: process.argv.slice(2).filter((arg) => arg !== '--'),
+	options: { phone: { type: 'string' }, name: { type: 'string' } }
+});
 const phone = phoneSchema.parse(values.phone ?? '');
 const name = personNameSchema.parse(values.name ?? '');
 const password = passwordSchema.parse(process.env.SUPER_ADMIN_PASSWORD ?? (await askHidden('Mot de passe (8 caractères au moins) : ')));

@@ -262,5 +262,94 @@ Prompt : `prompts/lot-01-socle.md`. Décisions du porteur avant le lot : porte 0
 
 ### Questions ouvertes pour le porteur
 1. Nombre d'entretiens réalisés pendant la phase 0 (pour clore l'écart sur la porte 0).
-2. Nom de la plateforme pour le manifeste et l'interface.
-3. Ouvrir `svelte.dev` et `shadcn-svelte.com` dans le réseau de l'environnement en ligne, pour suivre directement la documentation et le CLI.
+2. ~~Nom de la plateforme pour le manifeste et l'interface~~ : Ziga (D28).
+3. ~~Ouvrir `svelte.dev` et `shadcn-svelte.com` dans le réseau de l'environnement en ligne~~ : fait le 08/11/2026.
+
+## Lot 02 — Authentification — 08/11/2026
+
+Prompt : `prompts/lot-02-authentification.md`. Plan validé par le porteur avec ses compléments : domaines dans D28, `@node-rs/argon2` et `jose` ajoutées à `CLAUDE.md` §2, SMS de développement hors des journaux, délai de grâce de 10 s, réponse à une inscription sur un numéro déjà vérifié, et corrections a à e (numéros de tout pays, hors connexion, limite par IP, délai progressif, RLS par personne).
+
+### Fait
+- **`packages/shared`** :
+  - `phone.ts` accepte tout numéro E.164, de tout pays (diaspora), avec une liste de pays proposés (Burkina Faso en tête, `+226` par défaut) et une vérification plus fine des numéros burkinabè ;
+  - `auth.ts` : schémas Zod d'inscription, de vérification, de connexion, de mot de passe oublié et de réinitialisation, réutilisés par l'API et les formulaires ; rôles plateforme ; messages qui ne révèlent pas si un numéro existe.
+- **Base** (migration `0001_identity`) :
+  - tables `users`, `sessions`, `refresh_tokens` et `otp_codes` ;
+  - mots de passe en argon2id, codes en HMAC-SHA256, jetons de rafraîchissement en SHA-256 : rien en clair ;
+  - RLS sur `sessions` et `refresh_tokens` par `SET LOCAL app.user_id` (fonction `current_user_id()`, aide `withUser`) ; `app_api` ne peut ni supprimer un jeton de rafraîchissement ni le modifier, sauf sa date d'usage.
+- **Module `identity`** :
+  - inscription, vérification du numéro par code à 6 chiffres (10 min, 5 essais, usage unique), connexion, déconnexion, mot de passe oublié (toutes les sessions révoquées) ;
+  - jeton d'accès JWT EdDSA de 15 min (`jose`), clés publiques en JWKS avec identifiant de clé sur `/.well-known/jwks.json`, rotation des clés par `AUTH_JWT_KEYS` (la première signe, les suivantes vérifient) ;
+  - jeton de rafraîchissement de 30 jours dans le cookie `__Host-ziga_rt` (httpOnly, Secure, SameSite=Lax), renouvelé à chaque usage ; une réutilisation dans le délai de grâce de 10 s est refusée (409), au-delà toutes les sessions de la personne sont révoquées ;
+  - vérification de l'origine et corps JSON exigés sur `/auth/refresh` et `/auth/logout` ; CORS limité à `CORS_ORIGINS` ;
+  - limites de débit en Redis : par numéro (connexion, envoi de code) et plafond par IP (300 par minute, réglable) ;
+  - délai progressif après un échec (1 s, 2 s, 4 s… jusqu'à 60 s), par numéro et par IP, appliqué aussi aux numéros inconnus ; la réinitialisation par SMS reste toujours possible ;
+  - inscription sur un numéro déjà vérifié : même réponse à l'écran, et un SMS « Un compte Ziga existe déjà pour ce numéro. Utilisez « Mot de passe oublié ». », sous les mêmes limites ;
+  - garde global : toute route exige un jeton, sauf les exceptions marquées `@Public()` (authentification, JWKS, santé) ;
+  - appareils connectés (`GET /sessions`) et déconnexion d'un appareil (`DELETE /sessions/:id`) ;
+  - premier super administrateur par la commande `admin:create-super-admin`, jamais par l'interface ; clés par `auth:keygen`.
+- **Module `notifications`** : interface `SmsSender`, implémentations `console` (ligne à part sur la sortie standard, hors des journaux pino), `file` (tests de bout en bout) et `memory` (tests d'intégration).
+- **Web** :
+  - écrans `/connexion`, `/inscription`, `/verification`, `/mot-de-passe-oublie` et `/espace/appareils` ;
+  - numéro avec indicatif (`+226` affiché par défaut, autre pays au choix) et clavier téléphonique ; code avec clavier numérique et remplissage automatique ;
+  - jeton d'accès en mémoire seulement ; rafraîchissements sérialisés entre onglets (Web Locks), 409 réessayé ;
+  - repère non secret de la dernière personne connectée (identifiant, nom, rôle, date), valable 30 jours glissants : hors connexion, la coque s'affiche ; seul un 401 renvoie vers `/connexion` ;
+  - gardes de `/app` et `/espace` (session) et de `/admin` (rôle plateforme) ; retour à l'écran demandé après connexion, sans redirection ouverte ;
+  - une personne sans organisation arrive sur `/espace`, avec ses espaces personnels vides ;
+  - « Mes appareils » et « Se déconnecter » dans chaque coque (menu latéral, rail, écran « Plus », choix de l'espace) ; nom de la personne dans la barre du haut.
+- **CI** : le job Playwright tourne désormais contre la vraie API, avec PostgreSQL et Redis en services.
+- **Tests** : 143 tests Vitest et 51 tests Playwright.
+  - 54 tests de `packages/shared` (numéros de tout pays, schémas d'authentification).
+  - 22 tests unitaires de l'API (configuration d'authentification, refus de démarrer en production sans clés ni prestataire SMS).
+  - 49 tests d'intégration, dont 36 pour le lot :
+    - inscription, vérification, connexion, rafraîchissement, déconnexion ;
+    - rotation, délai de grâce et révocation sur réutilisation ;
+    - code expiré, code déjà utilisé, 6e essai refusé ;
+    - limites par numéro, par envoi de SMS et par IP ; délai progressif puis levée ;
+    - même message pour un numéro inconnu et un mauvais mot de passe ;
+    - appareils d'une autre personne invisibles ; RLS vérifiée en SQL avec `app_api` ;
+    - garde global sur toutes les routes ; JWKS ; super administrateur ;
+    - journaux capturés sans mot de passe, code ni jeton.
+  - 18 tests unitaires du web, dont 8 pour le repère de 30 jours, la règle « seul un 401 déconnecte » et le chemin de retour.
+  - 51 tests Playwright (35 de la coque, désormais connectés, et 16 nouveaux) :
+    - inscription puis connexion sur téléphone, en moins d'une minute ;
+    - personne sans organisation sur son espace personnel ;
+    - même message d'erreur, numéro invalide, autre pays ;
+    - gardes et retour à l'écran demandé, back-office refusé sans rôle plateforme ;
+    - session conservée au rechargement, cookie httpOnly, aucun jeton dans le stockage du navigateur ;
+    - connexion, coupure du réseau, rechargement : la coque s'affiche sans redirection ;
+    - cookie refusé (401) : renvoi vers la connexion et repère effacé ;
+    - mot de passe oublié ;
+    - deux appareils, déconnexion de l'un depuis l'autre ;
+    - écrans d'authentification en 360 × 800, 820 × 1180 et 1440 × 900, sans débordement, cibles de 44 px.
+
+### Critères d'acceptation
+- [x] Un nouvel utilisateur s'inscrit et se connecte en moins d'une minute : mesuré par le test Playwright (inscription, code lu dans le fichier des SMS, vérification, déconnexion, connexion), quelques secondes.
+- [x] Aucune donnée sensible en clair en base ni dans les journaux : empreintes seulement en base (vérifié par les tests), journaux capturés pendant un parcours complet sans mot de passe, code ni jeton.
+- [x] Toutes les routes de l'API hors authentification et `/health` exigent un jeton valide par défaut : garde global, exceptions `@Public()` explicites, test qui parcourt toutes les routes déclarées.
+- [x] Journal des lots mis à jour.
+
+### Écarts par rapport au prompt
+- **Verrouillage après 5 échecs remplacé par un délai progressif** (correction d du porteur) : il ne bloque pas un compte qu'un tiers viserait exprès. Le test « verrouillage puis déverrouillage » devient « délai qui s'allonge, puis levé après le délai ».
+- **Marge par IP** (`AUTH_IP_FAILURE_ALLOWANCE`, 20) : interprétation à confirmer. Une adresse IP partagée (réseau mobile, cybercafé) cumule les échecs de plusieurs personnes ; elle n'a son propre délai qu'au-delà de 20 échecs, alors que chaque numéro a le sien dès le premier.
+- **Code SMS de développement** : affiché sur la sortie de l'API, sur une ligne à part, et non dans les journaux comme le dit le prompt (validé par le porteur).
+- **Table `refresh_tokens`** en plus de `sessions` : une session garde la suite de ses jetons, ce qui permet de reconnaître une réutilisation et le délai de grâce.
+- **Production bloquée** tant qu'il n'y a pas de vrai prestataire SMS : la configuration refuse `console`, `file` et `memory` en production.
+- **Révocation** : un jeton d'accès déjà émis reste valable jusqu'à son expiration (15 min au plus), puisque l'API est sans état ; la révocation agit au rafraîchissement suivant.
+- **Déconnexion hors connexion** : refusée avec un message, car elle laisserait la session ouverte côté serveur.
+- **`/app` ouvert à toute personne connectée** jusqu'au lot 03, qui vérifiera l'appartenance à une organisation ; l'aperçu `?profil=` reste en développement. `/espace` propose encore les quatre espaces (lot 10 ter : seulement ceux de la personne).
+- **Écrans d'authentification rendus côté client** (`ssr = false`) : ils parlent directement à l'API, qui pose le cookie.
+- **Avertissement SvelteKit `window_fetch_in_load`** dans la console : les gardes appellent l'API (autre origine, avec cookie) par `fetch` du navigateur, volontairement.
+- **Tests de bout en bout** : l'API de test (`apps/api/scripts/e2e-server.mjs`) recrée la base `ziga_e2e`, utilise la base Redis n° 2, écrit les SMS dans un fichier et relève les limites de débit du compte de test partagé par les tests.
+- **`/verification`, « Renvoyer le code »** : l'inscription en cours reste en mémoire de l'onglet (jamais dans le stockage du navigateur) ; après un rechargement, l'écran invite à se connecter, ce qui renvoie un code.
+
+### Dette technique
+- Pas encore de journal d'audit des événements d'authentification (connexion, révocation, réutilisation détectée) : à brancher quand le module `audit` existera.
+- Pas de tâche de nettoyage des codes et des jetons de rafraîchissement expirés.
+- Pas de vrai prestataire SMS (hors périmètre).
+- Les rôles plateforme `sales` et `finance` existent sans usage avant le lot 04.
+
+### Questions ouvertes pour le porteur
+1. Nombre d'entretiens réalisés pendant la phase 0 : l'emplacement est resté vide dans votre message (« [nombre] entretiens réalisés »). Quel est le chiffre ?
+2. Préproduction : `ziga-staging.com` (inscrit dans D28 comme recommandé) ou `staging.ziga.com` ?
+3. Marge d'échecs par IP : 20 échecs vous conviennent-ils avant que l'adresse ait son propre délai ?

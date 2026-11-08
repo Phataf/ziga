@@ -53,8 +53,27 @@ curl http://localhost:3000/health/ready
 | `pnpm lint`                         | ESLint, svelte-check et Prettier                                                      |
 | `pnpm typecheck`                    | TypeScript dans les trois paquets                                                     |
 | `pnpm test`                         | Tests unitaires et d'intégration ; la base `ziga_test` est recréée à chaque exécution |
-| `pnpm test:e2e`                     | Playwright sur la coque de l'application (téléphone, tablette, ordinateur)            |
+| `pnpm test:e2e`                     | Playwright contre la vraie API (base `ziga_e2e` recréée) : coque et authentification  |
 | `pnpm build`                        | Construit `packages/shared`, l'API et le web                                          |
+
+## Comptes et authentification (lot 02)
+
+- **Créer un compte** : http://localhost:5173/inscription. En développement, le SMS (code à 6 chiffres) s'affiche dans le terminal de l'API, sur une ligne `[SMS de développement]`, hors des journaux.
+- **Clés** : sans `AUTH_JWT_KEYS`, l'API signe avec une clé éphémère (sessions perdues au redémarrage). Pour des clés stables, et pour la production où elles sont obligatoires :
+
+```bash
+pnpm --filter @ziga/api auth:keygen
+```
+
+Copier les deux lignes affichées (`AUTH_JWT_KEYS`, `AUTH_OTP_SECRET`) dans `.env` ou dans les secrets de l'environnement. Les clés publiques sont publiées sur `/.well-known/jwks.json`.
+
+- **Premier super administrateur** : par la ligne de commande seulement, jamais par l'interface (le mot de passe est demandé sans écho, ou lu dans `SUPER_ADMIN_PASSWORD`). Une personne déjà inscrite est promue.
+
+```bash
+pnpm --filter @ziga/api admin:create-super-admin --phone "+226 70 12 34 56" --name "Nom Prénom"
+```
+
+- **Sessions** : jeton d'accès de 15 minutes, en mémoire du navigateur ; jeton de rafraîchissement de 30 jours dans le cookie `__Host-ziga_rt` (httpOnly, Secure, SameSite=Lax), renouvelé à chaque usage. Hors connexion, la coque reste affichée ; seul un refus du serveur (401) renvoie vers `/connexion`.
 
 ## Organisation
 
