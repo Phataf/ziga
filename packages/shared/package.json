@@ -35,6 +35,18 @@
 		"./organizations": {
 			"types": "./dist/organizations.d.ts",
 			"default": "./dist/organizations.js"
+		},
+		"./features": {
+			"types": "./dist/features.d.ts",
+			"default": "./dist/features.js"
+		},
+		"./subscriptions": {
+			"types": "./dist/subscriptions.d.ts",
+			"default": "./dist/subscriptions.js"
+		},
+		"./admin": {
+			"types": "./dist/admin.d.ts",
+			"default": "./dist/admin.js"
 		}
 	},
 	"files": [

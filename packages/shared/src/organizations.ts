@@ -109,6 +109,24 @@ export const LOGO_MAX_BYTES = 2 * 1024 * 1024;
 export const LOGO_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const;
 export type LogoMimeType = (typeof LOGO_MIME_TYPES)[number];
 
+/** Moyens de paiement acceptés (D18) : un réglage de l'organisation, jamais un interrupteur ; au moins un actif. */
+export const PAYMENT_METHODS = ['cash', 'mobile_money_manual', 'bank_transfer'] as const;
+export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+	cash: 'Espèces',
+	mobile_money_manual: 'Mobile Money (saisi avec sa référence)',
+	bank_transfer: 'Virement bancaire'
+};
+export const paymentMethodsSchema = z.object({
+	methods: z
+		.array(z.enum(PAYMENT_METHODS))
+		.min(1, { error: 'Gardez au moins un moyen de paiement accepté.' })
+		.transform((m) => PAYMENT_METHODS.filter((x) => m.includes(x)))
+});
+
+/** Le directeur ne peut que désactiver, pour son organisation, une fonctionnalité qui lui est ouverte. */
+export const organizationFeatureSettingSchema = z.object({ disabled: z.boolean() });
+
 // « Mon compte » (complément c du lot 03).
 export const updateProfileSchema = z.object({ name: personNameSchema });
 export const changePasswordSchema = z.object({
@@ -154,6 +172,8 @@ export interface OrganizationView {
 	representative: Representative;
 	verificationStatus: 'pending' | 'verified' | 'suspended';
 	logo: LogoView | null;
+	planId: string;
+	acceptedPaymentMethods: PaymentMethod[];
 	createdAt: string;
 	updatedAt: string;
 }
@@ -199,6 +219,9 @@ export interface AuditEntryView {
 	before: unknown;
 	after: unknown;
 	origin: string;
+	/** Organisation et personne concernées (journal du back-office). */
+	organizationId?: string | null;
+	subjectUserId?: string | null;
 }
 
 export const ROLE_LABELS: Record<(typeof ORGANIZATION_ROLES)[number], string> = {

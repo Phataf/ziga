@@ -65,3 +65,46 @@ export type MemberProfile = OrganizationRole | 'landlord';
 export function memberProfile(type: OrganizationType, role: OrganizationRole): MemberProfile {
 	return type === 'landlord' ? 'landlord' : role;
 }
+
+// ---------------------------------------------------------------- rôles de la plateforme (lot 04)
+
+export const PLATFORM_ROLE_KEYS = ['super_admin', 'support', 'sales', 'finance'] as const;
+export type PlatformRoleKey = (typeof PLATFORM_ROLE_KEYS)[number];
+
+const SA = 'super_admin';
+const SU = 'support';
+const SL = 'sales';
+const FI = 'finance';
+
+/**
+ * Back-office : chaque rôle n'accède qu'à sa partie (prompt du lot 04). Seul `super_admin` modifie les interrupteurs.
+ * Vérifié par le garde @PlatformCan de l'API ; l'interface masque le reste.
+ */
+export const PLATFORM_PERMISSIONS = {
+	/** Lire organisations, personnes, simulateur et journal de la plateforme. */
+	'platform.read': [SA, SU, SL, FI],
+	'organization.verify': [SA, SU],
+	'organization.suspend': [SA],
+	'support.access': [SA, SU],
+	'organization.change_plan': [SA, SL],
+	/** Prix et quotas des formules (hypothèses du cadrage). */
+	'plan.manage': [SA, SL],
+	'subscription.manage': [SA, SL],
+	'subscription.record_payment': [SA, FI],
+	/** Modes globaux, exceptions, formules incluses, exceptions de quota. */
+	'feature.manage': [SA]
+} as const satisfies Record<string, readonly PlatformRoleKey[]>;
+
+export type PlatformAction = keyof typeof PLATFORM_PERMISSIONS;
+export const PLATFORM_ACTIONS = Object.keys(PLATFORM_PERMISSIONS) as PlatformAction[];
+
+export function platformCan(role: string | null | undefined, action: PlatformAction): boolean {
+	return !!role && (PLATFORM_PERMISSIONS[action] as readonly string[]).includes(role);
+}
+
+export const PLATFORM_ROLE_LABELS: Record<PlatformRoleKey, string> = {
+	super_admin: 'Administrateur général',
+	support: 'Assistance',
+	sales: 'Commercial',
+	finance: 'Finances'
+};

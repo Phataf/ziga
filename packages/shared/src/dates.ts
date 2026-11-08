@@ -36,3 +36,16 @@ export function parseDate(input: string): string | null {
 	const iso = `${m[3]}-${m[2]!.padStart(2, '0')}-${m[1]!.padStart(2, '0')}`;
 	return isIsoDate(iso) ? iso : null;
 }
+
+/** Ajoute (ou retire) des jours à une date aaaa-mm-jj. */
+export function addDays(iso: string, days: number): string {
+	if (!isIsoDate(iso)) throw new RangeError(`Date invalide : ${iso}`);
+	const d = new Date(`${iso}T00:00:00Z`);
+	d.setUTCDate(d.getUTCDate() + days);
+	return d.toISOString().slice(0, 10);
+}
+
+/** Nombre de jours de `from` à `to` (dates aaaa-mm-jj ; négatif si `to` est avant). */
+export function daysBetween(from: string, to: string): number {
+	return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+}
