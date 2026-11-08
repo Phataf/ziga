@@ -11,24 +11,30 @@ Lot 03 terminé.
 ## Périmètre
 1. **Catalogue** dans `packages/shared/features.ts` : les clés du §4 de la spécification, avec description, dépendances, `plan_bound`, mode global par défaut. Migration qui insère le catalogue.
 2. **Formules** : table `plans` (`discovery`, `essential`, `pro`, `custom`) avec quotas (unités, utilisateurs, relevés par mois) ; table `plan_features`. Données initiales conformes au cadrage (Découverte 10 unités et 1 utilisateur, Essentiel 60 et 3, Pro 250 et 10).
-3. **Tables** `features`, `feature_overrides`, `agency_feature_settings` (§5 de la spécification).
+3. **Tables** `features`, `feature_overrides`, `organization_feature_settings` (§5 de la spécification).
 4. **Service de résolution** `features.isEnabled(key, ctx)` et `features.explain(key, ctx)` (renvoie l'étape qui a décidé) : les 7 étapes du §3, dans l'ordre exact. Cache Redis avec invalidation par publication à chaque modification ; propagation en 30 secondes maximum.
 5. **Application** : décorateur `@RequiresFeature(key)` (refus `403`, code `FEATURE_DISABLED`) ; endpoint `GET /me/features` qui renvoie l'état effectif des clés pour l'utilisateur et l'agence active ; store Svelte `features` et composant `<FeatureGate key="...">` côté interface.
-6. **Quotas** : service `quotas.check(agencyId, 'units' | 'users' | ...)` utilisé à la création (les lots suivants l'appelleront).
-7. **Back-office**, pensé d'abord pour l'ordinateur et utilisable sur tablette (tableaux, filtres, panneaux latéraux, `docs/UX.md`) (`/admin`, réservé à `super_admin` et `support`, rôle base `app_admin`, chaque lecture d'une agence journalisée) :
-   - Agences : liste, fiche, validation (`pending` → `verified`), suspension avec motif, changement de formule.
+6. **Moyens de paiement acceptés (D18)** : réglage de chaque organisation (`cash`, `mobile_money_manual`, `bank_transfer`), modifiable par le directeur, au moins un actif. Ce n'est pas un interrupteur : la plateforme ne le vend pas et ne le coupe pas.
+7. **Quotas** : service `quotas.check(organizationId, 'units' | 'users' | ...)` utilisé à la création (les lots suivants l'appelleront).
+8. **Back-office**, pensé d'abord pour l'ordinateur et utilisable sur tablette (tableaux, filtres, panneaux latéraux, `docs/UX.md`) (`/admin`, réservé à `super_admin` et `support`, rôle base `app_admin`, chaque lecture d'une agence journalisée) :
+   - Organisations (agences et bailleurs) : liste filtrable par type, fiche, validation (`pending` → `verified`), suspension avec motif, changement de formule.
+   - **Abonnements saisis à la main** : table `subscriptions` (organisation, formule, début, fin, montant en FCFA, statut de paiement, référence du paiement reçu). Les abonnements sont payés sur le compte de la plateforme : ce ne sont pas des loyers (`CLAUDE.md` §5 règle 5). Un abonnement échu passe par paliers : rappel, puis blocage des **créations** seulement ; consultation, reçus, relevés et export restent toujours possibles ; aucune donnée n'est supprimée.
+   - **Accès d'assistance** : pour lire les données d'une organisation, `support` saisit un motif et une durée (24 heures au plus) ; l'accès apparaît dans le journal de l'organisation. Aucune connexion « en tant que » un utilisateur.
    - Fonctionnalités : les 4 écrans du §7 de la spécification (liste avec sélecteur à 3 positions, fiche avec exceptions, onglet « Fonctionnalités » sur les fiches agence et utilisateur avec la raison, simulateur).
    - Confirmation renforcée pour couper une fonctionnalité utilisée (affiche le nombre d'agences touchées) et pour suspendre une agence.
-   - `support` peut consulter et valider ; seul `super_admin` modifie les interrupteurs et les formules.
-8. **Réglages de l'agence** : le directeur voit les fonctionnalités ouvertes à son agence et peut en désactiver certaines pour son agence (jamais en activer).
-9. **Audit** : toute modification d'interrupteur, d'exception, de formule, de statut d'agence écrit dans `audit_log` avec avant et après.
+   - `support` peut consulter et valider ; `sales` gère formules et abonnements ; `finance` enregistre les paiements d'abonnement ; seul `super_admin` modifie les interrupteurs.
+9. **Réglages de l'organisation** : le directeur voit les fonctionnalités ouvertes à son agence et peut en désactiver certaines pour son agence (jamais en activer).
+10. **Audit** : toute modification d'interrupteur, d'exception, de formule, de statut d'agence écrit dans `audit_log` avec avant et après.
 
 ## Hors périmètre
-Facturation et paiement des abonnements, modules métier, pages publiques.
+Facturation automatique et paiement en ligne des abonnements, modules métier, pages publiques.
 
 ## Tests attendus
 Tous les tests du §8 de `docs/FEATURE-FLAGS.md`, plus :
-- `support` ne peut pas modifier un interrupteur ; `super_admin` peut.
+- `support` ne peut pas modifier un interrupteur ; `super_admin` peut ; `sales` et `finance` n'accèdent qu'à leur partie.
+- Accès d'assistance sans motif refusé ; accès expiré refusé ; chaque lecture journalisée et visible par l'organisation.
+- Abonnement échu : création refusée avec un message clair ; consultation et export toujours possibles.
+- Moyens de paiement : impossible de les désactiver tous.
 - Un utilisateur sans rôle plateforme ne peut pas accéder à `/admin` ni à ses endpoints.
 - Quota d'utilisateurs : l'invitation d'un 2e membre sur la formule Découverte est refusée avec un message clair, sauf exception.
 - `GET /me/features` reflète un changement en moins de 30 secondes.

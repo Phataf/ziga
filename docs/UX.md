@@ -23,11 +23,11 @@ Ce document fait foi pour toute interface du projet (maquette et produit). `CLAU
 | Directeur d'agence | Agence | Compte | Piloter : encaissements, retards, équipe, contrôle | Tableau de bord | Toute l'agence |
 | Gestionnaire | Agence | Compte | Encaisser, relancer, publier, envoyer les relevés | Tableau de bord | Toute l'agence |
 | Agent de terrain | Agence | Compte | Encaisser en espèces, visiter ses biens | « Ma tournée » | Ses biens affectés seulement |
-| Bailleur particulier | Agence (formule Découverte) | Compte | Gérer lui-même quelques logements | Accueil « Mes logements » | Ses logements |
-| Propriétaire | Propriétaire | Lien sans compte (compte plus tard) | Suivre ses revenus et ses biens | « Mes revenus » | Ses biens, ses relevés ; pas les coordonnées des locataires |
-| Locataire | Locataire | Lien sans compte | Connaître son solde, retrouver ses reçus, joindre l'agence | « Mon logement » | Son bail, ses échéances, ses reçus |
+| Bailleur particulier | Organisation de type bailleur (D12) | Compte | Gérer lui-même quelques logements | Accueil « Mes logements » | Ses logements |
+| Propriétaire | Espace personnel (D13) | Compte personnel vérifié par SMS, dès le lancement ; le lien d'un relevé reste partageable | Suivre tous ses biens, quelle que soit l'organisation qui les gère, et ses revenus | « Mon patrimoine » | Ses biens dans chaque organisation liée, avec le gestionnaire de chacun ; relevés, reversements, cautions détenues ; pas les coordonnées des locataires |
+| Locataire | Espace personnel (D13) | Compte personnel vérifié par SMS, dès le lancement ; le lien d'un reçu reste partageable | Connaître son solde, retrouver ses reçus, suivre sa caution, signaler un problème, donner son préavis | « Mon logement » | Tout son historique, toutes agences confondues : baux, échéances, reçus, cautions, décomptes ; chaque élément indique l'agence concernée |
 | Visiteur ou acheteur | Vitrine publique | Aucun | Trouver un logement à louer ou un bien à acheter | Recherche | Annonces publiées |
-| Administrateur plateforme | Back-office | Compte plateforme | Agences, formules, interrupteurs | Liste des agences | Selon `docs/FEATURE-FLAGS.md` |
+| Administrateur plateforme | Back-office | Compte plateforme (rôles : administrateur général, assistance, commercial, finances) | Organisations, formules, abonnements, interrupteurs | Liste des organisations | Selon `docs/FEATURE-FLAGS.md` ; accès aux données d'une organisation motivé, limité dans le temps et journalisé |
 
 **Navigation par profil**
 
@@ -37,9 +37,12 @@ Ce document fait foi pour toute interface du projet (maquette et produit). `CLAU
 | Gestionnaire | Accueil, Biens, Encaissements, Plus | Même chose, sans l'équipe |
 | Agent de terrain | Tournée, Biens, Encaissements, Plus | Terrain : tournée, mes biens, mes encaissements, retards |
 | Bailleur particulier | Accueil, Logements, Loyers, Plus | Mes logements |
-| Propriétaire | Revenus, Biens, Relevés | Mon patrimoine |
-| Locataire | Logement, Reçus, Contact | Mon espace |
+| Propriétaire | Patrimoine, Revenus, Relevés, Plus | Mon patrimoine (filtre par gestionnaire), revenus, relevés, reversements, approbations |
+| Locataire | Logement, Reçus, Caution, Plus | Mon logement, historique, reçus, caution et décompte, signalements, préavis |
 | Visiteur ou acheteur | Pas d'onglets : en-tête de site avec Louer et Acheter | Même en-tête, filtres à gauche |
+| Administrateur plateforme | Non prévu (back-office pensé pour l'ordinateur, utilisable sur tablette) | Organisations, formules et abonnements, fonctionnalités, journal, accès d'assistance |
+
+**Plusieurs espaces pour une même personne** : une personne peut être membre d'une organisation, propriétaire chez deux agences et locataire ailleurs. Elle choisit son espace dans le menu du compte. Un écran de gestion n'affiche jamais deux organisations à la fois ; seuls les espaces personnels (propriétaire, locataire) regroupent plusieurs organisations, en lecture seule, chaque élément indiquant l'organisation concernée (`CLAUDE.md` règle 15).
 
 **Ce que chaque profil peut faire** : la matrice de permissions (`packages/shared/permissions.ts`) et les interrupteurs (`docs/FEATURE-FLAGS.md`) décident. L'interface masque ce qui est interdit, et le serveur le refuse quand même. Une fonctionnalité coupée s'affiche désactivée avec une explication quand l'utilisateur s'y attend (par exemple « Payer par Mobile Money », bientôt disponible), sinon elle disparaît.
 
@@ -129,3 +132,44 @@ Conteneurs : `page` (32 rem sur téléphone, pleine largeur sur tablette, 80 rem
 - Le test anti-émoji.
 
 La maquette contient ces tests (`maquette/e2e/08-multiplateforme.spec.ts`), à reprendre dans le produit.
+
+---
+
+## 9. Direction artistique (D19)
+
+| Espace | Registre | Particularités |
+| --- | --- | --- |
+| Vitrine et fiches | Éditorial soigné | Photo de couverture large (3:2), titres de la vitrine dans une police à empattement hébergée sur la plateforme et limitée aux caractères latins, marges généreuses ; accueil en sections (quartiers, nouveautés, biens mis en avant) ; variante « mise en avant » pour les villas (`listings.featured`) |
+| Agence, bailleur | Utilitaire dense | Tableaux, chiffres tabulaires, couleurs réservées aux statuts ; aucune police d'affichage |
+| Propriétaire | Utilitaire aéré | Grands chiffres (revenus, rendement), une carte par bien avec le nom de son gestionnaire |
+| Locataire | Très simple | Un chiffre principal (ce que je dois), une action principale, vocabulaire de tous les jours |
+| Back-office | Dense, ordinateur d'abord | Tableaux filtrables, journaux, couleur d'alerte distincte pour les actions qui touchent toutes les organisations |
+
+- **Couleurs** : vert foncé et fond pierre de la maquette ; une seule couleur d'accent chaude (latérite), réservée à la vitrine.
+- **Interdits** : 3D, parallaxe, vidéo en lecture automatique, fond noir et doré généralisé. La visite 360° est une option (`media.virtual_tour_360`) ouverte par un bouton et chargée seulement à la demande.
+- **Mouvements** : moins de 200 ms, désactivés si l'appareil le demande ; jamais d'animation qui retarde une action.
+
+---
+
+## 10. Composants et écrans ajoutés par l'audit du 08/11/2026
+
+**Composants réutilisables**
+
+- **Assistant pas à pas** (ajout de bien, création de bail, sortie du locataire, transfert de gestion) : une étape par écran sur téléphone ; étapes à gauche et formulaire à droite sur ordinateur ; brouillon enregistré à chaque étape, reprise possible.
+- **Chronologie** (bail, unité, compte de caution, historique du locataire) : chaque événement daté, avec son auteur, son organisation et sa pièce jointe.
+- **Circuit d'accord** (imputation de la caution sur les derniers loyers, réparation faite par le locataire, dépense à approuver, contestation d'un décompte) : proposition, acceptation ou refus motivé, horodatage, visible des deux parties.
+- **Statut d'unité en quatre dimensions** (D14) : une pastille par dimension sur la fiche ; sur les cartes et les tableaux, une seule pastille de synthèse (« Disponible », « Occupée jusqu'au jj/mm/aaaa », « À remettre en état »…).
+
+**Écrans**
+
+| Espace | Écrans | Lot |
+| --- | --- | --- |
+| Gestion | Assistant d'ajout de bien (type et propriétaire, localisation avec point GPS, unités, médias, documents) | 07 |
+| Gestion | Fiche bail avec chronologie ; compte de caution | 08 |
+| Gestion, agent de terrain | Préavis ; état des lieux guidé pièce par pièce avec photos ; décompte de sortie ; remise en état ; transfert de gestion | 10 bis |
+| Gestion | Dépenses (qui paie, qui supporte, comment c'est récupéré) ; reversements | 10 |
+| Propriétaire | Patrimoine regroupé par gestionnaire ; fiche bien (statut, loyers, bail, caution, dépenses, rendement) ; relevés ; reversements | 10 ter |
+| Locataire | Mon logement ; historique toutes agences ; reçus ; caution et décompte ; signalements suivis ; préavis | 10 ter |
+| Compte | Choix de l'espace ; liaison d'une fiche (code SMS, puis acceptation par l'organisation) | 10 ter |
+| Gestion | Bouton global « Créer » (bien, locataire, bail, dépense) sur tablette et ordinateur ; écran de démarrage qui guide vers l'import Excel | 07, 11 |
+| Back-office | Organisations, formules et abonnements, fonctionnalités, journal, accès d'assistance motivé | 04 |

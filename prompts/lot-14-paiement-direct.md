@@ -8,7 +8,7 @@ Porte 1 franchie. Lot 13 terminé. **Avant de coder** : le porteur a choisi le o
 
 ## Périmètre
 1. **Implémentation de `PaymentProvider`** (interface du lot 09) pour l'agrégateur retenu, isolée dans `apps/api/src/modules/payments/providers/<nom>/`. Le reste du code ne connaît que l'interface.
-2. **Identifiants marchands par agence** : table `agency_payment_accounts` (agence, prestataire, identifiants **chiffrés** avec une clé hors base, mode test ou production, statut de vérification, dernier test réussi). Saisie par le directeur ; bouton « Tester la connexion ». Jamais affichés en clair après saisie.
+2. **Identifiants marchands par agence** : table `organization_payment_accounts` (organisation, prestataire, identifiants **chiffrés** avec une clé hors base, mode test ou production, statut de vérification, dernier test réussi). Saisie par le directeur ; bouton « Tester la connexion ». Jamais affichés en clair après saisie.
 3. **Parcours de paiement** :
    - Depuis un bail ou une échéance, l'agence génère un **lien de paiement** (`/p/<jeton>`), envoyé par WhatsApp.
    - Le locataire ouvre la page (sans compte) : agence, unité, période, montant dû (modifiable vers le bas si l'agence autorise les paiements partiels), choix de l'opérateur, puis redirection ou validation selon le flux de l'agrégateur.

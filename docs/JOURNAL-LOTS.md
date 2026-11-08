@@ -92,3 +92,22 @@ Demande du porteur après test de la maquette : une expérience adaptée à chaq
 
 ### Questions ouvertes pour le porteur
 - Le libellé « Bailleur particulier » et son périmètre (formule Découverte, sans équipe) conviennent-ils ? À vérifier en entretien.
+
+## Audit fonctionnel et décisions D12 à D19 — 08/11/2026
+
+Demande du porteur avant le lot 01 : un audit fonctionnel et UX/UI complet (cautions et sortie du locataire, espace locataire, propriétaire multi-agences, ajout de biens et statuts, cycle de location, dépenses, modèle SaaS, direction artistique), sans modifier le code avant validation. Rapport : `docs/AUDIT.md`.
+
+### Décisions validées par le porteur
+- **D12** organisation (agence ou bailleur particulier) comme unité de cloisonnement ; **D13** comptes de personne et espaces propriétaire et locataire regroupant toutes les organisations, **dès le lancement** ; **D14** statut d'unité en quatre dimensions, occupation calculée ; **D15** compte de caution et décompte de sortie unique ; **D16** un seul mandat de gestion actif par unité ; **D17** aucune information transmise d'une organisation à une autre (le locataire suit son propre historique, rien n'est partagé entre agences) ; **D18** moyens de paiement en réglage d'organisation ; **D19** direction artistique, pas de 3D.
+
+### Fait (documentation seulement, aucun code)
+- `CLAUDE.md` : vocabulaire `organization_id`, modules `organizations` et `portals`, règles 12 à 16, glossaire.
+- `docs/DECISIONS.md`, `docs/FEATURE-FLAGS.md` (clé `payments.mobile_money_manual` retirée, clés `portals.*` et `listings.facebook_publish` ajoutées), `docs/UX.md` (§2, §9, §10), `docs/LOTS.md`.
+- Prompts révisés : lots 01 à 04, 06 à 14. Nouveaux prompts : `lot-00ter-maquette-audit.md` (en parallèle des lots 01 à 05), `lot-10bis-sortie-locataire.md`, `lot-10ter-espaces-personnels.md`.
+
+### Écarts par rapport au rapport
+- La sortie du locataire est placée au lot **10 bis** (et non « 08 bis ») : le décompte a besoin des encaissements (lot 09) et des dépenses (lot 10).
+- La génération du bail en PDF n'est faite que si un modèle validé par un juriste est fourni avant le lot 08 ; la signature électronique est écartée (article 5 de la loi n° 103-2015/CNT), sans décision écrite à ce stade.
+
+### Questions ouvertes
+Voir `docs/DECISIONS.md` : lecture juridique de la loi n° 103-2015/CNT, réparations locatives (article 25), détenteur de la caution, légalisation des baux, nouvelle loi sur les données personnelles (ARCOD), prestataire SMS.

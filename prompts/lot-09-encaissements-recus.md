@@ -9,7 +9,7 @@ Lot 08 terminé. Question au porteur : mentions minimales d'un reçu de loyer (v
 ## Périmètre
 1. **Tables** (module `payments`), cloisonnées, auditées, synchronisées, **ajout seul** (triggers interdisant `UPDATE` des montants et tout `DELETE`) :
    - `payments` : bail, locataire, montant, moyen (`cash`, `mobile_money_manual`, `bank_transfer`, `mobile_money_direct` réservé au lot 14), opérateur (Orange Money, Moov Money, autre), référence de transaction, date de paiement, saisi par, statut, prestataire (`manual` ou clé d'agrégateur), référence prestataire, clé d'idempotence, motif d'annulation, annulé par, paiement d'annulation lié.
-   - `payment_allocations` : paiement, échéance, montant.
+   - `payment_allocations` : paiement, cible (échéance **ou compte de caution**), montant. Un versement de caution est un encaissement comme un autre : il a son reçu, et il crée le mouvement `received` du compte de caution (lot 08).
    - `receipts` : paiement, numéro (attribué par le serveur), numéro provisoire (local), date d'émission, statut (`provisional`, `valid`, `cancelled`), jeton de vérification, clé du PDF.
    - `receipt_counters` : compteur par agence et par année, verrouillé en ligne pour garantir la continuité.
 2. **Machine d'états du paiement** (source unique dans `packages/shared`) :
@@ -29,9 +29,9 @@ Lot 08 terminé. Question au porteur : mentions minimales d'un reçu de loyer (v
 6. **Annulation** : réservée au directeur (`payment.cancel`), motif obligatoire, crée une contre-écriture, annule les imputations par écritures inverses, marque le reçu « ANNULÉ » sur la page de vérification et le PDF.
 7. **Validation et rapprochement** : écran du gestionnaire listant les espèces `to_validate` et les Mobile Money `to_reconcile`, avec validation unitaire ou groupée.
 8. **Adaptateur de paiement** : interface `PaymentProvider` (`initiate`, `verify`, `handleWebhook`, `refund` facultatif) et registre des prestataires ; implémentation `manual` uniquement. Documente l'interface dans `docs/PAIEMENTS.md`.
-9. **Interrupteurs** : `payments.registry` et `payments.mobile_money_manual` protègent les endpoints et écrans correspondants.
+9. **Interrupteurs et réglages** : `payments.registry` protège les endpoints et écrans. Les moyens proposés à l'encaissement sont ceux que l'organisation accepte (réglage D18, lot 04) ; un moyen non accepté est refusé par l'API.
 10. **Écran d'encaissement en 3 gestes** : rechercher un locataire (par nom, téléphone ou unité) → montant pré-rempli avec le solde dû, modifiable au clavier numérique → moyen (et référence si Mobile Money) → valider → reçu. Sur ordinateur et tablette en paysage : liste et formulaire côte à côte ; tableau des encaissements avec validation groupée des espèces « à valider » (`docs/UX.md` §4).
-11. **Espace locataire par lien, sans compte** (D11, `docs/UX.md` §2) : lien long et révocable envoyé avec le reçu ; le locataire y voit son solde, ses échéances, ses reçus et le contact de l'agence, en lecture seule. Le bouton « Payer par Mobile Money » s'affiche désactivé, avec une explication, tant que `payments.direct` est coupée pour l'agence.
+11. **Lien du reçu** : le lien partagé par WhatsApp ouvre le reçu (lecture seule, jeton long et révocable) et invite le locataire à créer son compte pour retrouver tout son historique. L'espace locataire avec compte est au lot 10 ter (D13).
 
 ## Hors périmètre
 Paiement initié depuis la plateforme (lot 14), rapprochement automatique avec un relevé d'opérateur, remboursements, relances (lot 10).
@@ -45,7 +45,8 @@ Paiement initié depuis la plateforme (lot 14), rapprochement automatique avec u
 - Agent de terrain : statut `to_validate` ; ne peut pas confirmer ; le gestionnaire valide.
 - Annulation : réservée au directeur, motif obligatoire, échéances ressoldées correctement, reçu marqué annulé.
 - Transition d'état interdite refusée (ex. `to_reconcile` → `failed`).
-- Interrupteur `payments.mobile_money_manual` coupé : le moyen disparaît et l'API le refuse.
+- Moyen de paiement non accepté par l'organisation : absent de l'écran et refusé par l'API.
+- Versement de caution en deux fois : deux reçus, deux mouvements `received`, solde restant dû juste.
 - Montant en lettres correct (test sur 0, 1, 80 000, 1 250 000, 21 000 000).
 
 ## Critères d'acceptation

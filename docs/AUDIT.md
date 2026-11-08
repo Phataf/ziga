@@ -1,0 +1,469 @@
+# Audit fonctionnel et UX/UI — Plateforme immobilière (avant lot 01)
+
+Rapport d'audit du 08/11/2026, mis à jour avec les décisions du porteur. Version de travail partagée : https://claude.ai/artifact/WNYWg6QEaXPttoDzifpkyE. Les décisions qui font foi sont dans `docs/DECISIONS.md` (D12 à D19).
+
+## Synthèse
+
+Le socle de la maquette est sain : le registre des encaissements, les reçus, les impayés, les profils et l'adaptation aux appareils tiennent. En revanche, trois choix de modèle doivent être tranchés **avant le lot 01** : qui est une « organisation », comment une même personne existe dans plusieurs agences, et comment se compose le statut d'un logement. Les reprendre après le lot 03 coûterait une refonte des tables, des règles d'isolement par agence (RLS) et de la synchronisation.
+
+**Ce qui manque pour une première version exploitable** : la sortie du locataire (préavis, état des lieux, décompte de caution, remise en état), un vrai parcours d'ajout de bien, la répartition des dépenses entre propriétaire, agence et locataire, et le back-office.
+
+**Points discutés et décision retenue (votre retour du 08/11/2026) :**
+
+1. **Statuts des biens — validé.** Quatre dimensions séparées ; l'occupation est calculée à partir du bail, jamais saisie.
+2. **Caution — validé.** Un seul décompte de sortie, fait de lignes justifiées, couvre les scénarios A, B et C. Le scénario B n'est possible que par accord écrit (article 26).
+3. **Historique du locataire — précisé et validé.** Le locataire retrouve dans son espace tout son historique (baux, reçus, cautions, décomptes), quelle que soit l'agence. Aucune information sur un locataire ne passe d'une agence à une autre : l'attestation partagée que je proposais est retirée.
+4. **Propriétaire multi-agences — validé.** Un logement n'a qu'un seul gestionnaire. L'espace du propriétaire présente tous ses logements au même endroit : ceux confiés à chaque agence utilisatrice et ceux qu'il gère lui-même.
+5. **Espèces — validé.** Les moyens de paiement acceptés sont un réglage de l'agence, pas une option commerciale.
+6. **3D immersive — validé.** Écartée de la vitrine ; la visite 360° reste une option chargée à la demande.
+7. **Signature électronique — sans retour.** Je maintiens la recommandation : bail généré en PDF, signé, légalisé à la mairie, puis scanné.
+
+**Décisions à écrire dans `docs/DECISIONS.md` avant de coder :**
+
+| N° | Décision proposée | Avant le lot | Statut |
+| --- | --- | --- | --- |
+| D12 | L'unité d'isolement devient l'**organisation** : une agence ou un bailleur particulier | 01 | Validée |
+| D13 | Une **personne** (compte global) peut être liée aux fiches propriétaire ou locataire de plusieurs organisations ; son espace présente l'ensemble de ses biens ou de son historique | 02 | Validée |
+| D14 | Statut d'une unité en quatre dimensions ; occupation calculée | 07 | Validée |
+| D15 | Compte de caution et décompte de sortie unique ; aucune retenue sans ligne d'état des lieux et justificatif | 08 | Validée |
+| D16 | Un seul mandat de gestion actif par unité ; transfert de gestion guidé | 06 | Validée |
+| D17 | Aucune information sur un locataire ou un propriétaire ne passe d'une organisation à une autre ; seule la personne concernée voit l'ensemble de ses données | 02 | Validée |
+| D18 | Moyens de paiement acceptés : réglage de l'agence, pas un interrupteur commercial | 04 | Validée |
+| D19 | Pas de 3D sur la vitrine ; visite 360° en option, chargée à la demande | 12 | Validée |
+
+Le lot 01 peut démarrer dès que D12 est tranchée, car elle fixe le nom de la colonne d'isolement dans tout le code.
+
+## A. Audit de l'existant
+
+La maquette couvre bien le travail quotidien d'une agence pendant le bail, mais presque rien avant (ajout du bien, recherche du locataire) ni après (sortie). Les lots 07, 08 et 10 prévoient une partie de ce qui manque, avec deux contradictions à corriger.
+
+### Ce qui fonctionne bien
+
+- **Encaisser en trois gestes** depuis le téléphone, avec un statut qui dépend de la preuve : « à rapprocher » pour le Mobile Money déclaré, « à valider » pour les espèces d'un agent de terrain.
+- **Reçus numérotés par le serveur**, jamais supprimés, corrigés par une annulation motivée.
+- **Impayés et relances WhatsApp** en série, **relevé propriétaire** partagé par lien.
+- **Sept profils** qui ne voient que leur périmètre, trois agencements selon l'appareil, icônes Lucide uniquement.
+- **Isolement par agence et interrupteurs** pensés dès la conception, et non ajoutés après coup.
+
+### Incomplet
+
+| Élément | Dans la maquette aujourd'hui | Ce qui manque |
+| --- | --- | --- |
+| Caution | Un montant sur le bail | Versements en plusieurs fois, solde, détenteur (agence ou propriétaire), mouvements |
+| Biens | Liste et fiche | Parcours d'ajout, terrain, vente, géolocalisation, documents |
+| Statut d'unité | 4 valeurs saisies à la main | Séparation des dimensions, calcul à partir du bail |
+| Dépenses | Libellé et montant | Catégorie, qui paie, qui supporte, justificatif, lien avec la caution |
+| Mandat | Un mandat implicite par propriétaire | Plusieurs propriétaires d'un même bien (indivision), transfert de gestion |
+| Espace locataire | Solde, reçus, signalement | Bail, caution, suivi du signalement, historique complet |
+| Espace propriétaire | Une seule agence | Plusieurs agences et ses biens en gestion directe |
+
+### Absent
+
+- État des lieux d'entrée et de sortie, préavis, décompte de caution.
+- Demandes de location, visites, candidatures.
+- Back-office de la plateforme : organisations, formules, abonnements, interrupteurs.
+- Interventions : du signalement du locataire à la réparation et à sa dépense.
+- Reversements aux propriétaires (prévus au lot 10, absents de la maquette).
+
+### Incohérences à corriger
+
+1. **Le lot 08 remet l'unité « libre » à la fin du bail.** C'est contraire à votre exigence : un logement qui attend des travaux ne doit pas redevenir disponible.
+2. **Le statut d'unité est stocké alors que le bail le détermine.** Deux sources de vérité finiront par se contredire, et l'annonce affichera un logement occupé.
+3. **D11 prévoit des espaces propriétaire et locataire par lien, agence par agence.** Votre exigence d'un espace unique couvrant plusieurs agences demande un compte de personne, absent du modèle actuel.
+4. **Le plafond de caution est un paramètre d'agence (2 mois par défaut).** Or la loi le fixe à deux mois (article 26) ; l'agence ne doit pas pouvoir le relever en silence.
+
+### Problèmes d'ergonomie
+
+- Sur ordinateur, la seule action principale est « Encaisser » ; il manque un bouton « Créer » (bien, locataire, bail, dépense).
+- Aucun écran de démarrage : une agence qui s'inscrit arrive sur un tableau vide, sans guide vers l'import Excel.
+- L'onglet « Plus » du téléphone regroupe des sujets sans rapport ; il grossira avec chaque lot.
+- Les données de démonstration ne contiennent qu'une agence : impossible de montrer un propriétaire ou un locataire présent dans deux agences.
+
+### Risques liés à la logique métier
+
+| Risque | Conséquence | Parade |
+| --- | --- | --- |
+| Retenue sur caution sans preuve | Litige, perte de confiance des locataires | Retenue possible seulement sur une ligne d'état des lieux imputée au locataire, avec justificatif |
+| Logement annoncé alors qu'il est en travaux | Visites inutiles, vitrine non fiable | Disponibilité calculée (bail + état technique) |
+| Deux agences gèrent la même unité | Double encaissement, reçus contradictoires | Un seul mandat de gestion actif par unité (contrainte en base) |
+| Gestion transférée d'une agence à une autre | Caution « perdue » entre les deux | Transfert guidé qui enregistre qui détient la caution |
+| Même dépense comptée sur le relevé et retenue sur la caution | Le propriétaire est remboursé deux fois | Une dépense = un enregistrement, avec une seule partie qui la supporte |
+| Historique locataire partagé entre agences | Infraction au droit des données, « liste noire » erronée | Aucun partage : chaque agence ne voit que ses propres baux |
+| Abonnement impayé qui bloque l'agence | Loyers non saisis, agence perdue | Mode restreint progressif ; consultation et export toujours possibles |
+
+## B. Parcours utilisateurs
+
+Cinq acteurs échangent autour d'un logement, mais seule l'organisation qui le gère (agence ou bailleur particulier) écrit dans le registre. Les autres consultent, demandent ou valident. Le schéma montre qui fait quoi pour qui ; le tableau donne les parcours et les écrans.
+
+*Schéma (version texte) — seule l'organisation gestionnaire écrit dans le registre :*
+
+- Visiteur ou acheteur → organisation : demande, visite ; organisation → visiteur : annonces. Le visiteur devient locataire en signant un bail.
+- Locataire → organisation : loyers, préavis ; organisation → locataire : reçus, décompte.
+- Propriétaire → organisation : mandat, approbations ; organisation → propriétaire : relevés, reversements. Le propriétaire voit aussi, en lecture, ses autres biens gérés par une autre agence ; les deux agences n'ont aucun accès croisé.
+- Organisation → plateforme : abonnement ; plateforme → organisation : fonctionnalités, assistance.
+
+Le propriétaire voit ses biens chez d'autres agences dans son propre espace ; les deux agences, elles, ne voient jamais rien l'une de l'autre.
+
+| Profil | Parcours essentiels | Écrans nécessaires | Avec qui |
+| --- | --- | --- | --- |
+| **Visiteur, acheteur** | Chercher, comparer, demander une visite, être rappelé | Vitrine (Louer, Acheter), fiche annonce, formulaire de demande, suivi de sa demande par lien | Agence |
+| **Candidat locataire** | Visiter, déposer un dossier, recevoir l'accord, signer le bail | Demande, créneau de visite, dépôt de pièces (P2), bail à relire | Agence |
+| **Locataire** | Payer, retrouver ses reçus, suivre sa caution, signaler un problème, donner son préavis, suivre le décompte de sortie | Accueil (solde, prochaine échéance), reçus, bail, caution, signalements, préavis, décompte | Agence ou bailleur |
+| **Propriétaire** | Confier un bien, suivre ses revenus, approuver une dépense importante ou un accord de caution, recevoir ses reversements | Patrimoine (tous ses biens, par gestionnaire), fiche bien, relevés, reversements, approbations | Une ou plusieurs agences |
+| **Bailleur particulier** | Tout ce que fait une agence, en version simple, sur ses propres biens | Mêmes écrans que l'agence, sans équipe ni commission | Ses locataires |
+| **Agence : direction** | Piloter l'activité, gérer l'équipe, l'abonnement et les réglages | Tableau de bord, équipe et rôles, réglages, formule | Plateforme |
+| **Agence : gestionnaire** | Ajouter des biens, louer, encaisser, relancer, sortir un locataire, produire les relevés | Biens, locataires, baux, encaissements, impayés, sorties, dépenses, relevés, demandes | Tous |
+| **Agence : agent de terrain** | Visites, encaissements en espèces, photos, états des lieux | Ses unités, encaisser, prendre des photos, état des lieux guidé | Gestionnaire, locataire |
+| **Administrateur plateforme** | Accueillir une agence, gérer formules et abonnements, activer des fonctionnalités, assister sans voir plus que nécessaire | Organisations, formules, abonnements, interrupteurs, journal, accès d'assistance | Agences |
+
+Deux interactions demandent un circuit de validation entre acteurs, absent aujourd'hui :
+
+- **Accords autour de la caution** (imputation sur les derniers loyers, réparation faite par le locataire) : proposés par l'un, acceptés par l'autre, horodatés.
+- **Dépenses au-delà d'un seuil fixé dans le mandat** : approbation du propriétaire avant les travaux, comme le font déjà les agences par téléphone.
+
+## C. Analyse fonctionnelle
+
+Vos six besoins sont fondés, et la loi n° 103-2015/CNT sur le bail d'habitation privée en couvre déjà une bonne partie. La plateforme doit appliquer ce cadre plutôt qu'inventer ses propres règles. Les articles cités ci-dessous sont à faire confirmer par un juriste (voir la dernière section).
+
+### C1. Caution : de l'entrée à la restitution
+
+Selon la loi, la garantie couvre les loyers impayés, les charges impayées et les réparations locatives ; elle ne dépasse pas deux mois de loyer (articles 3 et 26). Elle est rendue à la fin du bail lorsque les deux parties acceptent l'état des lieux de sortie, déduction faite des sommes dues et justifiées. Les parties peuvent aussi convenir de l'imputer sur les derniers loyers.
+
+**À l'entrée : un compte de caution par bail.**
+
+- Montant convenu, saisi en mois de loyer ou en somme fixe, toujours stocké en FCFA.
+- Versements en une ou plusieurs fois, chacun avec son reçu ; le solde restant dû est affiché.
+- **Détenteur** de la caution : l'agence ou le propriétaire. Sans cette information, personne ne sait qui doit rembourser.
+- Avertissement explicite, et tracé dans le journal, au-delà de deux mois de loyer.
+- L'**avance** (loyers payés d'avance) n'est pas une caution : c'est un encaissement imputé sur les premières échéances. Les mélanger fausse les deux soldes.
+
+**À la sortie : l'état des lieux, puis un décompte unique.**
+
+La loi exige un état des lieux écrit, daté, signé des deux parties, à l'entrée et à la sortie, sans formule vague comme « bon état » (articles 8 et 9). Le locataire ne répond ni de l'usure normale ni de la vétusté (article 20). La plateforme reprend ces règles telles quelles :
+
+1. **État des lieux par pièce et par élément** (porte, douche, prises…), photos datées, comparé à celui d'entrée. Pour un meublé, l'inventaire des meubles en fait partie.
+2. **Constat par élément**, parmi trois choix : usure normale, dégradation imputable au locataire, défaut à la charge du propriétaire.
+3. **Réparation** pour chaque dégradation imputable : description, montant estimé (devis) puis réel (facture), justificatif, et qui la réalise (le propriétaire via l'agence, ou le locataire lui-même).
+4. **Décompte de sortie** : caution reçue, moins les réparations justifiées, moins les loyers et charges impayés, moins les mois couverts par accord. Le résultat est soit un montant à restituer, soit un complément à réclamer.
+5. **Mouvements en ajout seul** sur le compte de caution : versement reçu, retenue pour réparation, imputation sur loyer, restitution, complément réclamé, changement de détenteur. Le total des sorties ne dépasse jamais la caution reçue.
+
+Votre exemple (100 000 FCFA de caution, 10 000 FCFA pour la douche, 5 000 FCFA pour la porte, 85 000 FCFA à restituer) devient un décompte de deux lignes, chacune rattachée à un élément de l'état des lieux et à son justificatif.
+
+**Règle contre les retenues arbitraires** : une retenue n'existe que si elle pointe vers une ligne d'état des lieux classée « imputable au locataire », avec un montant et un justificatif. Sinon, l'application refuse de l'enregistrer.
+
+**Vos trois scénarios deviennent trois variantes du même décompte :**
+
+| Scénario | Ce qui change dans le décompte | Condition |
+| --- | --- | --- |
+| A. Restitution après réparations | Lignes de réparation, puis restitution du solde | État des lieux de sortie accepté |
+| B. Caution utilisée comme derniers loyers | Lignes « imputation sur loyer », mois par mois, puis réparations, puis solde | Accord écrit et daté **avant** les mois concernés ; l'application affiche ce qu'il restera pour couvrir les dégâts |
+| C. Le locataire répare lui-même | Lignes « réparé par le locataire » à 0 FCFA, après contre-visite | Proposition du locataire, acceptation ou refus motivé du gestionnaire |
+
+Le scénario B est le plus risqué pour le propriétaire : si toute la caution part en loyers, plus rien ne couvre les dégradations. Je recommande de l'autoriser, mais avec cet avertissement et la possibilité d'en garder une partie.
+
+**Désaccord.** Si l'une des parties refuse l'état des lieux, le décompte passe « en contestation » : observations des deux côtés, pièces, historique. Je recommande de restituer sans attendre la partie non contestée. La plateforme n'arbitre pas : elle enregistre l'issue (accord amiable ou décision de justice).
+
+### C2. Ajout des biens et statuts
+
+**Le parcours d'ajout** se fait en cinq étapes, enregistrables à tout moment en brouillon :
+
+1. **Type et propriétaire** : villa ou maison, immeuble d'appartements, cour commune, local commercial, terrain ; propriétaire et mandat (ou « je suis le propriétaire » pour un bailleur particulier).
+2. **Localisation** : commune, quartier, repère en texte (« derrière la pharmacie »), point GPS pris sur place avec le téléphone. La vitrine n'affiche que le quartier, jamais le point exact.
+3. **Unités** : pour chacune, type (entrée-coucher, chambre-salon, appartement…), pièces, douches, meublé ou non, équipements, loyer, charges, conditions (caution, avance).
+4. **Médias** : photos (déjà prévues), courte vidéo compressée (P2), lien vers une visite 360° hébergée ailleurs (P3).
+5. **Documents privés** : titre foncier, PUH, attestation d'attribution, mandat. Ils ne sont jamais publiés.
+
+**« Maison meublée » n'est pas un type** : c'est une caractéristique de l'unité. Elle a une conséquence pratique : l'état des lieux comprend alors l'inventaire des meubles. **Le terrain** est un bien sans unité à louer dans la plupart des cas ; on le gère surtout en vente. **La vente** suppose un mandat de vente et un prix ; elle n'a ni bail ni échéances.
+
+**Les statuts : quatre dimensions, pas une liste.** Votre liste mélange des informations qui changent pour des raisons différentes. Un logement peut être à la fois occupé (bail en cours), en préavis (libre dans deux mois) et annoncé (pour éviter la vacance). Avec un statut unique, il faut choisir et perdre de l'information.
+
+| Dimension | Valeurs | Qui la change |
+| --- | --- | --- |
+| Fiche | Brouillon, active, archivée | Le gestionnaire |
+| Occupation | Libre, réservée (bail signé qui commence plus tard), occupée, en préavis (libre le jj/mm/aaaa) | **Calculée à partir des baux**, jamais saisie |
+| État technique | Prête, à remettre en état, en travaux, indisponible (motif obligatoire) | L'état des lieux et le gestionnaire |
+| Annonce | Non publiée, en attente de vérification, publiée, suspendue, retirée | Les règles de publication et le gestionnaire |
+
+**« Disponible » devient un résultat**, pas une saisie : fiche active, logement libre ou en préavis, état « prête ». « En cours de visite » devient un compteur de visites prévues sur la carte du logement. « Disponible à la vente » dépend du mandat et de l'annonce, pas du logement.
+
+C'est ce qui répond à votre exemple : à la fin du bail, l'unité passe « à remettre en état ». Elle ne redevient disponible qu'une fois l'état des lieux clos et les travaux terminés.
+
+*Schéma (version texte) — cycle de vie d'une unité :*
+
+Brouillon → (fiche complète) → **Disponible** → (bail signé) → Réservée → (entrée, état des lieux) → Occupée → (préavis donné) → En préavis → (sortie, état des lieux) → À remettre en état → soit (rien à réparer) → Disponible, soit (travaux à faire) → En travaux → (travaux terminés) → Disponible. « Indisponible » et « archivée » s'appliquent à tout moment, avec un motif. Une annonce est possible en « Disponible » et « En préavis ».
+
+La fin du bail ne ramène pas l'unité à « Disponible » : elle passe d'abord par « À remettre en état », puis, si nécessaire, par « En travaux ».
+
+### C3. Location : de l'annonce à la fin du bail
+
+| Étape | Ce que la plateforme fait | Priorité |
+| --- | --- | --- |
+| Demande | Formulaire ou WhatsApp depuis l'annonce, enregistré comme demande | P1 (lot 12) |
+| Visite | Créneau, agent, compte rendu en une ligne | P2 |
+| Candidature | Pièces minimales (identité, contact, garant) ; supprimées quelques mois après un refus | P2 |
+| Réservation | Bail signé qui commence plus tard ; tout acompte est un encaissement avec reçu | P1 |
+| Bail | Généré en PDF depuis un modèle, imprimé, signé, légalisé à la mairie, transmis aux impôts (articles 5 et 11), puis scanné et joint | P1 |
+| État des lieux d'entrée | Même outil que la sortie | P1 |
+| Loyers, reçus, impayés | Déjà couverts | P1 |
+| Renouvellement, révision | Date de fin, alerte ; révision selon le décret prévu à l'article 37 | P2 |
+| Préavis | Date, origine, motif ; deux mois pour un bail à durée déterminée quitté avant terme, trois mois pour un bail à durée indéterminée (articles 45 et 46) | P1 |
+| Sortie | État des lieux, décompte, remise en état (C1) | P1 |
+
+**Signature électronique** : je déconseille d'en faire un objectif. La légalisation en mairie reste obligatoire, et une signature en ligne n'aurait pas la même valeur. Plus tard, une acceptation par code SMS peut servir de preuve complémentaire (P3). Chaque étape écrit une ligne dans le journal et dans l'historique du bail.
+
+### C4. Dépenses
+
+Pour éviter les doubles comptes, une dépense est **un seul enregistrement** qui répond à trois questions distinctes :
+
+| Question | Réponses possibles |
+| --- | --- |
+| Qui a payé le réparateur ? | L'agence (avance), le propriétaire, le locataire |
+| Qui la supporte au final ? | Le propriétaire, l'agence, le locataire |
+| Comment est-elle récupérée ? | Déduite du relevé du propriétaire, retenue sur la caution, réclamée au locataire, aucune récupération |
+
+La retenue sur caution **renvoie** à la dépense au lieu d'en créer une seconde ; le relevé du propriétaire l'exclut dès qu'elle est supportée par le locataire. Chaque dépense a une catégorie (plomberie, électricité, menuiserie, entretien, taxe, autre), une date, un bien ou une unité, et un justificatif si possible.
+
+Deux points de désaccord avec votre liste :
+
+- **Les frais de gestion ne sont pas une dépense** : c'est la commission de l'agence, calculée sur le relevé. La traiter en dépense la compterait deux fois.
+- **La comptabilité générale de l'agence (SYSCOHADA) reste hors périmètre.** La plateforme tient la comptabilité des mandats (ce qui est encaissé, retenu et reversé pour chaque propriétaire) et l'exporte au comptable.
+
+### C5. Propriétaire ayant des biens dans plusieurs agences
+
+Votre exemple (maison A chez l'agence A, maison B chez l'agence B, appartement C géré en direct) se résout ainsi :
+
+- **Chaque organisation garde sa fiche propriétaire**, comme aujourd'hui. L'agence A ne sait rien de la maison B.
+- **Le propriétaire a un compte de personne**, vérifié par code SMS. Chaque agence accepte de lier sa fiche à ce compte.
+- **Son espace agrège des vues en lecture** fournies par chaque organisation : statut, loyers, baux, cautions, dépenses, rendement par bien. L'appartement C vit dans son propre espace de bailleur particulier.
+- **Chaque bien affiche son gestionnaire** (agence A, agence B, gestion directe).
+
+**Règle proposée : un seul mandat de gestion actif par unité.** Partager la gestion d'un logement entre deux agences créerait deux registres pour les mêmes loyers. Les mandats de vente non exclusifs, eux, peuvent coexister (P3).
+
+**Le transfert de gestion** (A vers B, ou A vers le propriétaire) devient une opération guidée : fin du mandat de A, remise du dossier (bail, locataire, documents), changement de détenteur de la caution. A garde son historique comptable ; B reçoit une copie du dossier, jamais l'accès aux écritures de A.
+
+**Indivision** : beaucoup de biens appartiennent à plusieurs héritiers. Au MVP, le propriétaire peut être un groupe avec un représentant ; la répartition des revenus par quote-part vient en P2.
+
+### C6. Locataire qui change d'agence
+
+**Décision (08/11/2026) : le locataire suit tout son historique, et rien n'est partagé entre agences.** Un locataire qui déménage d'un logement géré par l'agence A vers un logement géré par l'agence B retrouve tout dans son propre espace. L'agence B, elle, ne voit que ce qu'elle a saisi.
+
+Concrètement :
+
+- **Chaque agence garde sa propre fiche locataire**, isolée comme toutes ses données.
+- **Le compte du locataire est lié à chacune de ces fiches**, après vérification par code SMS et accord de l'agence.
+- **Son espace présente une chronologie unique** : tous ses baux, reçus, cautions et décomptes, chaque élément indiquant l'agence concernée.
+- **Aucune agence ne voit les baux d'une autre**, ni directement ni par une attestation. Ce choix respecte aussi la loi n° 001-2021/AN et la nouvelle loi sur les données votée le 3 août 2026.
+
+## D. Recommandations UX/UI par espace
+
+La structure actuelle (un espace par profil, une forme par appareil) est la bonne et doit être conservée. L'effort porte sur les écrans manquants et sur trois composants réutilisables : l'assistant pas à pas, la chronologie et le circuit d'accord.
+
+| Espace | Conserver | Améliorer | Repenser | Nouveaux écrans |
+| --- | --- | --- | --- | --- |
+| **Vitrine** | Louer et Acheter séparés, filtres en panneau, légèreté | Recherche par quartier avec suggestions, tri, compteur de résultats | Page d'accueil éditoriale (G) au lieu d'une simple grille | Quartiers, agences (page publique d'agence), suivi d'une demande |
+| **Fiche annonce** | Mosaïque sur ordinateur, carrousel sur téléphone, contact fixe | Photos plein cadre, conditions claires (loyer, caution, avance), quartier sur carte approximative | Bloc « ce qui est inclus » et « conditions », plutôt qu'une liste brute | Demande de visite avec créneaux, bouton 360° (P3) |
+| **Agence** | Tableaux, sélection multiple, Ctrl+K, panneaux latéraux, encaissement en trois gestes | Bouton « Créer » global, écrans vides qui guident, onglet « Plus » réorganisé | Fiche unité autour des quatre dimensions de statut | Assistant d'ajout de bien, locataires, fiche bail avec chronologie, sortie guidée, dépenses, demandes et visites, reversements |
+| **Agent de terrain** | Périmètre limité, espèces « à valider » | Mode hors connexion visible | — | État des lieux guidé pièce par pièce avec photos, agenda des visites |
+| **Propriétaire** | Revenus du mois, relevés | Rendement par bien, cautions détenues | Vue patrimoine groupée par gestionnaire | Approbations (dépense, accord de caution), reversements, choix de l'organisation dans l'en-tête |
+| **Locataire** | Solde, reçus, signalement | Gros chiffres, une seule action principale par écran | Signalement devenu demande suivie (reçue, planifiée, faite) | Bail, caution et décompte, préavis, historique de tous ses baux, toutes agences confondues (dès le lancement) |
+| **Back-office** | — | — | Conçu d'abord pour ordinateur, très dense | Organisations, formules, abonnements, interrupteurs, journal, accès d'assistance |
+
+**Trois composants à ajouter à `docs/UX.md` :**
+
+- **Assistant pas à pas** (ajout de bien, création de bail, sortie) : une étape par écran sur téléphone ; étapes à gauche et formulaire à droite sur ordinateur ; brouillon enregistré à chaque étape.
+- **Chronologie** (bail, unité, caution) : chaque événement daté, avec son auteur et sa pièce jointe. C'est la réponse visible à « tout doit être historisé ».
+- **Circuit d'accord** : proposition, acceptation ou refus motivé, horodatage. Il sert pour les accords de caution, les dépenses à approuver et les contestations.
+
+**Navigation multi-organisations** : une personne qui est à la fois propriétaire chez deux agences et locataire ailleurs choisit son espace dans le menu du compte. On ne mélange jamais deux organisations sur un même écran de gestion ; seule la vue patrimoine du propriétaire les rassemble, en lecture.
+
+## E. Architecture fonctionnelle SaaS
+
+L'isolement par agence décrit dans `CLAUDE.md` est solide et doit rester la règle. Il lui manque deux notions : une organisation qui n'est pas une agence, et une personne qui existe dans plusieurs organisations. Toutes deux s'ajoutent sans affaiblir l'isolement, à condition de les poser avant le lot 01.
+
+### Les notions et leur portée
+
+| Notion | Portée | Rôle |
+| --- | --- | --- |
+| **Organisation** | Unité d'isolement | Une agence, ou un bailleur particulier qui gère lui-même. Toute donnée de gestion lui appartient (colonne `organization_id` à la place de `agency_id`). |
+| **Membre** | Organisation | Une personne avec un rôle : direction, gestionnaire, agent de terrain, comptable, lecture seule. |
+| **Personne** | Plateforme | Le compte de connexion, vérifié par téléphone. Il ne contient aucune donnée de gestion. |
+| **Fiche propriétaire, fiche locataire** | Organisation | Telle que l'organisation l'a saisie. Elle peut être **liée** à une personne, après vérification et accord de l'organisation. |
+| **Mandat** | Organisation | Lien entre l'organisation, un propriétaire et un périmètre (biens ou unités). Un seul mandat de gestion actif par unité. |
+| **Abonnement** | Organisation | Formule, période, quotas, factures de la plateforme. |
+| **Interrupteur** | Plateforme | Déjà spécifié dans `docs/FEATURE-FLAGS.md`. |
+
+**Pourquoi renommer `agency_id` en `organization_id`.** Le bailleur particulier deviendrait sinon une « agence » fictive, avec des écrans, des formules et des textes d'agence qui ne lui conviennent pas. Le changement ne coûte rien tant que le lot 01 n'a pas commencé ; il coûterait une migration de toutes les tables ensuite.
+
+**Comment le propriétaire ou le locataire voit plusieurs organisations.** Pas par une exception aux règles d'isolement. Un service de lecture dédié (module `portals`) parcourt les liens vérifiés de la personne, puis lit dans chaque organisation, l'une après l'autre, avec son contexte d'isolement. Il ne lit que ce qui concerne cette personne, toujours en lecture seule, et chaque lecture est journalisée.
+
+### Risques de permissions et de mélange de données
+
+| Risque | Où il apparaît | Parade |
+| --- | --- | --- |
+| Une personne se lie à la fiche d'un homonyme | Liaison de compte | Code SMS envoyé au numéro de la fiche, **et** acceptation par l'organisation |
+| Une agence découvre les biens confiés à une concurrente | Espace propriétaire | L'agrégation n'existe que côté personne ; aucun écran d'agence ne la montre |
+| Un agent de terrain voit tout le portefeuille | Synchronisation | Périmètre d'affectation, déjà prévu au lot 07 |
+| Un administrateur de la plateforme lit des données sans raison | Back-office | Rôle distinct, motif obligatoire, durée limitée, accès visible par l'organisation dans son journal |
+| L'assistance se connecte « en tant que » un utilisateur | Back-office | Interdit ; l'assistance travaille avec ses propres droits, en lecture |
+| Deux organisations gèrent la même unité | Mandats | Contrainte d'unicité sur le mandat de gestion actif |
+| Un abonnement impayé bloque la saisie des loyers | Abonnements | Paliers : rappel, puis blocage des créations ; consultation, reçus et export toujours possibles ; aucune suppression |
+| Un quota est dépassé en hors connexion | Synchronisation | Le quota bloque la création suivante, jamais une donnée déjà saisie |
+
+### Abonnements et facturation
+
+- **La règle « la plateforme ne détient jamais les fonds » vise les loyers.** Encaisser les abonnements des agences sur le compte marchand de la plateforme est normal ; il faut le préciser dans `CLAUDE.md` pour qu'aucun lot ne le refuse.
+- **Au MVP**, abonnements saisis à la main par l'administrateur (formule, période, paiement reçu). La facturation automatique attend la porte 2, comme prévu.
+- **Quotas par formule** : nombre d'unités gérées, de membres, de relevés. Ils sont vérifiés par le serveur.
+- **Rôles de la plateforme** : administrateur général, assistance, commercial, finances. Chacun n'accède qu'à sa partie du back-office.
+
+### Vos exemples d'interrupteurs
+
+| Votre exemple | Ce que je propose | Pourquoi |
+| --- | --- | --- |
+| Paiement en ligne | `payments.direct` (déjà prévu) | Fonctionnalité vendable, à activer agence par agence |
+| Paiement Mobile Money | Deux choses distinctes : la **saisie** d'un paiement Mobile Money (socle), et le **paiement initié** depuis la plateforme (`payments.direct`) | La saisie fait partie du registre |
+| Paiements en espèces | **Réglage de l'agence** (moyens acceptés), pas un interrupteur | Les couper casserait le registre de la plupart des agences |
+| Publicité WhatsApp | Partage par lien (socle, gratuit) ; envois en masse via l'API WhatsApp Business (`notifications.whatsapp_api`, P3) | Les envois publicitaires exigent le consentement préalable des destinataires |
+| Publication Facebook | Partage avec aperçu soigné (socle) ; publication automatique sur une page (nouvelle clé, P3) | La publication automatique passe par une validation de Meta |
+| Visites virtuelles | `media.virtual_tour_360` (déjà prévu) | Option, chargée à la demande |
+| Gestion avancée | Contenu des formules, pas une clé unique | Une clé par fonctionnalité reste lisible et testable |
+
+## F. Priorisation
+
+La priorité 1 ajoute surtout la **sortie du locataire** et la **structure des données** ; avec les espaces propriétaire et locataire ouverts dès le lancement (votre décision du 08/11/2026), elle allonge la phase 1 d'environ trois à quatre semaines. Le reste peut attendre le pilote sans rien casser, à condition que le modèle soit posé dès maintenant.
+
+### Priorité 1 : indispensable pour la première version
+
+| Recommandation | Lot concerné |
+| --- | --- |
+| Organisation (agence ou bailleur particulier), `organization_id` | 01, 03 |
+| Personne distincte des fiches, liaison vérifiée aux fiches propriétaire et locataire | 02, 03 |
+| Back-office : organisations, interrupteurs, abonnements saisis à la main | 04 |
+| Un seul mandat de gestion actif par unité ; propriétaire « groupe » avec représentant | 06 |
+| Assistant d'ajout de bien ; terrain ; meublé en caractéristique ; point GPS | 07 |
+| Statut en quatre dimensions, occupation calculée | 07, 08 |
+| Compte de caution (versements, détenteur, avertissement au-delà de deux mois), avance distincte | 08 |
+| Bail scanné ; bail généré en PDF si un juriste a validé le modèle | 08 |
+| Préavis, état des lieux d'entrée et de sortie, décompte de sortie, remise en état, transfert de gestion | 10 bis (nouveau) |
+| Dépenses : qui paie, qui supporte, comment c'est récupéré ; frais de gestion hors dépenses | 10 |
+| Reversements aux propriétaires enregistrés | 10 |
+| **Espaces propriétaire et locataire avec compte**, regroupant toutes les organisations : patrimoine, revenus, baux, cautions, reçus, signalements suivis | 10 ter (nouveau) |
+| Demandes de location depuis l'annonce | 12 |
+
+### Priorité 2 : à intégrer pendant le pilote
+
+| Recommandation | Remarque |
+| --- | --- |
+| Contestation structurée du décompte | Au MVP : observations libres et pièces jointes |
+| Visites (agenda) et candidatures simples | Avec effacement automatique des dossiers refusés |
+| Interventions : signalement, réparateur, dépense | Relie l'espace locataire aux dépenses |
+| Approbation des dépenses par le propriétaire au-delà d'un seuil | Seuil inscrit dans le mandat |
+| Indivision : répartition par quote-part sur les relevés |  |
+| Vidéos courtes | Compressées sur le téléphone avant envoi |
+| Renouvellement et révision du loyer | Après lecture du décret d'application |
+
+### Priorité 3 : évolutions futures
+
+| Recommandation | Condition pour la lancer |
+| --- | --- |
+| Visite 360° (lien vers un service spécialisé) | Demande réelle des agences, contenu disponible |
+| Acceptation du bail par code SMS | En complément de la légalisation |
+| Publication Facebook et envois WhatsApp Business automatiques | Validation par Meta, consentement des destinataires |
+| Mandats de vente non exclusifs et dédoublonnage des annonces | Ouverture de la rubrique Acheter à plusieurs agences |
+| Carte interactive de la vitrine | Mesure du poids de la page |
+| Paiement direct Mobile Money | Déjà au lot 14, après la porte 1 |
+
+## G. Proposition de direction artistique
+
+Je propose une identité à deux registres sur une seule base. La vitrine et les fiches adoptent un style **éditorial soigné**, où la photo domine. Les espaces de gestion restent **sobres et denses**, faits pour aller vite. Le « luxe » se limite aux annonces haut de gamme, et la 3D immersive est écartée.
+
+### Ce que je retiens des trois approches
+
+| Approche | À retenir | À écarter | Où |
+| --- | --- | --- | --- |
+| Premium Editorial | Grandes photos, titres en caractères à empattement, marges généreuses, mise en page de magazine pour la page d'accueil et les quartiers | Textes longs que personne ne lit sur téléphone | Vitrine, fiches, pages de quartier |
+| Luxury | Variante de fiche « mise en avant » pour les villas et biens à forte valeur : photo plein écran, prix discret, appel à l'agence | Fond noir et doré partout : la plupart des annonces sont des chambres-salons à moins de 100 000 FCFA, et ce style exclurait ce public | Annonces mises en avant (`listings.featured`) |
+| Immersive 3D | Visite 360° en option, ouverte par un bouton, chargée seulement à la demande | Scènes 3D, parallaxe, vidéo en lecture automatique : trop lourdes pour la data mobile et le budget de 100 Ko de JavaScript | Fiche annonce, P3 |
+
+### Base commune
+
+- **Couleurs** : conserver le vert foncé (argent, confiance) et le fond pierre clair de la maquette. Ajouter une seule couleur d'accent chaude, couleur latérite, réservée à la vitrine (repères, mises en avant). Elle donne une identité locale sans concurrencer le vert des actions.
+- **Typographie** : une police à empattement pour les titres de la vitrine uniquement, hébergée sur la plateforme et limitée aux caractères latins. Partout ailleurs, la police sans empattement actuelle, avec des chiffres tabulaires pour les montants.
+- **Photos** : format 3:2 partout, recadrage centré, chargement progressif. Une vraie photo de couverture compte plus que tout effet graphique.
+- **Icônes** : Lucide seulement, en 16, 20 et 24 px, trait uniforme, toujours accompagnées d'un mot (déjà vérifié par un test).
+- **Mouvements** : transitions courtes (moins de 200 ms), désactivées si l'appareil le demande. Aucune animation qui retarde une action.
+
+### Par espace
+
+| Espace | Registre | Particularités |
+| --- | --- | --- |
+| Vitrine et fiches | Éditorial | Accueil en sections (quartiers, nouveautés, villas mises en avant) ; fiche avec photo de couverture large, conditions claires, contact toujours visible |
+| Agence | Utilitaire dense | Tableaux, chiffres alignés, couleurs réservées aux statuts ; aucune police d'affichage |
+| Propriétaire | Utilitaire aéré | Grands chiffres (revenus, rendement), cartes par bien, logo de l'agence gestionnaire sur chaque bien |
+| Locataire | Très simple | Un chiffre principal (ce que je dois), une action principale, vocabulaire de tous les jours |
+| Back-office | Dense, ordinateur d'abord | Tableaux filtrables, journaux, couleur d'alerte distincte pour les actions qui touchent toutes les organisations |
+
+Pour valider cette direction avant de l'appliquer, je propose deux écrans de référence (accueil de la vitrine et fiche d'une villa mise en avant), en version téléphone et ordinateur.
+
+## H. Conclusion et plan d'action
+
+**Mise à jour du 08/11/2026 : les décisions sont écrites dans le dépôt, le lot 01 peut démarrer dès la fusion.** Les lots 01 à 05 posent le socle technique et ne dépendent pas des écrans métier. Le complément de maquette et le test avec les pilotes se font donc en parallèle, et doivent être terminés avant le lot 06.
+
+*Schéma (version texte) — feuille de route :* Préparer (maquette 00 ter, test des pilotes, en parallèle des lots 01 à 05) ; Socle (01 à 05) ; Registre (06, 07, 08) ; Encaisser (09, 10, 10 bis, 10 ter, 11) ; Publier (12, 13, puis pilote). Décisions utilisées : D12 avant 01 ; D13 et D17 avant 02 ; D16 avant 06 ; D14 avant 07 ; D15 avant 08.
+
+Chaque décision doit être écrite avant le lot qui l'utilise : D12 conditionne le départ, les autres peuvent suivre au fil des lots.
+
+### Les étapes
+
+1. **Valider ou amender ce rapport.** Commentez directement les points sur lesquels vous n'êtes pas d'accord.
+2. **Mettre à jour le dossier de référence** (une session Claude Code, sans code) :
+   - `docs/DECISIONS.md` : D12 à D17.
+   - `CLAUDE.md` : `organization_id`, notion de personne, module `portals` ; trois nouvelles règles non négociables (un seul mandat de gestion actif par unité ; aucune retenue de caution sans justificatif ; aucune information sur un locataire ou un propriétaire transmise d'une organisation à une autre) ; précision sur les abonnements.
+   - `docs/UX.md` : nouveaux écrans et les trois composants de la section D.
+   - `docs/FEATURE-FLAGS.md` : moyens de paiement en réglage d'agence, clé de publication Facebook.
+   - `docs/LOTS.md` et les prompts concernés (tableau ci-dessous).
+3. **Compléter la maquette (lot 00 ter, environ une semaine)** avec les écrans les plus risqués : assistant d'ajout de bien, fiche unité à quatre statuts, sortie guidée avec décompte, patrimoine d'un propriétaire présent dans deux agences, écrans principaux du back-office.
+4. **Faire tester ces écrans aux trois agences pilotes**, en particulier la sortie : qui détient la caution, comment se fait l'état des lieux, quels accords sont courants.
+5. **Lancer le lot 01**, puis suivre l'ordre des lots mis à jour.
+
+### Effets sur les lots
+
+| Lot | Changement |
+| --- | --- |
+| 01 Socle | `organization_id` dans les conventions, les tests et le schéma de départ |
+| 02 Authentification | La personne devient le compte unique ; vérification par code SMS |
+| 03 Organisations, rôles | Type agence ou bailleur, membres, rôles ; liaison des fiches à une personne préparée |
+| 04 Back-office | Abonnements saisis à la main, rôles de la plateforme, accès d'assistance motivé, moyens de paiement en réglage |
+| 06 Propriétaires, mandats | Propriétaire de type groupe ; unicité du mandat de gestion actif |
+| 07 Biens | Assistant d'ajout, terrain, point GPS, statut en quatre dimensions |
+| 08 Baux | Compte de caution, avance distincte ; l'unité n'est plus remise « libre » automatiquement |
+| 10 bis (nouveau, après le lot 10) Sortie | Préavis, états des lieux, accords, décompte, contestation simple, remise en état, transfert de gestion |
+| 09 Encaissements | Lien du reçu conservé ; l'espace locataire passe au lot 10 ter |
+| 10 Impayés, relevés | Dépenses à trois questions, lien avec la caution, reversements ; l'espace propriétaire passe au lot 10 ter |
+| 10 ter (nouveau) Espaces | Comptes propriétaire et locataire, liaison vérifiée, module `portals`, vues regroupant toutes les organisations |
+| 12 Vitrine | Disponibilité calculée, demandes, direction éditoriale, variante « mise en avant » |
+| 13 Production | Formalités auprès de l'ARCOD (nouvelle loi), tests d'accès du module `portals` |
+
+Les lots 05, 09, 11, 13 et 14 ne changent pas sur le fond. Ils héritent seulement du renommage en `organization_id`.
+
+## Questions ouvertes
+
+Ces points ne se tranchent pas par la technique ; ils conditionnent les lots indiqués.
+
+| Question | À qui la poser | Avant le lot |
+| --- | --- | --- |
+| Lecture des articles 3, 8, 9, 20, 26, 45 et 46 de la loi n° 103-2015/CNT : l'interprétation retenue ici est-elle juste ? | Juriste | 08 |
+| Liste des réparations à la charge du locataire (décret prévu à l'article 25) | Juriste, ministère de l'Habitat | 10 bis |
+| Avertir ou bloquer au-delà de deux mois de caution ? | Vous, après avis du juriste | 08 |
+| Qui détient la caution en pratique : l'agence ou le propriétaire ? | Agences pilotes | 08 |
+| Les pilotes légalisent-ils les baux à la mairie et les transmettent-ils aux impôts ? | Agences pilotes | 08 |
+| Arrêté du 8 avril 2026 sur les démarcheurs : effet sur la commission demandée au locataire | Juriste | 08 |
+| Nouvelle loi sur les données du 3 août 2026 : promulgation, démarches auprès de l'ARCOD, hébergement des données | Juriste | 02 et 13 |
+| « Bailleur particulier » : le terme parle-t-il aux propriétaires qui gèrent eux-mêmes ? | Entretiens | 03 |
+
+## Sources
+
+- [Loi n° 103-2015/CNT portant bail d'habitation privée au Burkina Faso](https://academiedepolice.bf/index.php/telechargement/category/28-urbanisme-et-construction?download=75:loi-portant-bail-d-habitation-privee-au-burkina-faso) (texte consulté le 08/11/2026)
+- [Loi n° 001-2021/AN portant protection des personnes à l'égard du traitement des données à caractère personnel](https://assembleenationale.bf/storage/Loi/kDsWHXOTUCQFVESChh8BlBdiZnCrdTsOpXe1rzmH.pdf)
+- [Adoption de la loi sur la protection des données et création de l'ARCOD, AllAfrica, 4 août 2026](https://fr.allafrica.com/stories/202608040299.html)
+- Dépôt `Phataf/ziga` : maquette, `docs/LOTS.md`, `docs/DECISIONS.md`, `docs/FEATURE-FLAGS.md`, prompts des lots 06, 07, 08 et 10

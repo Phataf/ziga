@@ -1,7 +1,7 @@
 # Lot 07 — Biens, unités, médias et documents
 
 ## Contexte
-Un bien (maison, villa, immeuble, cour commune, terrain…) contient une ou plusieurs unités (chambre-salon, studio, appartement, mini-villa, boutique, bureau…). Chaque unité a son statut, son loyer et, plus tard, son bail. Les photos servent la vitrine ; les documents (titres, pièces d'identité, mandats) sont strictement privés.
+Un bien (villa ou maison, immeuble d'appartements, cour commune, local commercial, terrain) contient une ou plusieurs unités (chambre-salon, studio, appartement, mini-villa, boutique, bureau…). Chaque unité a son statut, son loyer et, plus tard, son bail. Les photos servent la vitrine ; les documents (titres, pièces d'identité, mandats) sont strictement privés.
 
 ## Prérequis
 Lot 06 terminé.
@@ -9,12 +9,17 @@ Lot 06 terminé.
 ## Périmètre
 1. **Référentiel géographique** (partagé, non cloisonné, lecture seule pour les agences) : `communes` et `neighborhoods` (Ouagadougou et Saaba au minimum, avec un point central latitude/longitude). Données initiales en migration ; ajout de quartiers par le back-office.
 2. **Tables** (module `properties`), cloisonnées, auditées, synchronisées :
-   - `properties` : propriétaire, type, nom interne, commune, quartier, adresse ou repère (« derrière la pharmacie… »), coordonnées facultatives, documents déclarés (APFR, attestation d'attribution, PUH, titre foncier, aucun), notes internes, statut (actif, archivé).
-   - `units` : bien, type, libellé (« Appartement A2 »), pièces, douches, surface facultative, meublé, équipements (liste fermée : clôture, gardien, compteur séparé, climatisation, garage, eau courante…), loyer affiché, charges, statut (`vacant`, `occupied`, `reserved`, `unavailable`), agent affecté facultatif.
+   - `properties` : propriétaire, type (`house`, `apartment_building`, `shared_compound`, `commercial`, `land`), opération visée (location, vente, les deux), nom interne, commune, quartier, adresse ou repère (« derrière la pharmacie… »), point GPS pris sur place (facultatif, jamais publié tel quel), documents déclarés (APFR, attestation d'attribution, PUH, titre foncier, aucun), notes internes, statut de la fiche (`draft`, `active`, `archived`). Un terrain peut n'avoir aucune unité louable.
+   - `units` : bien, type, libellé (« Appartement A2 »), pièces, douches, surface facultative, meublé (caractéristique, pas un type ; un meublé aura un inventaire dans l'état des lieux), équipements (liste fermée : clôture, gardien, compteur séparé, climatisation, garage, eau courante…), loyer affiché, charges, caution et avance proposées, agent affecté facultatif, et le **statut en quatre dimensions (D14, `CLAUDE.md` règle 13)** :
+     - `record_status` : `draft`, `active`, `archived` (saisi) ;
+     - `technical_status` : `ready`, `to_refurbish`, `under_works`, `unavailable`, avec motif obligatoire hors `ready` et date prévue facultative (saisi) ;
+     - occupation : **jamais stockée ni saisie**, calculée à partir des baux par une fonction pure de `packages/shared` (`free`, `reserved`, `occupied`, `notice`) ; au lot 07, sans bail, elle vaut toujours `free` ;
+     - annonce : ajoutée au lot 12.
+     - `isAvailable(unit)` (fonction pure) : fiche active, occupation `free` ou `notice`, état `ready`.
    - `media` : propriétaire de l'objet (bien ou unité), clé de stockage, type, ordre, légende, largeur et hauteur, statut de traitement.
    - `documents` : objet lié (propriétaire, mandat, bien, unité ; plus tard bail), type, clé de stockage, nom, taille, **toujours privé**.
-   - Remplir `mandate_scopes` : un mandat couvre des biens entiers ou des unités précises.
-3. **Statut d'unité** : modifiable à la main sauf `occupied`, qui sera piloté par le bail au lot 08 (préparer la règle : pas de passage manuel à `occupied`).
+   - Remplir `mandate_scopes` : un mandat couvre des biens entiers ou des unités précises. **Contrainte (D16)** : une unité est couverte au plus par un mandat de gestion actif, qu'elle soit visée directement ou par son bien.
+3. **Statut d'unité** : seuls `record_status` et `technical_status` se modifient à la main ; aucun endpoint ni aucune opération de synchronisation ne peut écrire l'occupation.
 4. **Photos** :
    - Compression et redimensionnement **sur le téléphone** avant envoi (largeur max 1600 px), envoi direct vers le stockage par URL présignée, puis tâche BullMQ qui produit les variantes WebP (miniature 320, moyenne 800, grande 1600) avec sharp et supprime les métadonnées EXIF (position GPS).
    - Hors ligne : la photo est mise en file d'envoi et affichée localement en attendant.
@@ -22,7 +27,7 @@ Lot 06 terminé.
 5. **Documents** : envoi par URL présignée, accès en lecture par URL signée de 5 minutes, jamais derrière le CDN public, téléchargement journalisé dans l'audit.
 6. **Quota d'unités** de la formule vérifié à la création (`quotas.check`).
 7. **Affectation** d'unités à un agent de terrain : l'agent ne voit que ses unités affectées (règle de synchronisation et API).
-8. **Écrans** : liste des biens (filtre par quartier, statut, propriétaire), fiche bien avec ses unités, création d'un bien et de ses unités en un parcours, galerie photo avec réordonnancement, ajout de documents, changement de statut d'une unité.
+8. **Écrans** : liste des biens (filtre par quartier, disponibilité, état technique, propriétaire), fiche bien avec ses unités et une pastille par dimension de statut, **assistant d'ajout en cinq étapes** (`docs/UX.md` §10 : type et propriétaire ; localisation avec repère et point GPS ; unités ; médias ; documents privés), brouillon enregistré à chaque étape, bouton global « Créer » sur tablette et ordinateur, galerie photo avec réordonnancement, ajout de documents, changement de statut d'une unité.
 
 ## Hors périmètre
 Publication et vitrine (lot 12), baux (lot 08), visites 360°, vidéos, carte interactive (lot 12).
@@ -31,7 +36,9 @@ Publication et vitrine (lot 12), baux (lot 08), visites 360°, vidéos, carte in
 - Accès croisé A/B sur chaque table, y compris l'accès aux fichiers (une URL signée de A n'ouvre pas un document de B ; une clé de stockage de B demandée par A est refusée).
 - EXIF supprimés des variantes (test sur une image contenant une position GPS).
 - 16e photo refusée ; quota d'unités de la formule respecté.
-- Passage manuel à `occupied` refusé.
+- Écriture de l'occupation refusée (API et synchronisation) ; `isAvailable` testée sur toutes les combinaisons.
+- Deux mandats de gestion actifs sur la même unité (directement ou par le bien) : refusé.
+- Point GPS absent du HTML et des réponses publiques (préparé pour le lot 12).
 - Agent de terrain : ne voit et ne modifie que ses unités affectées.
 - Document : jamais accessible sans URL signée ; URL expirée refusée ; téléchargement audité.
 - Photo prise hors ligne envoyée à la reconnexion.

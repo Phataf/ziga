@@ -9,9 +9,9 @@ Lot 11 terminé.
 ## Périmètre
 1. **Annonces** (module `listings`), cloisonnées, auditées, synchronisées :
    - `listings` : cible (unité, ou bien entier pour une vente), titre, description, prix affiché, type d'opération (location, vente), état de visibilité (`internal`, `published`, `suspended`, `archived`), précision de localisation (`neighborhood` par défaut, `exact` si l'agence le choisit), photos choisies et ordre, slug, dates de publication.
-   - Publication possible seulement si : mandat actif avec `can_publish`, au moins 3 photos, prix renseigné, unité `vacant` (ou `reserved` affichée « Réservé »), interrupteur `listings.publication` actif pour l'agence.
-   - **Synchronisation automatique** : bail activé → annonce `suspended` (« Loué »), puis retirée ; mandat expiré ou révoqué → annonce suspendue ; interrupteur coupé → annonces masquées. Chaque retrait purge le cache CDN de la page.
-2. **Vitrine** (`apps/web/src/routes/(public)/`), rendue côté serveur, **JavaScript minimal** :
+   - Publication possible seulement si : mandat actif avec `can_publish` (ou mandat `self_managed` d'un bailleur), au moins 3 photos, prix renseigné, **unité disponible au sens de `isAvailable`** (D14 : fiche active, libre ou en préavis, état `ready` ; une unité en préavis s'affiche « Libre le jj/mm/aaaa »), interrupteur `listings.publication` actif pour l'organisation. Le statut d'annonce est la quatrième dimension du statut d'unité : `not_published`, `pending_review`, `published`, `suspended`, `withdrawn`.
+   - **Synchronisation automatique** : unité qui cesse d'être disponible (bail signé, état technique changé) → annonce `suspended` (« Loué » ou « Indisponible »), puis retirée ; mandat expiré ou révoqué → annonce suspendue ; interrupteur coupé → annonces masquées. Chaque retrait purge le cache CDN de la page.
+2. **Vitrine** (`apps/web/src/routes/(public)/`), rendue côté serveur, **JavaScript minimal**, selon la direction artistique de `docs/UX.md` §9 (D19 : style éditorial, photo d'abord, police à empattement pour les titres de la vitrine seulement, accent latérite ; aucune 3D, aucune vidéo en lecture automatique) :
    - Accueil : rubriques **Louer** et **Acheter** (biens à vendre en fiche simple, documents déclarés par le vendeur et signalés comme tels) ; recherche par commune, quartier, type, budget, pièces, meublé. Filtres dans une feuille sur téléphone et tablette, toujours visibles à gauche sur ordinateur (`docs/UX.md` §4).
    - Liste de résultats paginée par curseur, avec miniatures WebP et chargement différé.
    - Page d'annonce : carrousel sur téléphone, mosaïque de photos et carte de contact collante sur tablette et ordinateur ; galerie, prix au format FCFA, caractéristiques, quartier sur une carte OpenStreetMap légère (chargée seulement au clic), mention « Géré sous mandat par <agence> », boutons WhatsApp (message pré-rempli avec la référence de l'annonce), Appeler, formulaire de contact.
@@ -28,14 +28,14 @@ Lot 11 terminé.
 6. **Interrupteur global** `listings.public_showcase` : coupé, la vitrine affiche une page de maintenance.
 
 ## Hors périmètre
-Publication par les particuliers, mise en avant payante (`listings.featured`), alertes de recherche, favoris, visites 360°, rapprochement automatique des demandes.
+Publication par les particuliers, mise en avant payante (`listings.featured`), publication Facebook automatique (`listings.facebook_publish`), alertes de recherche, favoris, visites 360°, rapprochement automatique des demandes.
 
 ## Tests attendus
 - Publication refusée pour chaque condition manquante, avec le bon motif.
-- Bail activé : annonce retirée de la vitrine et cache purgé (test avec un faux client de purge).
+- Unité qui cesse d'être disponible (bail signé, passage « à remettre en état » ou « en travaux ») : annonce retirée de la vitrine et cache purgé (test avec un faux client de purge) ; unité en préavis publiable avec sa date de libération.
 - Interrupteur `listings.publication` coupé pour une agence : ses annonces disparaissent, celles des autres restent ; rouvert, elles réapparaissent.
 - Aucune donnée privée dans le HTML d'une page publique (test qui cherche le nom du propriétaire, les documents, l'adresse exacte).
-- Accès croisé : une agence ne voit pas les prospects d'une autre.
+- Accès croisé : une organisation ne voit pas les prospects d'une autre.
 - Performance : JavaScript de la page d'annonce < 100 Ko compressés ; Lighthouse mobile ≥ 90 en performance.
 - Formulaire de contact : limitation de débit et champ piège.
 - Aperçu Open Graph présent et correct.

@@ -4,21 +4,23 @@
 Premier lot de la phase 1. Il pose le monorepo, l'infrastructure locale, les outils de qualité et les briques partagées. Aucune fonctionnalité métier.
 
 ## Prérequis
-Porte 0 franchie. Lis `CLAUDE.md` en entier, `docs/DECISIONS.md`, `docs/LOTS.md`.
+Porte 0 franchie. Lis `CLAUDE.md` en entier, `docs/DECISIONS.md` (en particulier D12 à D19), `docs/LOTS.md`. `docs/AUDIT.md` explique les raisons de D12 à D19 ; il ne définit pas le périmètre.
+
+**Vocabulaire (D12)** : l'unité de cloisonnement est l'**organisation** (une agence ou un bailleur particulier). Tous les noms techniques l'emploient : `organization_id`, `current_organization_id()`, `withOrganization`. N'écris jamais `agency_id`.
 
 ## Périmètre
 1. **Monorepo** pnpm + Turborepo avec `apps/web`, `apps/api`, `packages/shared`, `infra/`, `docs/`, `prompts/` (structure de `CLAUDE.md` §3). TypeScript `strict` partout, configuration ESLint et Prettier commune.
 2. **Infrastructure locale** `infra/docker-compose.dev.yml` : PostgreSQL 16 (`wal_level=logical`), Redis, MinIO. Le service PowerSync est ajouté au lot 05.
 3. **API NestJS** minimale : configuration validée par Zod au démarrage (l'API refuse de démarrer si une variable manque), logs pino en JSON avec identifiant de requête, endpoint `GET /health` (base, Redis, stockage), gestion d'erreurs uniforme `{ code, message, details }`, branchement Sentry désactivable.
-4. **Base de données** : Drizzle ORM, drizzle-kit, dossier de migrations, commande `pnpm db:migrate`. Création de deux rôles PostgreSQL : `app_api` (sans `BYPASSRLS`) et `app_admin` (back-office). Fonction SQL utilitaire `current_agency_id()` qui lit `current_setting('app.agency_id', true)`.
-5. **Helper de transaction** côté API : `withAgency(agencyId, fn)` qui ouvre une transaction et fait `SET LOCAL app.agency_id`. Toute requête métier future passera par lui.
+4. **Base de données** : Drizzle ORM, drizzle-kit, dossier de migrations, commande `pnpm db:migrate`. Création de deux rôles PostgreSQL : `app_api` (sans `BYPASSRLS`) et `app_admin` (back-office). Fonction SQL utilitaire `current_organization_id()` qui lit `current_setting('app.organization_id', true)`.
+5. **Helper de transaction** côté API : `withOrganization(organizationId, fn)` qui ouvre une transaction et fait `SET LOCAL app.organization_id`. Toute requête métier future passera par lui.
 6. **File de tâches** BullMQ branchée sur Redis, avec un processeur d'exemple et un tableau de bord désactivé en production.
 7. **`packages/shared`** :
    - `money.ts` : type `Fcfa` (entier), `formatFcfa(75000) → "75 000 FCFA"` avec espace fine insécable, `parseFcfa`, refus des décimales.
    - `phone.ts` : normalisation E.164 `+226`, formatage `+226 70 12 34 56`, validation.
    - `ids.ts` : génération UUIDv7.
    - `dates.ts` : formatage `jj/mm/aaaa`.
-8. **Application SvelteKit** : `adapter-node`, Tailwind, shadcn-svelte, icônes Lucide, manifeste PWA et service worker natif (D09), fichier `src/lib/i18n/fr.ts`. **Coque responsive selon `docs/UX.md` §3**, reprise de la maquette : store `device`, barre d'onglets sur téléphone, rail sur tablette, menu latéral et barre du haut sur ordinateur, navigation déclarée par profil (écrans vides). Composants de base : `Sheet` (feuille, boîte de dialogue ou tiroir selon l'appareil), `ActionMenu`, `PageHeader`, conteneurs `page` et `page-narrow`, test anti-émoji.
+8. **Application SvelteKit** : `adapter-node`, Tailwind, shadcn-svelte, icônes Lucide, manifeste PWA et service worker natif (D09), fichier `src/lib/i18n/fr.ts`. **Coque responsive selon `docs/UX.md` §3**, reprise de la maquette : store `device`, barre d'onglets sur téléphone, rail sur tablette, menu latéral et barre du haut sur ordinateur, navigation déclarée par profil (écrans vides), y compris les espaces personnels propriétaire et locataire (`/espace`) et le choix de l'espace pour une personne qui en a plusieurs (`docs/UX.md` §2). Composants de base : `Sheet` (feuille, boîte de dialogue ou tiroir selon l'appareil), `ActionMenu`, `PageHeader`, conteneurs `page` et `page-narrow`, test anti-émoji.
 9. **Tests** : Vitest configuré pour les trois paquets ; base de test PostgreSQL recréée à chaque exécution des tests d'intégration ; Playwright configuré en émulation mobile.
 10. **CI** GitHub Actions : installation, lint, typecheck, tests unitaires et d'intégration (avec services PostgreSQL et Redis).
 11. **Commandes** de `CLAUDE.md` §10 opérationnelles ; `.env.example` complet ; `README.md` de démarrage.
@@ -30,7 +32,7 @@ Modification de `maquette/` (D10), authentification, tables métier, PowerSync, 
 ## Tests attendus
 - `money.ts` : formatage, arrondi refusé, montants négatifs refusés, très grands montants (10 milliards FCFA).
 - `phone.ts` : numéros valides et invalides du Burkina, formats d'entrée variés (`70123456`, `0022670123456`, `+226 70 12 34 56`).
-- `withAgency` : la variable `app.agency_id` est visible dans la transaction et absente en dehors.
+- `withOrganization` : la variable `app.organization_id` est visible dans la transaction et absente en dehors.
 - `/health` : renvoie l'état de chaque dépendance ; renvoie une erreur si PostgreSQL est arrêté.
 - Coque : Playwright sur 360 × 800, 820 × 1180 et 1440 × 900 (bonne navigation affichée, aucune autre ; aucun débordement horizontal) ; test anti-émoji.
 - Démarrage de l'API refusé si une variable d'environnement obligatoire manque.
