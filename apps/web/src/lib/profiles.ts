@@ -202,11 +202,12 @@ export const profiles: Record<ProfileId, Profile> = {
 		space: 'admin',
 		home: 'admin',
 		nav: [
-			item({ path: 'admin', label: n.organizations, icon: Building2, section: s.platform, tab: true, lot: '04' }),
-			item({ path: 'admin/formules', label: n.plansLong, short: n.plans, icon: Wallet, section: s.platform, tab: true, lot: '04' }),
-			item({ path: 'admin/fonctionnalites', label: n.features, icon: ToggleRight, section: s.platform, tab: true, lot: '04' }),
-			item({ path: 'admin/journal', label: n.journal, icon: ScrollText, section: s.control, lot: '04' }),
-			item({ path: 'admin/assistance', label: n.support, icon: LifeBuoy, section: s.control, lot: '04' }),
+			item({ path: 'admin', label: n.organizations, icon: Building2, section: s.platform, tab: true }),
+			item({ path: 'admin/personnes', label: n.people, icon: Users, section: s.platform }),
+			item({ path: 'admin/formules', label: n.plansLong, short: n.plans, icon: Wallet, section: s.platform, tab: true }),
+			item({ path: 'admin/fonctionnalites', label: n.features, icon: ToggleRight, section: s.platform, tab: true }),
+			item({ path: 'admin/journal', label: n.journal, icon: ScrollText, section: s.control }),
+			item({ path: 'admin/assistance', label: n.support, icon: LifeBuoy, section: s.control }),
 			plus('admin')
 		]
 	}
@@ -266,4 +267,13 @@ export const knownPaths = new Set(Object.values(profiles).flatMap((p) => p.nav.m
 
 export function normalizePath(pathname: string): string {
 	return pathname.replace(/\/+$/, '') || '/';
+}
+
+/**
+ * Back-office (lot 04) : la navigation suit le rôle plateforme (l'API refuse de toute façon le reste).
+ * L'accès d'assistance n'est proposé qu'aux rôles qui peuvent l'ouvrir.
+ */
+export function adminProfileFor(role: string | null | undefined): Profile {
+	const hidden = new Set<string>(role === 'super_admin' || role === 'support' ? [] : ['/admin/assistance']);
+	return { ...profiles.admin, nav: profiles.admin.nav.filter((i) => !hidden.has(i.href)) };
 }

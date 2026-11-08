@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { resolvePath } from '#lib/nav.ts';
 	/** Téléphone : écran « Plus », avec les entrées qui n'ont pas d'onglet. */
 	import { ArrowLeftRight, ChevronRight, CircleUserRound } from '@lucide/svelte';
 	import LogoutButton from './auth/LogoutButton.svelte';
@@ -16,7 +17,9 @@
 	<ul class="divide-y rounded-xl border bg-card">
 		{#each items as item (item.href)}
 			<li>
-				<a href={resolve(item.path)} class="flex min-h-14 items-center gap-3 p-3 hover:bg-accent">
+				<!-- eslint-disable svelte/no-navigation-without-resolve -- resolvePath() appelle resolve() de $app/paths (src/lib/nav.ts) -->
+				<a href={resolvePath(item.path)} class="flex min-h-14 items-center gap-3 p-3 hover:bg-accent">
+					<!-- eslint-enable svelte/no-navigation-without-resolve -->
 					<item.icon class="size-6 shrink-0 text-primary" aria-hidden="true" />
 					<span class="flex-1 font-semibold">{item.label}</span>
 					<ChevronRight class="size-5 text-muted-foreground" aria-hidden="true" />

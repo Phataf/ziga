@@ -11,8 +11,9 @@
 
 <header class="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background/95 px-8 backdrop-blur" data-testid="barre-haut">
 	<p class="font-medium">
-		{#if auth.user}<span data-testid="nom-barre-haut">{auth.user.name}</span> ·
-		{/if}{profile.label}{#if profile.space === 'agency' && organizations.active}
+		{#if auth.user}<span data-testid="nom-barre-haut">{auth.user.name}</span><span>
+				·
+			</span>{/if}{profile.label}{#if profile.space === 'agency' && organizations.active}
 			<span data-testid="organisation-active"> · {organizations.active.name}</span>{/if}
 	</p>
 	{#if auth.status === 'offline'}<p class="rounded-full bg-warning-soft px-3 py-1 text-sm text-warning-foreground" role="status">

@@ -4,6 +4,7 @@
  */
 import { error, redirect } from '@sveltejs/kit';
 import { fr } from '../i18n/fr';
+import { features } from '../features/features.svelte';
 import { organizations } from '../org/organizations.svelte';
 import { auth } from './auth.svelte';
 
@@ -28,4 +29,6 @@ export async function requireOrganization(url: URL): Promise<void> {
 	await requireSession(url);
 	await organizations.load();
 	if (!organizations.active) redirect(307, '/espace');
+	// Fonctionnalités ouvertes dans cette organisation : un échec n'empêche pas d'ouvrir l'application (le serveur décide).
+	await features.load(organizations.activeId).catch(() => undefined);
 }

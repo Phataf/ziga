@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Path } from '$app/types';
-	import { resolve } from '$app/paths';
+	import { resolvePath } from '#lib/nav.ts';
 	/**
 	 * En-tête de page.
 	 * Téléphone : barre collante compacte avec bouton retour.
@@ -39,11 +39,13 @@
 >
 	<div class="page flex items-center gap-1 !px-2 py-2 md:pt-6 md:pb-2 {flush ? 'md:!max-w-none md:!px-0 md:!pt-0' : 'md:!px-6 xl:!px-8'}">
 		{#if back && device.isPhone}
+			<!-- eslint-disable svelte/no-navigation-without-resolve -- resolvePath() appelle resolve() de $app/paths (src/lib/nav.ts) -->
 			<a
-				href={resolve(back)}
+				href={resolvePath(back)}
 				class="flex min-h-11 items-center gap-0.5 rounded-lg pr-2 text-primary hover:bg-accent md:hidden"
 				aria-label={backLabel}
 			>
+				<!-- eslint-enable svelte/no-navigation-without-resolve -->
 				<ChevronLeft class="size-6" aria-hidden="true" />
 				<span class="text-base">{backLabel}</span>
 			</a>
@@ -51,7 +53,9 @@
 		<div class="min-w-0 flex-1 px-2 md:px-0">
 			{#if back && !device.isPhone}
 				<nav aria-label={fr.app.breadcrumb} class="hidden md:block">
-					<a href={resolve(back)} class="inline-flex items-center gap-1 text-base text-muted-foreground hover:text-primary">
+					<!-- eslint-disable svelte/no-navigation-without-resolve -- resolvePath() appelle resolve() de $app/paths (src/lib/nav.ts) -->
+					<a href={resolvePath(back)} class="inline-flex items-center gap-1 text-base text-muted-foreground hover:text-primary">
+						<!-- eslint-enable svelte/no-navigation-without-resolve -->
 						{backLabel}<ChevronRight class="size-4" aria-hidden="true" />
 					</a>
 				</nav>

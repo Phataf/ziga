@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { resolvePath } from '#lib/nav.ts';
 	/** Ordinateur : menu latéral par sections, espace en tête, compte en pied. */
 	import { page } from '$app/state';
 	import { ArrowLeftRight, Building2, CircleUserRound } from '@lucide/svelte';
@@ -33,8 +34,9 @@
 					{#each items as item (item.href)}
 						{@const active = current?.href === item.href}
 						<li>
+							<!-- eslint-disable svelte/no-navigation-without-resolve -- resolvePath() appelle resolve() de $app/paths (src/lib/nav.ts) -->
 							<a
-								href={resolve(item.path)}
+								href={resolvePath(item.path)}
 								aria-current={active ? 'page' : undefined}
 								class={cn(
 									'flex min-h-11 items-center gap-3 rounded-lg px-3',
@@ -43,6 +45,7 @@
 										: 'text-foreground/80 hover:bg-accent hover:text-foreground'
 								)}
 							>
+								<!-- eslint-enable svelte/no-navigation-without-resolve -->
 								<item.icon class="size-5 shrink-0" aria-hidden="true" />
 								{item.label}
 							</a>

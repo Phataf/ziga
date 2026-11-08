@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { resolve } from '$app/paths';
+	import { resolvePath } from '#lib/nav.ts';
 	/** Téléphone : barre d'onglets en bas, 4 entrées au plus, chacune avec son mot (docs/UX.md §3). */
 	import { page } from '$app/state';
 	import { fr } from '#lib/i18n/fr.ts';
@@ -25,14 +25,16 @@
 		{#each tabs as tab (tab.href)}
 			{@const active = current?.href === tab.href}
 			<li class="min-w-0 flex-1">
+				<!-- eslint-disable svelte/no-navigation-without-resolve -- resolvePath() appelle resolve() de $app/paths (src/lib/nav.ts) -->
 				<a
-					href={resolve(tab.path)}
+					href={resolvePath(tab.path)}
 					aria-current={active ? 'page' : undefined}
 					class={cn(
 						'flex min-h-16 flex-col items-center justify-center gap-0.5 text-base leading-tight',
 						active ? 'font-semibold text-primary' : 'text-muted-foreground'
 					)}
 				>
+					<!-- eslint-enable svelte/no-navigation-without-resolve -->
 					<span class={cn('flex h-7 w-12 items-center justify-center rounded-full', active && 'bg-secondary')}>
 						<tab.icon class="size-6" aria-hidden="true" />
 					</span>

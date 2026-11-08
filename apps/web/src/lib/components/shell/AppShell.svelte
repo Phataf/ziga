@@ -15,6 +15,7 @@
 	import Sidebar from './Sidebar.svelte';
 	import TabBar from './TabBar.svelte';
 	import TopBar from './TopBar.svelte';
+	import SubscriptionBanner from '../org/SubscriptionBanner.svelte';
 
 	let { profile, children }: { profile: Profile; children: Snippet } = $props();
 	// Espace de gestion : le nom de l'organisation active (une seule à la fois).
@@ -29,18 +30,21 @@
 
 {#if device.isPhone}
 	<div class="min-h-dvh pb-28" data-coque="telephone">
+		{#if profile.space === 'agency'}<SubscriptionBanner />{/if}
 		{@render children()}
 	</div>
 	<TabBar {profile} />
 {:else if device.isTablet}
 	<NavRail {profile} />
 	<div class="min-h-dvh pb-10 pl-28" data-coque="tablette">
+		{#if profile.space === 'agency'}<SubscriptionBanner />{/if}
 		{@render children()}
 	</div>
 {:else}
 	<Sidebar {profile} {spaceLabel} />
 	<div class="min-h-dvh pb-10 pl-64" data-coque="ordinateur">
 		<TopBar {profile} />
+		{#if profile.space === 'agency'}<SubscriptionBanner />{/if}
 		{@render children()}
 	</div>
 {/if}

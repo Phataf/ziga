@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { resolvePath } from '#lib/nav.ts';
 	/** Vitrine publique : rendue côté serveur, sans menu d'application ; en-tête de site avec Louer et Acheter. */
 	import { page } from '$app/state';
 	import { Building2 } from '@lucide/svelte';
@@ -21,14 +22,16 @@
 			</a>
 			<nav aria-label={fr.spaces.public} class="ml-auto flex gap-1" data-testid="entete-vitrine">
 				{#each profiles.visitor.nav as item (item.href)}
+					<!-- eslint-disable svelte/no-navigation-without-resolve -- resolvePath() appelle resolve() de $app/paths (src/lib/nav.ts) -->
 					<a
-						href={resolve(item.path)}
+						href={resolvePath(item.path)}
 						aria-current={page.url.pathname === item.href ? 'page' : undefined}
 						class={cn(
 							'flex min-h-11 items-center gap-2 rounded-lg px-3 font-medium',
 							page.url.pathname === item.href ? 'bg-secondary text-secondary-foreground' : 'hover:bg-accent'
 						)}
 					>
+						<!-- eslint-enable svelte/no-navigation-without-resolve -->
 						<item.icon class="size-5" aria-hidden="true" />{item.label}
 					</a>
 				{/each}

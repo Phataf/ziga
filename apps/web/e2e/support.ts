@@ -26,7 +26,11 @@ export const accounts = {
 	viewer: { phone: '+22670010004', national: '70 01 00 04', password: DEMO, name: 'Salif Traoré' },
 	// Agence B (Sahel Habitat).
 	directorB: { phone: '+22670020001', national: '70 02 00 01', password: DEMO, name: 'Fatimata Sawadogo' },
-	managerB: { phone: '+22670020002', national: '70 02 00 02', password: DEMO, name: 'Boukary Compaoré' }
+	managerB: { phone: '+22670020002', national: '70 02 00 02', password: DEMO, name: 'Boukary Compaoré' },
+	// Équipe de la plateforme (lot 04) : assistance, commercial, finances.
+	support: { phone: '+22670030001', national: '70 03 00 01', password: DEMO, name: 'Aïcha Sanogo' },
+	sales: { phone: '+22670030002', national: '70 03 00 02', password: DEMO, name: 'Yacouba Ouattara' },
+	finance: { phone: '+22670030003', national: '70 03 00 03', password: DEMO, name: 'Delphine Somé' }
 } as const;
 
 export const ORG_A = 'Faso Immobilier';

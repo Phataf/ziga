@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { resolvePath } from '#lib/nav.ts';
 	/** Tablette : rail de navigation à gauche, cibles de 56 px, libellés courts. */
 	import { page } from '$app/state';
 	import { CircleUserRound } from '@lucide/svelte';
@@ -18,14 +19,16 @@
 			{#each items as item (item.href)}
 				{@const active = current?.href === item.href}
 				<li>
+					<!-- eslint-disable svelte/no-navigation-without-resolve -- resolvePath() appelle resolve() de $app/paths (src/lib/nav.ts) -->
 					<a
-						href={resolve(item.path)}
+						href={resolvePath(item.path)}
 						aria-current={active ? 'page' : undefined}
 						class={cn(
 							'flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-0.5 text-center text-sm leading-tight',
 							active ? 'font-semibold text-primary' : 'text-muted-foreground hover:bg-accent hover:text-foreground'
 						)}
 					>
+						<!-- eslint-enable svelte/no-navigation-without-resolve -->
 						<span class={cn('flex h-8 w-14 items-center justify-center rounded-full', active && 'bg-secondary')}>
 							<item.icon class="size-6" aria-hidden="true" />
 						</span>

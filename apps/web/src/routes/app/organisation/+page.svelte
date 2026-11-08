@@ -18,7 +18,10 @@
 	import { toE164 } from '@ziga/shared/phone';
 	import FormAlert from '#lib/components/auth/FormAlert.svelte';
 	import PhoneField from '#lib/components/auth/PhoneField.svelte';
+	import FeaturesSection from '#lib/components/org/FeaturesSection.svelte';
+	import PaymentMethodsSection from '#lib/components/org/PaymentMethodsSection.svelte';
 	import ReceiptHeader from '#lib/components/org/ReceiptHeader.svelte';
+	import SubscriptionSection from '#lib/components/org/SubscriptionSection.svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
 	import { Button } from '#lib/components/ui/button/index.ts';
 	import { Input } from '#lib/components/ui/input/index.ts';
@@ -338,6 +341,13 @@
 				</section>
 				{#if previewView}<ReceiptHeader organization={previewView} />{/if}
 			</div>
+		</div>
+		<div class="grid grid-cols-1 gap-4 xl:grid-cols-2 xl:items-start">
+			<div class="space-y-4">
+				<PaymentMethodsSection bind:view {editable} />
+				<SubscriptionSection />
+			</div>
+			<FeaturesSection {editable} />
 		</div>
 	{/if}
 </main>
