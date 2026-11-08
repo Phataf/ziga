@@ -41,7 +41,7 @@ export default ts.config(
 		rules: { '@typescript-eslint/consistent-type-imports': 'off' }
 	},
 	{
-		files: ['scripts/**', '**/*.config.{js,ts}', '**/test/**', '**/e2e/**'],
+		files: ['scripts/**', '**/scripts/**', '**/*.config.{js,ts}', '**/test/**', '**/e2e/**'],
 		rules: { 'no-console': 'off' }
 	}
 );

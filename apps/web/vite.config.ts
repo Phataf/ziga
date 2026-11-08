@@ -24,6 +24,8 @@ export default defineConfig({
 			}
 		})
 	],
+	// Port réglable par WEB_PORT (lu ici plutôt que dans un script : la syntaxe ${…:-…} n'existe pas sous Windows).
+	server: { port: Number(process.env.WEB_PORT || 5173), strictPort: true },
 	test: {
 		include: ['src/**/*.test.ts'],
 		environment: 'node'

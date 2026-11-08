@@ -13,7 +13,9 @@ services:
       POSTGRES_USER: ziga
       POSTGRES_PASSWORD: ziga_dev
       POSTGRES_DB: ziga
-    ports: ['5432:5432']
+    # Port 55432 sur la machine : le 5432 est souvent pris par un PostgreSQL installé sous Windows ou macOS,
+    # qui répondrait à la place du conteneur (« authentification échouée pour l'utilisateur ziga »).
+    ports: ['55432:5432']
     volumes: ['postgres-data:/var/lib/postgresql/data']
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ziga -d ziga']

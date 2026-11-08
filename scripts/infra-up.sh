@@ -8,4 +8,4 @@ compose=(docker compose -f infra/docker-compose.dev.yml)
 "${compose[@]}" up -d --wait
 bucket="${S3_BUCKET:-ziga-dev}"
 "${compose[@]}" exec -T seaweedfs sh -c "echo 's3.bucket.create -name ${bucket}' | weed shell -master=localhost:9333" >/dev/null 2>&1 || true
-echo "Services prêts : PostgreSQL :5432, Redis :6379, S3 (SeaweedFS) :8333, compartiment ${bucket}."
+echo "Services prêts : PostgreSQL :55432, Redis :6379, S3 (SeaweedFS) :8333, compartiment ${bucket}."

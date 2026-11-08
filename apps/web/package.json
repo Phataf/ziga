@@ -8,7 +8,7 @@
 		"#lib/*": "./src/lib/*"
 	},
 	"scripts": {
-		"dev": "vite dev --port ${WEB_PORT:-5173}",
+		"dev": "vite dev",
 		"build": "vite build",
 		"preview": "node build/index.js",
 		"prepare": "svelte-kit sync || echo ''",

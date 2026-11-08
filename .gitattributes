@@ -1,0 +1,5 @@
+# Fins de ligne LF pour tout le texte, quel que soit le système (core.autocrlf sous Windows).
+* text=auto eol=lf
+# Scripts lancés par bash : un retour chariot les casserait.
+*.sh text eol=lf
+*.png binary

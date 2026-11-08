@@ -22,7 +22,7 @@ jobs:
           POSTGRES_USER: ziga
           POSTGRES_PASSWORD: ziga_dev
           POSTGRES_DB: ziga
-        ports: ['5432:5432']
+        ports: ['55432:5432']
         options: >-
           --health-cmd "pg_isready -U ziga -d ziga"
           --health-interval 2s

@@ -51,8 +51,8 @@ else
 		su postgres -c "createdb -O ziga ziga"
 	fi
 	redis-cli ping >/dev/null 2>&1 || redis-server --daemonize yes --save '' --appendonly no >/dev/null
-	# Pas de serveur S3 ici : l'API utilise le stockage local de développement.
-	sed -i 's/^STORAGE_DRIVER=s3$/STORAGE_DRIVER=local/' .env
+	# PostgreSQL de la machine sur 5432 (et non 55432, le port du conteneur), pas de serveur S3 : stockage local.
+	sed -i -e 's/@localhost:55432\//@localhost:5432\//' -e 's/^STORAGE_DRIVER=s3$/STORAGE_DRIVER=local/' .env
 fi
 
 # 4. Migrations (l'API se compile d'abord, avec le paquet partagé).

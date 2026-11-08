@@ -1,0 +1,4 @@
+# La maquette est un projet à part, avec son propre fichier de verrouillage (D10) :
+# ce fichier arrête la recherche du workspace ici, pour que `pnpm install` lancé dans maquette/
+# installe la maquette seule, et non le monorepo du produit.
+packages: []
