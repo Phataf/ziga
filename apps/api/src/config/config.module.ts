@@ -1,0 +1,13 @@
+import { Global, Module, type DynamicModule } from '@nestjs/common';
+import type { AppConfig } from './env.js';
+
+/** Jeton d'injection de la configuration validée. */
+export const APP_CONFIG = Symbol('APP_CONFIG');
+
+@Global()
+@Module({})
+export class ConfigModule {
+	static forRoot(config: AppConfig): DynamicModule {
+		return { module: ConfigModule, providers: [{ provide: APP_CONFIG, useValue: Object.freeze({ ...config }) }], exports: [APP_CONFIG] };
+	}
+}
