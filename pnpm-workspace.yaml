@@ -1,0 +1,8 @@
+# La maquette (maquette/) reste hors du workspace : elle a son propre fichier de verrouillage (D10).
+packages:
+  - apps/*
+  - packages/*
+onlyBuiltDependencies:
+  - '@swc/core'
+  - esbuild
+  - msgpackr-extract
