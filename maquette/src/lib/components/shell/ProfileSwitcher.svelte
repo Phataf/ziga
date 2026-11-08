@@ -4,7 +4,7 @@
 	 * avec chaque profil pendant les entretiens. Dans le produit, le profil découle du compte.
 	 */
 	import { goto } from '$app/navigation';
-	import { ChevronsUpDown, CircleCheck, Eye, RotateCcw } from '@lucide/svelte';
+	import { ArrowLeftRight, ChevronsUpDown, CircleCheck, Eye, RotateCcw } from '@lucide/svelte';
 	import { Sheet } from '$lib/components/ui/sheet';
 	import { demo } from '$lib/demo.svelte';
 	import { profileGroups, profiles, type ProfileId } from '$lib/profiles';
@@ -74,6 +74,10 @@
 			<h2 id="titre-profil" class="text-xl font-bold">Voir l’application en tant que…</h2>
 			<p class="text-base text-muted-foreground">Chaque profil a son espace, sa navigation et ses données.</p>
 		</div>
+		<a href="/espaces" class="flex min-h-12 items-center gap-3 rounded-xl border-2 border-dashed border-input px-3 hover:bg-accent" onclick={() => (open = false)}>
+			<ArrowLeftRight class="size-5 shrink-0 text-primary" aria-hidden="true" />
+			<span><span class="block font-semibold">Choix de l’espace</span><span class="block text-base text-muted-foreground">Issouf Sawadogo : propriétaire et bailleur particulier</span></span>
+		</a>
 		{#each profileGroups as g (g.label)}
 			<section class="space-y-2" aria-label={g.label}>
 				<h3 class="text-sm font-semibold tracking-wide text-muted-foreground uppercase">{g.label}</h3>

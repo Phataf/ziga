@@ -6,8 +6,8 @@
 	import { ChevronRight, Globe, MapPin, Search } from '@lucide/svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import { demo } from '$lib/demo.svelte';
-	import { unitStatusLabel, unitStatusVariant } from '$lib/labels';
-	import type { UnitStatus } from '$lib/types';
+	import { isListed } from '$lib/listing';
+	import { summaryCounts } from '$lib/unit-status';
 	import { cn } from '$lib/utils';
 	import { propertyUnits } from '$lib/views';
 
@@ -38,12 +38,10 @@
 
 	function summary(propertyId: string) {
 		const units = propertyUnits(demo.data, propertyId);
-		const by = new Map<UnitStatus, number>();
-		for (const u of units) by.set(u.status, (by.get(u.status) ?? 0) + 1);
 		return {
 			units,
-			by: [...by.entries()],
-			published: units.filter((u) => u.visibility === 'published' && u.status === 'free').length
+			by: summaryCounts(demo.data, units),
+			published: units.filter(isListed).length
 		};
 	}
 </script>
@@ -98,8 +96,8 @@
 							<span class="truncate">{p.district}, {p.city} · {p.kind}</span>
 						</p>
 						<div class="flex flex-wrap gap-1">
-							{#each s.by as [status, n] (status)}
-								<Badge variant={unitStatusVariant[status]}>{n} {unitStatusLabel[status].toLowerCase()}{n > 1 ? 's' : ''}</Badge>
+							{#each s.by as c (c.label)}
+								<Badge variant={c.variant}>{c.count} {c.label.toLowerCase()}</Badge>
 							{/each}
 							{#if s.published}
 								<Badge variant="default"><Globe aria-hidden="true" /> publiée</Badge>

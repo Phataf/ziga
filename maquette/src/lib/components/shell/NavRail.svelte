@@ -26,7 +26,7 @@
 		</a>
 	{/if}
 	<ul class="flex w-full flex-1 flex-col gap-1 px-2">
-		{#each demo.profile.nav as item (item.href)}
+		{#each demo.profile.nav.filter((n) => !n.phoneOnly) as item (item.href)}
 			{@const active = current?.href === item.href}
 			<li>
 				<a

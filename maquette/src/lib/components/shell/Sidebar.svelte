@@ -1,7 +1,7 @@
 <script lang="ts">
 	/** Ordinateur : menu latéral fixe, sections nommées, action principale en tête, profil en pied. */
 	import { page } from '$app/state';
-	import { Building2, ExternalLink, Wallet } from '@lucide/svelte';
+	import { ArrowLeftRight, Building2, ExternalLink, Wallet } from '@lucide/svelte';
 	import { demo } from '$lib/demo.svelte';
 	import { activeNav, type NavItem } from '$lib/profiles';
 	import { cn } from '$lib/utils';
@@ -10,18 +10,27 @@
 	const current = $derived(activeNav(demo.profile.nav, page.url.pathname));
 	const sections = $derived.by(() => {
 		const map = new Map<string, NavItem[]>();
-		for (const item of demo.profile.nav) {
+		for (const item of demo.profile.nav.filter((n) => !n.phoneOnly)) {
 			const key = item.section ?? '';
 			map.set(key, [...(map.get(key) ?? []), item]);
 		}
 		return [...map.entries()];
 	});
 	const spaceLabel = $derived(
-		{ agency: demo.profileId === 'landlord' ? 'Espace bailleur' : 'Espace agence', owner: 'Espace propriétaire', tenant: 'Espace locataire', public: 'Vitrine' }[
+		{
+			agency: demo.profileId === 'landlord' ? 'Espace bailleur' : 'Espace agence',
+			owner: 'Espace propriétaire',
+			tenant: 'Espace locataire',
+			public: 'Vitrine',
+			admin: 'Back-office plateforme'
+		}[
 			demo.profile.space
 		]
 	);
 	const canCollect = $derived(demo.profile.space === 'agency');
+	/** Une personne qui a plusieurs espaces en change depuis le menu du compte (docs/UX.md §2). */
+	const canSwitchSpace = $derived(demo.profileId === 'owner' || demo.profileId === 'landlord');
+	const headName = $derived(demo.profile.space === 'owner' ? `${demo.ownerPerson.civility} ${demo.ownerPerson.name}` : demo.profile.space === 'tenant' ? `${demo.tenantPerson.civility} ${demo.tenantPerson.name}` : demo.workspaceName);
 </script>
 
 <aside class="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r bg-card xl:flex">
@@ -30,7 +39,7 @@
 			<Building2 class="size-5" />
 		</span>
 		<div class="min-w-0">
-			<p class="truncate font-bold">{demo.workspaceName}</p>
+			<p class="truncate font-bold">{headName}</p>
 			<p class="truncate text-sm text-muted-foreground">{spaceLabel}</p>
 		</div>
 	</div>
@@ -78,6 +87,11 @@
 	</nav>
 
 	<div class="border-t p-3">
+		{#if canSwitchSpace}
+			<a href="/espaces" class="mb-2 flex min-h-10 items-center gap-3 rounded-lg px-3 text-foreground/80 hover:bg-accent hover:text-foreground">
+				<ArrowLeftRight class="size-5 shrink-0" aria-hidden="true" /> Changer d’espace
+			</a>
+		{/if}
 		<ProfileSwitcher variant="sidebar" />
 		<p class="px-1 pt-2 text-sm text-muted-foreground">Maquette — données fictives</p>
 	</div>

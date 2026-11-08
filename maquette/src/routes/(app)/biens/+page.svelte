@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Globe, MousePointerClick } from '@lucide/svelte';
+	import { Globe, MousePointerClick, Plus } from '@lucide/svelte';
 	import PropertyList from '$lib/components/agency/PropertyList.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import { Badge } from '$lib/components/ui/badge';
@@ -7,28 +7,33 @@
 	import { demo } from '$lib/demo.svelte';
 	import { device } from '$lib/device.svelte';
 	import { formatFCFA } from '$lib/format';
-	import { unitStatusLabel, unitStatusVariant } from '$lib/labels';
-	import type { UnitStatus } from '$lib/types';
+	import { isListed } from '$lib/listing';
+	import { summaryCounts, summaryOfUnit } from '$lib/unit-status';
+	import UnitStatusBadge from '$lib/components/status/UnitStatusBadge.svelte';
 
-	const counts = $derived.by(() => {
-		const c: Record<UnitStatus, number> = { free: 0, rented: 0, reserved: 0, unavailable: 0 };
-		for (const u of demo.data.units) c[u.status]++;
-		return c;
-	});
+	const counts = $derived(summaryCounts(demo.data, demo.data.units));
+	/** Unités sans locataire en place : disponibles, à remettre en état, en travaux. */
 	const freeUnits = $derived(
 		demo.data.units
-			.filter((u) => u.status === 'free')
-			.map((u) => ({ unit: u, property: demo.data.properties.find((p) => p.id === u.propertyId)! }))
+			.filter((u) => u.occupancy === 'free' || u.occupancy === 'notice')
+			.map((u) => ({ unit: u, summary: summaryOfUnit(demo.data, u), property: demo.data.properties.find((p) => p.id === u.propertyId)! }))
 	);
+	const canCreate = $derived(demo.profileId !== 'field_agent');
 	const title = $derived(demo.profileId === 'landlord' ? 'Mes logements' : demo.profileId === 'field_agent' ? 'Mes biens' : 'Biens');
 </script>
 
-<PageHeader {title} subtitle="{demo.data.properties.length} biens · {demo.data.units.length} unités" />
+<PageHeader {title} subtitle="{demo.data.properties.length} biens · {demo.data.units.length} unités">
+	{#snippet actions()}
+		{#if canCreate}
+			<Button href="/biens/nouveau" data-testid="ajouter-bien"><Plus aria-hidden="true" /> {demo.profileId === 'landlord' ? 'Ajouter un logement' : 'Ajouter un bien'}</Button>
+		{/if}
+	{/snippet}
+</PageHeader>
 
 <main class="page pt-3 lg:grid lg:grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)] lg:items-start lg:gap-6">
 	<div class="space-y-3">
-		<p class="text-base text-muted-foreground">
-			{counts.rented} louées · {counts.free} libres · {counts.reserved} réservées
+		<p class="text-base text-muted-foreground" data-testid="resume-parc">
+			{counts.map((c) => `${c.count} ${c.label.toLowerCase()}`).join(' · ')}
 		</p>
 		<PropertyList />
 	</div>
@@ -39,23 +44,24 @@
 		<div class="rounded-xl border bg-card p-5">
 			<h2 id="titre-synthese" class="text-lg font-semibold">Synthèse du parc</h2>
 			<dl class="mt-3 grid grid-cols-2 gap-3 xl:grid-cols-4">
-				{#each Object.entries(counts) as [status, n] (status)}
+				{#each counts as c (c.label)}
 					<div class="rounded-lg bg-muted p-3">
-						<dt><Badge variant={unitStatusVariant[status as UnitStatus]}>{unitStatusLabel[status as UnitStatus]}</Badge></dt>
-						<dd class="mt-1 text-2xl font-bold">{n}</dd>
+						<dt><Badge variant={c.variant}>{c.label}</Badge></dt>
+						<dd class="mt-1 text-2xl font-bold">{c.count}</dd>
 					</div>
 				{/each}
 			</dl>
 		</div>
 		<div class="rounded-xl border bg-card">
-			<h2 class="border-b px-5 py-3 text-lg font-semibold">Unités libres</h2>
+			<h2 class="border-b px-5 py-3 text-lg font-semibold">Unités libres ou bientôt libres</h2>
 			<ul class="divide-y">
 				{#each freeUnits as f (f.unit.id)}
-					{@const published = f.unit.visibility === 'published'}
+					{@const published = isListed(f.unit)}
 					<li class="flex items-center gap-3 px-5 py-3">
-						<div class="min-w-0 flex-1">
+						<div class="min-w-0 flex-1 space-y-1">
 							<p class="truncate font-medium">{f.property.name} — {f.unit.label}</p>
 							<p class="text-base text-muted-foreground">{f.unit.kind} · {formatFCFA(f.unit.rent)}/mois</p>
+							<UnitStatusBadge summary={f.summary} />
 						</div>
 						{#if published}
 							<Badge><Globe aria-hidden="true" /> Publiée</Badge>

@@ -1,6 +1,10 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { Bed, Check, CircleCheck, Eye, EyeOff, FileText, Globe, MessageCircle, Ruler, Wallet, X } from '@lucide/svelte';
+	import { Bed, Check, ChevronRight, CircleCheck, Eye, EyeOff, FileText, Globe, LogOut, MessageCircle, Ruler, Wallet, X } from '@lucide/svelte';
+	import UnitDimensions from '$lib/components/status/UnitDimensions.svelte';
+	import UnitStatusBadge from '$lib/components/status/UnitStatusBadge.svelte';
+	import { isListed } from '$lib/listing';
+	import { dimensionsOf, isAvailable, summaryOfUnit } from '$lib/unit-status';
 	import PropertyList from '$lib/components/agency/PropertyList.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import { ActionMenu } from '$lib/components/ui/menu';
@@ -12,7 +16,6 @@
 	import { demo } from '$lib/demo.svelte';
 	import { device } from '$lib/device.svelte';
 	import { formatDate, formatFCFA, formatPhone } from '$lib/format';
-	import { unitStatusLabel, unitStatusVariant } from '$lib/labels';
 	import { isMandateActive, publicationBlockers } from '$lib/rules';
 	import type { Unit } from '$lib/types';
 	import { activeLeaseOfUnit, propertyUnits } from '$lib/views';
@@ -35,8 +38,10 @@
 	function checklist(unit: Unit) {
 		if (!mandate) return [];
 		return [
-			{ ok: unit.status === 'free', label: 'Unité libre' },
-			{ ok: isMandateActive(mandate, demo.today) && mandate.canPublish, label: 'Mandat actif qui autorise la publication' },
+			{ ok: isAvailable(dimensionsOf(unit)), label: 'Unité disponible (libre ou en préavis, et prête)' },
+			mandate.selfManaged
+				? { ok: true, label: 'Logement géré par son propriétaire' }
+				: { ok: isMandateActive(mandate, demo.today) && mandate.canPublish, label: 'Mandat actif qui autorise la publication' },
 			{ ok: unit.photos >= 3, label: `Au moins 3 photos (${unit.photos})` },
 			{ ok: unit.rent > 0, label: `Loyer renseigné (${formatFCFA(unit.rent)})` }
 		];
@@ -53,6 +58,8 @@
 		const blockers = demo.publish(sheetUnit.id);
 		justPublished = blockers.length === 0;
 	}
+
+	const canExit = $derived(demo.profileId !== 'field_agent');
 
 	function title(u: Unit) {
 		return `${u.kind} ${u.rooms} pièce${u.rooms > 1 ? 's' : ''} — ${property?.district ?? ''}`;
@@ -74,7 +81,7 @@
 	<div class="min-w-0">
 		<PageHeader flush class="-mx-4 md:mx-0" title={property.name} subtitle="{property.district}, {property.city} · {property.kind}" back="/biens" backLabel="Biens">
 			{#snippet actions()}
-				{#if demo.profileId !== 'field_agent'}
+				{#if demo.profileId !== 'field_agent' && !mandate!.selfManaged}
 					<div class="hidden gap-2 md:flex">
 						<Button variant="outline" href="/proprietaires/{owner!.id}/releve"><FileText aria-hidden="true" /> Relevé du propriétaire</Button>
 					</div>
@@ -82,6 +89,12 @@
 			{/snippet}
 		</PageHeader>
 
+	{#if page.url.searchParams.get('nouveau')}
+		<p class="mt-3 flex items-start gap-2 rounded-xl bg-success-soft p-3 font-medium" role="status" data-testid="bien-enregistre">
+			<CircleCheck class="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
+			Bien enregistré. Rien n’est publié : chaque unité se publie quand ses conditions sont remplies.
+		</p>
+	{/if}
 	<main class="space-y-4 pt-3 2xl:grid 2xl:grid-cols-[minmax(0,1fr)_20rem] 2xl:items-start 2xl:gap-6 2xl:space-y-0">
 		<div class="space-y-4 md:grid md:grid-cols-2 md:gap-4 md:space-y-0 2xl:order-2 2xl:block 2xl:space-y-4">
 		<div class="aspect-[400/260] overflow-hidden rounded-xl">
@@ -94,6 +107,12 @@
 					<p class="text-base text-muted-foreground">Adresse (privée)</p>
 					<p>{property.address}, {property.district}, {property.city}</p>
 				</div>
+				{#if mandate.selfManaged}
+				<div>
+					<p class="text-base text-muted-foreground">Gestion</p>
+					<p class="font-medium">Gérée par son propriétaire, sans agence ni commission</p>
+				</div>
+				{:else}
 				<div class="space-y-2">
 					<div>
 						<p class="text-base text-muted-foreground">Propriétaire</p>
@@ -122,6 +141,7 @@
 						{/each}
 					</ul>
 				</div>
+				{/if}
 			</Card.Content>
 		</Card.Root>
 
@@ -140,13 +160,14 @@
 						{#each units as u (u.id)}
 							{@const lease = activeLeaseOfUnit(demo.data, u.id)}
 							{@const tenant = lease ? demo.data.tenants.find((t) => t.id === lease.tenantId) : undefined}
-							{@const published = u.visibility === 'published' && u.status === 'free'}
+							{@const published = isListed(u)}
+							{@const sum = summaryOfUnit(demo.data, u)}
 							<tr data-testid="ligne-unite-{u.id}">
 								<td>
-									<p class="font-semibold">{u.label}</p>
+									<a href="/biens/{property.id}/{u.id}" class="font-semibold text-primary hover:underline">{u.label}</a>
 									<p class="text-muted-foreground">{u.kind} · {u.rooms} p. · {u.surface} m²</p>
 								</td>
-								<td><Badge variant={unitStatusVariant[u.status]}>{unitStatusLabel[u.status]}</Badge></td>
+								<td><UnitStatusBadge summary={sum} /></td>
 								<td class="text-right font-semibold tabular-nums">{formatFCFA(u.rent)}</td>
 								<td>
 									{#if tenant}{tenant.civility} {tenant.name}
@@ -155,7 +176,9 @@
 								</td>
 								<td class="w-1 whitespace-nowrap text-right">
 									<div class="flex items-center justify-end gap-1">
-										{#if u.status === 'rented' && lease}
+										{#if sum.occupancy === 'notice' && lease && canExit}
+											<Button variant="outline" href="/sorties/{lease.id}"><LogOut aria-hidden="true" /> Préparer la sortie</Button>
+										{:else if u.status === 'rented' && lease}
 											<Button variant="outline" href="/encaisser/{lease.id}"><Wallet aria-hidden="true" /> Encaisser</Button>
 										{:else if published}
 											<Button variant="outline" href="/annonce/{u.id}"><Eye aria-hidden="true" /> Annonce</Button>
@@ -167,7 +190,8 @@
 											actions={[
 												...(published ? [{ label: 'Retirer l’annonce', icon: EyeOff, onclick: () => demo.unpublish(u.id) }] : []),
 												...(lease ? [{ label: 'Encaisser', icon: Wallet, href: `/encaisser/${lease.id}` }] : []),
-												{ label: 'Relevé du propriétaire', icon: FileText, href: `/proprietaires/${owner.id}/releve` }
+												{ label: 'Fiche de l’unité', icon: ChevronRight, href: `/biens/${property!.id}/${u.id}` },
+												...(mandate!.selfManaged ? [] : [{ label: 'Relevé du propriétaire', icon: FileText, href: `/proprietaires/${owner!.id}/releve` }])
 											]}
 										/>
 									</div>
@@ -182,12 +206,13 @@
 			{#each units as u (u.id)}
 				{@const lease = activeLeaseOfUnit(demo.data, u.id)}
 				{@const tenant = lease ? demo.data.tenants.find((t) => t.id === lease.tenantId) : undefined}
-				{@const published = u.visibility === 'published' && u.status === 'free'}
+				{@const published = isListed(u)}
+				{@const sum = summaryOfUnit(demo.data, u)}
 				<Card.Root data-testid="unite-{u.id}">
 					<Card.Content class="space-y-2">
 						<div class="flex items-start justify-between gap-2">
-							<div>
-								<p class="font-semibold">{u.label}</p>
+							<div class="min-w-0">
+								<a href="/biens/{property.id}/{u.id}" class="inline-flex min-h-11 items-center gap-1 font-semibold text-primary hover:underline">{u.label}<ChevronRight class="size-4" aria-hidden="true" /></a>
 								<p class="flex flex-wrap items-center gap-x-3 text-base text-muted-foreground">
 									<span class="flex items-center gap-1"><Bed class="size-4" aria-hidden="true" />{u.rooms} p.</span>
 									<span class="flex items-center gap-1"><Ruler class="size-4" aria-hidden="true" />{u.surface} m²</span>
@@ -195,16 +220,20 @@
 								</p>
 							</div>
 							<div class="flex flex-col items-end gap-1">
-								<Badge variant={unitStatusVariant[u.status]}>{unitStatusLabel[u.status]}</Badge>
+								<UnitStatusBadge summary={sum} />
 								{#if published}<Badge variant="default"><Globe aria-hidden="true" /> Publiée</Badge>{/if}
 							</div>
 						</div>
+						<UnitDimensions unit={u} compact />
 
 						{#if u.status === 'rented' && tenant && lease}
 							<div class="flex items-center justify-between gap-2 rounded-lg bg-muted p-2">
 								<p class="min-w-0 truncate text-base">Locataire : {tenant.civility} {tenant.name}</p>
 								<Button variant="outline" href="/encaisser/{lease.id}"><Wallet aria-hidden="true" /> Encaisser</Button>
 							</div>
+							{#if sum.occupancy === 'notice' && canExit}
+								<Button class="w-full" href="/sorties/{lease.id}"><LogOut aria-hidden="true" /> Préparer la sortie</Button>
+							{/if}
 						{:else if published}
 							<div class="grid grid-cols-2 gap-2">
 								<Button variant="secondary" href="/annonce/{u.id}"><Eye aria-hidden="true" /> Voir l’annonce</Button>

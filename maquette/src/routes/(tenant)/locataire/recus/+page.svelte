@@ -5,11 +5,15 @@
 	import { demo } from '$lib/demo.svelte';
 	import { formatDate, formatFCFA, formatMonth } from '$lib/format';
 	import { methodLabel, paymentStatusLabel, paymentStatusVariant } from '$lib/labels';
+	import OrgTag from '$lib/components/OrgTag.svelte';
 
-	const payments = $derived([...demo.data.payments].sort((a, b) => b.date.localeCompare(a.date)));
+	/** Tous les reçus de la personne, toutes agences confondues ; chacun indique son agence. */
+	const payments = $derived(
+		demo.tenantLeases.flatMap((l) => l.payments.map((p) => ({ ...p, organization: l.organization }))).sort((a, b) => b.date.localeCompare(a.date))
+	);
 </script>
 
-<PageHeader title="Mes reçus" subtitle="{payments.length} paiement{payments.length > 1 ? 's' : ''} enregistrés par l’agence" />
+<PageHeader title="Mes reçus" subtitle="{payments.length} paiement{payments.length > 1 ? 's' : ''}, toutes agences confondues" />
 
 <main class="page pt-3">
 	<ul class="divide-y rounded-xl border bg-card md:grid md:grid-cols-2 md:gap-px md:divide-y-0 md:overflow-hidden md:bg-border xl:grid-cols-3" data-testid="recus-locataire">
@@ -21,7 +25,7 @@
 						<p class="truncate text-base text-muted-foreground">
 							{formatDate(p.date)} · {methodLabel[p.method]} · {p.allocations.map((a) => formatMonth(a.period)).join(', ') || 'avance'}
 						</p>
-						<Badge variant={paymentStatusVariant[p.status]}>{paymentStatusLabel[p.status]}</Badge>
+						<span class="flex flex-wrap gap-1"><Badge variant={paymentStatusVariant[p.status]}>{paymentStatusLabel[p.status]}</Badge><OrgTag organization={p.organization} /></span>
 					</div>
 					<ChevronRight class="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
 				</a>

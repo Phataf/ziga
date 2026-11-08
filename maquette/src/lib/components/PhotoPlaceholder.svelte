@@ -9,7 +9,7 @@
 		['#eadfe6', '#ccb2c2'],
 		['#e7ead6', '#c3c9a0']
 	];
-	const [bg, fg] = $derived(palettes[index % palettes.length]);
+	const [bg, fg] = $derived(palettes[(Math.abs(Math.trunc(index)) || 0) % palettes.length]);
 </script>
 
 <svg viewBox="0 0 400 260" preserveAspectRatio="xMidYMid slice" class="block h-full w-full" role="img" aria-label={`Photo ${index + 1} sur ${total} (illustration)`}>

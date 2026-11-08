@@ -7,22 +7,31 @@ import {
 	Building2,
 	CalendarClock,
 	ClipboardCheck,
+	Ellipsis,
 	FileText,
+	History,
 	House,
 	KeyRound,
 	LayoutDashboard,
+	LifeBuoy,
+	LogOut,
 	MessageCircle,
 	Receipt,
+	ScrollText,
 	Search,
+	ShieldCheck,
+	ToggleRight,
+	TrendingUp,
 	TriangleAlert,
 	Users,
-	Wallet
+	Wallet,
+	Wrench
 } from '@lucide/svelte';
 
-export type ProfileId = 'director' | 'manager' | 'field_agent' | 'landlord' | 'owner' | 'tenant' | 'visitor';
+export type ProfileId = 'director' | 'manager' | 'field_agent' | 'landlord' | 'owner' | 'tenant' | 'visitor' | 'admin';
 
 /** Espace applicatif : chaque espace a sa propre coque et ses propres routes. */
-export type Space = 'agency' | 'owner' | 'tenant' | 'public';
+export type Space = 'agency' | 'owner' | 'tenant' | 'public' | 'admin';
 
 export interface NavItem {
 	href: string;
@@ -36,6 +45,8 @@ export interface NavItem {
 	section?: string;
 	/** Visible dans la barre d'onglets du téléphone (4 au plus). */
 	tab?: boolean;
+	/** Entrée propre au téléphone (« Plus ») : absente du rail et du menu latéral. */
+	phoneOnly?: boolean;
 }
 
 export interface Profile {
@@ -48,7 +59,7 @@ export interface Profile {
 	nav: NavItem[];
 }
 
-const agencyNav = (opts: { owners: boolean; team: boolean; validate: boolean }): NavItem[] => [
+const agencyNav = (opts: { owners: boolean; team: boolean; validate: boolean; exits?: boolean }): NavItem[] => [
 	{ href: '/', label: 'Tableau de bord', short: 'Accueil', icon: LayoutDashboard, match: ['/'], section: 'Pilotage', tab: true },
 	{ href: '/biens', label: 'Biens et unités', short: 'Biens', icon: Building2, match: ['/biens'], section: 'Gestion', tab: true },
 	{
@@ -60,6 +71,7 @@ const agencyNav = (opts: { owners: boolean; team: boolean; validate: boolean }):
 		tab: true
 	},
 	{ href: '/impayes', label: 'Impayés', icon: TriangleAlert, match: ['/impayes'], section: 'Gestion' },
+	...(opts.exits !== false ? [{ href: '/sorties', label: 'Préavis et sorties', icon: LogOut, match: ['/sorties'], section: 'Gestion' }] : []),
 	...(opts.owners
 		? [{ href: '/proprietaires', label: 'Propriétaires', icon: Users, match: ['/proprietaires'], section: 'Gestion' }]
 		: []),
@@ -110,7 +122,7 @@ export const profiles: Record<ProfileId, Profile> = {
 	landlord: {
 		id: 'landlord',
 		label: 'Bailleur particulier',
-		description: 'Gère lui-même ses logements, sans agence',
+		description: 'Issouf Sawadogo gère lui-même son immeuble de Larlé',
 		space: 'agency',
 		home: '/',
 		nav: [
@@ -125,31 +137,37 @@ export const profiles: Record<ProfileId, Profile> = {
 				section: 'Mes logements',
 				tab: true
 			},
-			{ href: '/impayes', label: 'Retards', icon: TriangleAlert, match: ['/impayes'], section: 'Mes logements' }
+			{ href: '/impayes', label: 'Retards', icon: TriangleAlert, match: ['/impayes'], section: 'Mes logements' },
+			{ href: '/sorties', label: 'Préavis et sorties', icon: LogOut, match: ['/sorties'], section: 'Mes logements' }
 		]
 	},
 	owner: {
 		id: 'owner',
 		label: 'Propriétaire',
-		description: 'Confie ses biens à l’agence et suit ses revenus',
+		description: 'Issouf Sawadogo : biens chez deux agences et en gestion directe',
 		space: 'owner',
 		home: '/proprietaire',
 		nav: [
-			{ href: '/proprietaire', label: 'Mes revenus', short: 'Revenus', icon: LayoutDashboard, match: ['/proprietaire'], section: 'Mon patrimoine', tab: true },
-			{ href: '/proprietaire/biens', label: 'Mes biens', short: 'Biens', icon: Building2, match: ['/proprietaire/biens'], section: 'Mon patrimoine', tab: true },
-			{ href: '/proprietaire/releves', label: 'Relevés', icon: FileText, match: ['/proprietaire/releves'], section: 'Mon patrimoine', tab: true }
+			{ href: '/proprietaire', label: 'Mon patrimoine', short: 'Patrimoine', icon: Building2, match: ['/proprietaire', '/proprietaire/biens'], section: 'Mon patrimoine', tab: true },
+			{ href: '/proprietaire/revenus', label: 'Revenus', icon: TrendingUp, match: ['/proprietaire/revenus'], section: 'Mon patrimoine', tab: true },
+			{ href: '/proprietaire/releves', label: 'Relevés', icon: FileText, match: ['/proprietaire/releves'], section: 'Mon patrimoine', tab: true },
+			{ href: '/proprietaire/plus', label: 'Mon compte et mes gestionnaires', short: 'Plus', icon: Ellipsis, match: ['/proprietaire/plus'], section: 'Compte', tab: true }
 		]
 	},
 	tenant: {
 		id: 'tenant',
 		label: 'Locataire',
-		description: 'Consulte son solde, ses échéances et ses reçus',
+		description: 'Rodrigue Yaméogo : son logement et tout son historique',
 		space: 'tenant',
 		home: '/locataire',
 		nav: [
 			{ href: '/locataire', label: 'Mon logement', short: 'Logement', icon: KeyRound, match: ['/locataire'], section: 'Mon espace', tab: true },
+			{ href: '/locataire/historique', label: 'Mon historique', icon: History, match: ['/locataire/historique'], section: 'Mon espace' },
 			{ href: '/locataire/recus', label: 'Mes reçus', short: 'Reçus', icon: Receipt, match: ['/locataire/recus'], section: 'Mon espace', tab: true },
-			{ href: '/locataire/contact', label: 'Contacter l’agence', short: 'Contact', icon: MessageCircle, match: ['/locataire/contact'], section: 'Mon espace', tab: true }
+			{ href: '/locataire/caution', label: 'Caution et décompte', short: 'Caution', icon: ShieldCheck, match: ['/locataire/caution'], section: 'Mon espace', tab: true },
+			{ href: '/locataire/signalements', label: 'Mes signalements', icon: Wrench, match: ['/locataire/signalements'], section: 'Mon espace' },
+			{ href: '/locataire/contact', label: 'Contacter l’agence', icon: MessageCircle, match: ['/locataire/contact'], section: 'Mon espace' },
+			{ href: '/locataire/plus', label: 'Plus', icon: Ellipsis, match: ['/locataire/plus'], tab: true, phoneOnly: true }
 		]
 	},
 	visitor: {
@@ -159,17 +177,32 @@ export const profiles: Record<ProfileId, Profile> = {
 		space: 'public',
 		home: '/vitrine',
 		nav: [{ href: '/vitrine', label: 'Rechercher', icon: Search, match: ['/vitrine', '/annonce'] }]
+	},
+	admin: {
+		id: 'admin',
+		label: 'Administrateur plateforme',
+		description: 'Organisations, abonnements, interrupteurs, assistance',
+		space: 'admin',
+		home: '/admin',
+		nav: [
+			{ href: '/admin', label: 'Organisations', icon: Building2, match: ['/admin'], section: 'Plateforme', tab: true },
+			{ href: '/admin/abonnements', label: 'Formules et abonnements', short: 'Abonnements', icon: Wallet, match: ['/admin/abonnements'], section: 'Plateforme', tab: true },
+			{ href: '/admin/fonctionnalites', label: 'Fonctionnalités', icon: ToggleRight, match: ['/admin/fonctionnalites'], section: 'Plateforme', tab: true },
+			{ href: '/admin/assistance', label: 'Accès d’assistance', short: 'Assistance', icon: LifeBuoy, match: ['/admin/assistance'], section: 'Contrôle', tab: true },
+			{ href: '/admin/journal', label: 'Journal', icon: ScrollText, match: ['/admin/journal'], section: 'Contrôle' }
+		]
 	}
 };
 
-export const profileOrder: ProfileId[] = ['director', 'manager', 'field_agent', 'landlord', 'owner', 'tenant', 'visitor'];
+export const profileOrder: ProfileId[] = ['director', 'manager', 'field_agent', 'landlord', 'owner', 'tenant', 'visitor', 'admin'];
 
 /** Groupes du sélecteur de profil. */
 export const profileGroups: { label: string; ids: ProfileId[] }[] = [
 	{ label: 'Agence', ids: ['director', 'manager', 'field_agent'] },
 	{ label: 'Particulier', ids: ['landlord'] },
-	{ label: 'Accès par lien, sans compte', ids: ['owner', 'tenant'] },
-	{ label: 'Public', ids: ['visitor'] }
+	{ label: 'Espaces personnels (compte vérifié par SMS)', ids: ['owner', 'tenant'] },
+	{ label: 'Public', ids: ['visitor'] },
+	{ label: 'Plateforme', ids: ['admin'] }
 ];
 
 /** Entrée de navigation active : le préfixe le plus long qui correspond. */
@@ -193,5 +226,6 @@ export function spaceOfPath(pathname: string): Space {
 	if (pathname.startsWith('/proprietaire') && !pathname.startsWith('/proprietaires')) return 'owner';
 	if (pathname.startsWith('/locataire')) return 'tenant';
 	if (pathname.startsWith('/vitrine') || pathname.startsWith('/annonce')) return 'public';
+	if (pathname.startsWith('/admin')) return 'admin';
 	return 'agency';
 }
