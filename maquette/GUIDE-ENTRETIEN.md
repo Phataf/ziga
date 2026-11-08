@@ -65,3 +65,47 @@ Tout geste qui prend plus de 30 secondes est à corriger avant le lot 01.
 - Recopiez les notes le jour même : chiffres, citations, objections.
 - Classez l'agence : **pilote possible**, **intéressée plus tard** ou **pas intéressée**, avec la raison.
 - Réinitialisez la démo avant le rendez-vous suivant.
+
+---
+
+# Lot 00 ter — présentation aux trois agences pilotes (avant le lot 06)
+
+Objectif : faire réagir les pilotes sur les règles des décisions D14 à D17 **avant** de les coder, et obtenir leurs réponses aux deux questions ouvertes (détenteur de la caution, légalisation des baux). Réinitialisez la démo avant chaque rendez-vous (**Plus → Réinitialiser la démo**). Comptez 20 minutes de démonstration et 20 minutes de questions.
+
+## Déroulé (20 minutes)
+
+| Minute | Écran | Ce que vous montrez | Règle à faire réagir |
+| --- | --- | --- | --- |
+| 0 – 3 | **Biens → Mini-villa Saaba → Mini-villa** | La fiche unité : quatre pastilles (fiche, occupation, état technique, annonce). L'unité est « En préavis, libre le 30/11 » : l'occupation vient du bail, personne ne la saisit. | D14 : statut en quatre dimensions |
+| 3 – 10 | **Préparer la sortie** (Mme Mariétou Sorgho) | Préavis ; état des lieux pièce par pièce (douche : pommeau cassé, 10 000 FCFA, devis ; chambre : porte fendue, 5 000 FCFA, photo) ; signatures ; décompte : **100 000 − 10 000 − 5 000 = 85 000 FCFA**. Retirez le devis de la douche : la retenue est refusée. | D15 : aucune retenue sans constat et justificatif |
+| 10 – 13 | Décompte, variantes | « Caution imputée sur les derniers loyers » : l'accord écrit, daté du 22/10, couvre novembre ; il ne reste que 30 000 FCFA pour les dégâts → 15 000 restitués. « Réparations faites par le locataire » : accord, contre-visite, 100 000 restitués. Revenez à la restitution, **Valider**. | D15 : trois variantes du même décompte |
+| 13 – 14 | **Voir l'unité** | L'unité passe « À remettre en état », puis « En travaux », puis « Disponible ». | D14 : jamais disponible directement à la fin du bail |
+| 14 – 19 | Profil **Propriétaire** (M. Issouf Sawadogo) | Patrimoine groupé par gestionnaire : Immo Démo, Horizon Immo et sa gestion directe ; fiche de la Maison Kossodo (rendement, caution détenue par lui) ; revenus par gestionnaire. | D13, D16, D17 : un gestionnaire par unité, aucune agence ne voit l'autre |
+| 19 – 20 | Profil **Locataire** (M. Rodrigue Yaméogo) | Son historique : ancien bail chez Horizon Immo (décompte de 85 000 FCFA) et bail actuel chez Immo Démo. | D17 : seul le locataire voit tout son historique |
+
+Si le temps le permet : **Choix de l'espace** (sélecteur de profil, en haut), **Biens → Ajouter un bien** (assistant en cinq étapes) et le back-office sur ordinateur.
+
+## Questions aux pilotes
+
+Notez les réponses mot pour mot ; elles seront reportées dans `docs/JOURNAL-LOTS.md` et, pour les deux premières, dans `docs/DECISIONS.md`.
+
+1. **Détenteur de la caution.** « Aujourd'hui, qui garde la caution : l'agence, ou le propriétaire ? Qui la rend au départ du locataire ? »
+2. **Légalisation des baux.** « Faites-vous légaliser vos baux à la mairie ? Les transmettez-vous aux impôts ? Combien de temps cela prend-il ? »
+3. **État des lieux.** « Faites-vous un état des lieux écrit à l'entrée et à la sortie ? Pièce par pièce ? Avec photos ? Qui le fait : vous ou un agent de terrain ? »
+4. **Retenues.** « Le décompte que vous avez vu correspond-il à ce que vous faites ? Retenez-vous parfois sans devis ni facture ? Le locataire conteste-t-il souvent ? »
+5. **Caution contre derniers loyers.** « Arrive-t-il que le locataire ne paie pas ses derniers mois "parce qu'il y a la caution" ? Comment le gérez-vous ? Exigeriez-vous un accord écrit ? »
+6. **Statuts.** « "À remettre en état" puis "En travaux" : est-ce que cela correspond à votre façon de suivre vos logements entre deux locataires ? »
+7. **Propriétaire multi-agences.** « Avez-vous des propriétaires qui confient d'autres biens à une autre agence ? Cela vous gêne-t-il qu'il voie tout au même endroit, sans que vous voyiez rien de l'autre agence ? »
+8. **Transfert de gestion.** « Quand un propriétaire vous retire un bien pour le confier ailleurs, que remettez-vous : bail, caution, documents ? »
+
+## Fiche de remarques (une par agence)
+
+| Sujet | Remarque de l'agence | Écart avec D14 à D17 ? |
+| --- | --- | --- |
+| Statut en quatre dimensions | | |
+| État des lieux et retenues | | |
+| Variantes du décompte | | |
+| Détenteur de la caution | | |
+| Légalisation des baux | | |
+| Espace propriétaire | | |
+| Historique du locataire | | |

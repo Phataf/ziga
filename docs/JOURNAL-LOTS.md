@@ -111,3 +111,48 @@ Demande du porteur avant le lot 01 : un audit fonctionnel et UX/UI complet (caut
 
 ### Questions ouvertes
 Voir `docs/DECISIONS.md` : lecture juridique de la loi n° 103-2015/CNT, réparations locatives (article 25), détenteur de la caution, légalisation des baux, nouvelle loi sur les données personnelles (ARCOD), prestataire SMS.
+
+## Lot 00 ter — Maquette des écrans de l'audit — 08/11/2026
+
+Prompt : `prompts/lot-00ter-maquette-audit.md`. Seul `maquette/` est modifié (exception à D10 limitée à ce lot), plus ce journal.
+
+### Fait
+- **Données de démonstration** : trois organisations, chacune avec son propre jeu de données isolé et sa propre numérotation de reçus (`src/lib/fixtures.ts`, `src/lib/fixtures-orgs.ts`) :
+  - Immo Démo (inchangée en volume : 12 biens, 20 unités, 15 locataires) ; bail de Mme Mariétou Sorgho **en préavis** (caution de 100 000 FCFA, libre à la fin du mois) ; baux signés qui rendent « réservées » les deux unités qui l'étaient déjà.
+  - **Horizon Immo**, deuxième agence : 2 biens, 3 unités, dont la Maison Kossodo de M. Issouf Sawadogo ; l'ancien bail de M. Rodrigue Yaméogo, clos avec le décompte du porteur (100 000 − 10 000 − 5 000 = 85 000 FCFA).
+  - **Bailleur particulier** M. Issouf Sawadogo (Résidence Larlé, 2 logements, dont un **à remettre en état**). Le profil « Bailleur particulier » utilise désormais cette organisation, et non plus des biens d'Immo Démo (qui contredisaient D16).
+  - Personnes et liens vérifiés (code SMS et acceptation) : M. Issouf Sawadogo, propriétaire dans les trois organisations ; M. Rodrigue Yaméogo, passé d'Horizon Immo à Immo Démo.
+- **Statut en quatre dimensions** (`src/lib/unit-status.ts`) : occupation **calculée à partir des baux** (y compris le statut simplifié du lot 00) ; fiche unité `/biens/[bien]/[unité]` avec une pastille par dimension, le bail, le préavis, le compte de caution et une chronologie ; pastille de synthèse dans les listes, les cartes et les tableaux ; la publication et la vitrine suivent la disponibilité (libre ou en préavis, et prête).
+- **Assistant d'ajout de bien** `/biens/nouveau` : cinq étapes (type et propriétaire, localisation avec repère et point GPS, unités, photos et médias, documents privés), brouillon enregistré à chaque étape et repris, fiche active seulement avec un mandat ; « Enregistrer n'est jamais publier ».
+- **Sortie du locataire** `/sorties` et `/sorties/[bail]` : préavis ; état des lieux guidé pièce par pièce, comparé à l'entrée, signé des deux parties ; décompte unique et ses trois variantes (restitution après réparations ; caution imputée sur le dernier loyer par accord écrit daté avant le mois ; réparations faites par le locataire après accord et contre-visite) ; refus d'une retenue sans constat imputable, montant ou justificatif ; validation qui ajoute les mouvements au compte de caution et fait passer l'unité « à remettre en état », puis « en travaux », puis « disponible ».
+- **Espace propriétaire** : patrimoine groupé par gestionnaire avec filtre, fiche bien (statut, loyers, bail et caution sans l'identité du locataire, dépenses, rendement brut sur valeur déclarée), revenus par mois et par gestionnaire, relevés de chaque agence, compte (gestionnaires, liens vérifiés, lectures journalisées).
+- **Espace locataire** : historique des deux baux (chaque élément porte son organisation), caution et décompte avec justificatifs, reçus des deux agences, signalements suivis (reçue, planifiée, faite).
+- **Back-office** `/admin` (ordinateur d'abord, utilisable sur tablette et téléphone) : organisations et état effectif des fonctionnalités avec la raison ; formules et abonnements avec paiement saisi à la main ; interrupteurs à trois positions avec motif, confirmation qui compte les organisations touchées et couleur d'alerte ; exceptions par organisation ; accès d'assistance motivé, en lecture seule et limité à deux heures ; journal.
+- **Choix de l'espace** `/espaces`, et « Changer d'espace » dans le menu du compte.
+- **Composants** (`docs/UX.md` §10) : assistant pas à pas, chronologie, circuit d'accord, pastilles de statut, grosses réponses (ChoiceGroup).
+- **Présentation aux pilotes** : déroulé, questions et fiche de remarques ajoutés à `maquette/GUIDE-ENTRETIEN.md`.
+- **Tests** : 78 tests Vitest (dont `unit-status`, `deposit`, `portals` et `platform` : occupation calculée, décompte et variantes, retenues refusées, plafond des sorties, lecture une organisation à la fois et seulement sur lien accepté, aucune donnée d'une autre organisation) ; 48 tests Playwright, dont `e2e/09-audit.spec.ts` (7 parcours × 3 appareils, refus d'une retenue sans justificatif, débordement horizontal sur téléphone des 19 nouvelles pages, onglets des espaces personnels). Les 15 tests d'origine et ceux du lot 00 bis passent sans modification ; le test anti-émoji couvre les nouveaux fichiers.
+
+### Critères d'acceptation
+- [ ] Le porteur a présenté la sortie du locataire et l'espace propriétaire aux trois agences pilotes ; leurs remarques sont consignées ici, et les écarts avec D14 à D17 sont signalés avant le lot 06 — **à faire par le porteur** ; déroulé, questions et fiche de remarques dans `maquette/GUIDE-ENTRETIEN.md` (section « Lot 00 ter »).
+- [ ] Les réponses des pilotes aux questions ouvertes (détenteur de la caution, légalisation des baux) sont reportées dans `docs/DECISIONS.md` — **à faire après les rendez-vous** ; les deux questions figurent dans le guide. Claude Code ne modifie `docs/DECISIONS.md` que sur demande du porteur.
+
+### Écarts par rapport au prompt
+- **Préavis et sortie** : la remise des clés et l'état des lieux se font « aujourd'hui » dans la démo, avant la fin du préavis (30/11), pour pouvoir dérouler la sortie à toute date ; le loyer du dernier mois reste dû jusqu'à la fin du préavis.
+- **Variante B** : la maquette impute la caution sur le loyer du mois où finit le préavis, s'il n'est pas payé ; l'accord du locataire est daté du 22 du mois précédent. L'imputation n'est pas encore transformée en encaissement avec reçu (lot 10 bis).
+- **Contestation du décompte** et **transfert de gestion** : non maquettés (lot 10 bis), seulement mentionnés.
+- **Rendement** : calculé sur une valeur déclarée par le propriétaire dans son espace (donnée fictive), jamais vue par les agences.
+- **Préavis donné par le locataire en ligne** : non maquetté ; l'espace locataire renvoie vers l'agence.
+- **Lecture de la loi n° 103-2015/CNT** (délais de préavis de 2 ou 3 mois, état des lieux, usure normale, plafond de deux mois) : appliquée telle que retenue par l'audit, à confirmer par un juriste.
+
+### Dette technique
+- Code jetable, comme aux lots 00 et 00 bis. Les règles pures (`unit-status.ts`, `deposit.ts`, `portals.ts`) préfigurent `packages/shared` et le module `portals`.
+- Le back-office n'a pas de rôles plateforme distincts (administrateur général, assistance, commercial, finances) ni de simulateur ; la résolution des interrupteurs n'y traite pas les exceptions par personne ni le réglage du directeur.
+- Les textes restent dans les composants (pas de `i18n/fr.ts`).
+- Les biens créés avec l'assistant et les sorties validées ne vivent que dans le navigateur qui les a saisis.
+
+### Questions ouvertes pour le porteur
+1. **Détenteur de la caution** et **légalisation des baux** : à poser aux trois pilotes (questions 1 et 2 du guide).
+2. **Variante B** : faut-il permettre de garder une partie de la caution pour les dégâts, comme le recommande l'audit, ou laisser l'agence refuser l'accord ? La maquette affiche seulement ce qu'il restera.
+3. **Remise des clés avant la fin du préavis** : les agences rendent-elles la caution dès la remise des clés, ou seulement à la fin du préavis ?
+4. **Rendement** : les propriétaires accepteraient-ils de déclarer la valeur de leur bien ? Sinon, afficher seulement le taux d'occupation et le net.
