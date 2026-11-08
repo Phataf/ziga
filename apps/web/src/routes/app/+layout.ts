@@ -1,10 +1,10 @@
-import { requireSession } from '#lib/auth/guard.ts';
+import { requireOrganization } from '#lib/auth/guard.ts';
 import type { LayoutLoad } from './$types';
 
 // Application de gestion : rendue côté client (local-first, D07) ; aucune page n'est générée par le serveur.
 export const ssr = false;
 
-/** Session exigée (lot 02). L'appartenance à une organisation sera vérifiée au lot 03. */
+/** Session et organisation active exigées (lot 03) ; le profil vient du rôle dans cette organisation. */
 export const load: LayoutLoad = async ({ url }) => {
-	await requireSession(url);
+	await requireOrganization(url);
 };

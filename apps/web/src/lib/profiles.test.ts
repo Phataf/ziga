@@ -17,6 +17,7 @@ describe('navigation par profil (docs/UX.md §2)', () => {
 		const tabs = (id: ProfileId) => tabsOf(profiles[id]).map((t) => t.short ?? t.label);
 		expect(tabs('director')).toEqual(['Accueil', 'Biens', 'Encaissements', 'Plus']);
 		expect(tabs('manager')).toEqual(['Accueil', 'Biens', 'Encaissements', 'Plus']);
+		expect(tabs('viewer')).toEqual(['Accueil', 'Biens', 'Encaissements', 'Plus']);
 		expect(tabs('field_agent')).toEqual(['Tournée', 'Biens', 'Encaissements', 'Plus']);
 		expect(tabs('landlord')).toEqual(['Accueil', 'Logements', 'Loyers', 'Plus']);
 		expect(tabs('owner')).toEqual(['Patrimoine', 'Revenus', 'Relevés', 'Plus']);
@@ -24,16 +25,23 @@ describe('navigation par profil (docs/UX.md §2)', () => {
 		expect(tabs('visitor')).toEqual([]);
 	});
 
-	it('le gestionnaire n’a pas l’équipe, que le directeur a', () => {
+	it('équipe, paramètres et journal selon le rôle (lot 03)', () => {
 		const labels = (id: ProfileId) => menuOf(profiles[id]).map((i) => i.label);
-		expect(labels('director')).toContain('Équipe');
-		expect(labels('manager')).not.toContain('Équipe');
+		expect(labels('director')).toEqual(expect.arrayContaining(['Équipe', 'Paramètres de l’organisation', 'Journal']));
+		// Le gestionnaire voit l'équipe (en lecture), sans les paramètres ni le journal.
+		expect(labels('manager')).toContain('Équipe');
+		expect(labels('manager')).not.toContain('Paramètres de l’organisation');
+		expect(labels('manager')).not.toContain('Journal');
+		// La lecture et comptabilité ne voit pas l'équipe.
+		expect(labels('viewer')).not.toContain('Équipe');
+		expect(labels('landlord')).toEqual(expect.arrayContaining(['Paramètres de l’organisation', 'Journal']));
+		expect(labels('landlord')).not.toContain('Équipe');
 		expect(sectionsOf(profiles.director).map(([s]) => s)).toEqual(['Pilotage', 'Gestion', 'Contrôle', 'Agence']);
 	});
 
 	it('« Plus » n’apparaît que sur téléphone et rassemble les entrées sans onglet', () => {
 		expect(menuOf(profiles.manager).some((i) => i.phoneOnly)).toBe(false);
-		expect(moreOf(profiles.manager).map((i) => i.label)).toEqual(['Impayés', 'Propriétaires', 'À valider']);
+		expect(moreOf(profiles.manager).map((i) => i.label)).toEqual(['Impayés', 'Propriétaires', 'À valider', 'Équipe']);
 	});
 
 	it('trouve l’entrée active par le plus long préfixe', () => {

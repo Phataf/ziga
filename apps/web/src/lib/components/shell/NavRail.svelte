@@ -2,7 +2,7 @@
 	import { resolve } from '$app/paths';
 	/** Tablette : rail de navigation à gauche, cibles de 56 px, libellés courts. */
 	import { page } from '$app/state';
-	import { MonitorSmartphone } from '@lucide/svelte';
+	import { CircleUserRound } from '@lucide/svelte';
 	import { fr } from '#lib/i18n/fr.ts';
 	import { activeNav, menuOf, type Profile } from '#lib/profiles.ts';
 	import { cn } from '#lib/utils.ts';
@@ -36,11 +36,11 @@
 		</ul>
 	</nav>
 	<a
-		href={resolve('espace/appareils')}
-		aria-current={page.url.pathname === '/espace/appareils' ? 'page' : undefined}
+		href={resolve('espace/compte')}
+		aria-current={page.url.pathname === '/espace/compte' ? 'page' : undefined}
 		class="mx-2 flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-0.5 text-center text-sm leading-tight text-muted-foreground hover:bg-accent hover:text-foreground"
 	>
-		<MonitorSmartphone class="size-6" aria-hidden="true" />
+		<CircleUserRound class="size-6" aria-hidden="true" />
 		{fr.auth.account}
 	</a>
 </div>

@@ -38,6 +38,7 @@ test.describe('Téléphone : parcours complet', () => {
 		// Personne sans organisation : son espace personnel, sans erreur.
 		await expect(page).toHaveURL('/espace');
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Bonjour Issa Kaboré');
+		await expect(page.getByTestId('espaces-gestion')).toContainText('Vous n’êtes membre d’aucune organisation.');
 		await page.getByTestId('espace-owner').click();
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Mon patrimoine');
 		await expect(page.getByTestId('ecran-vide')).toBeVisible();
@@ -102,7 +103,7 @@ test.describe('Téléphone : parcours complet', () => {
 	});
 
 	test('la session survit au rechargement (jeton de rafraîchissement en cookie httpOnly)', async ({ page, context }) => {
-		await signIn(page, 'person', '/app');
+		await signIn(page, 'director', '/app');
 		await page.reload();
 		await expect(page.getByTestId('barre-onglets')).toBeVisible();
 		await expect(page).toHaveURL('/app');
@@ -115,7 +116,7 @@ test.describe('Téléphone : parcours complet', () => {
 	});
 
 	test('hors connexion : la coque s’affiche au rechargement, sans renvoi vers la connexion', async ({ page, context }) => {
-		await signIn(page, 'person', '/app');
+		await signIn(page, 'director', '/app');
 		await page.evaluate(async () => {
 			await navigator.serviceWorker.ready;
 		});
@@ -133,7 +134,7 @@ test.describe('Téléphone : parcours complet', () => {
 	});
 
 	test('session refusée par le serveur (401) : renvoi vers la connexion', async ({ page, context }) => {
-		await signIn(page, 'person', '/app');
+		await signIn(page, 'director', '/app');
 		await context.clearCookies();
 		await page.reload();
 		await expect(page).toHaveURL('/connexion?retour=%2Fapp');
@@ -213,7 +214,9 @@ for (const [name, device] of [
 		test('le compte est accessible depuis la coque', async ({ page }) => {
 			await signIn(page, 'person', '/espace/locataire');
 			if (name === 'téléphone') await page.goto('/espace/locataire/plus');
-			await page.getByRole('link', { name: name === 'tablette' ? 'Mon compte' : 'Mes appareils' }).click();
+			await page.getByRole('link', { name: 'Mon compte' }).click();
+			await expect(page).toHaveURL('/espace/compte');
+			await page.getByRole('link', { name: 'Mes appareils' }).click();
 			await expect(page).toHaveURL('/espace/appareils');
 		});
 	});

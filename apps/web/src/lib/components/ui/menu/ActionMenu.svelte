@@ -77,7 +77,7 @@
 	<button
 		bind:this={trigger}
 		type="button"
-		class="flex size-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
+		class="flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
 		aria-haspopup="menu"
 		aria-expanded={open}
 		aria-controls={id}

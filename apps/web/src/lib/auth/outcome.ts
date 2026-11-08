@@ -13,6 +13,6 @@ export function refreshFailure(error: { status?: number } | null | undefined, ha
 /** Chemin de retour accepté après connexion : interne à l'application uniquement (pas de redirection ouverte). */
 export function safeReturn(value: string | null | undefined, fallback = '/espace'): string {
 	if (!value || !value.startsWith('/') || value.startsWith('//') || value.startsWith('/\\')) return fallback;
-	if (!/^\/(app|espace|admin)(\/|\?|$)/.test(value)) return fallback;
+	if (!/^\/(app|espace|admin|invitation)(\/|\?|$)/.test(value)) return fallback;
 	return value;
 }

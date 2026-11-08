@@ -6,7 +6,7 @@
  * - Hors connexion, la coque reste affichée grâce au repère non secret (marker.ts) ; seul un 401 renvoie vers /connexion.
  */
 import type { MeResponse, PlatformRole, SessionView, TokenResponse } from '@ziga/shared/auth';
-import { ApiError, call, NetworkError } from './http';
+import { ApiError, call, NetworkError, type Method } from './http';
 import { clearMarker, MARKER_KEY, readMarker, writeMarker } from './marker';
 import { refreshFailure } from './outcome';
 
@@ -43,6 +43,12 @@ class Auth {
 	#pending: Promise<AuthStatus> | null = null;
 	#timer: ReturnType<typeof setTimeout> | undefined;
 	#listening = false;
+	#onSignOut: (() => void)[] = [];
+
+	/** Appelé à chaque déconnexion locale (ex. oubli des organisations gardées sur l'appareil). */
+	onSignOut(fn: () => void): void {
+		this.#onSignOut.push(fn);
+	}
 
 	get isPlatformStaff(): boolean {
 		return !!this.user?.platformRole;
@@ -79,6 +85,11 @@ class Auth {
 				return this.#refreshOnce(attempt + 1);
 			}
 			if (!(error instanceof ApiError) && !(error instanceof NetworkError)) throw error;
+			// Coupure passagère (réseau tout juste revenu, changement d'antenne) : un nouvel essai si le navigateur se dit en ligne.
+			if (error instanceof NetworkError && attempt < 1 && typeof navigator !== 'undefined' && navigator.onLine) {
+				await wait(500);
+				return this.#refreshOnce(attempt + 1);
+			}
 			const marker = readMarker(storage());
 			if (refreshFailure(error instanceof ApiError ? error : null, !!marker) === 'signed_out') {
 				this.#signOutLocally();
@@ -110,6 +121,7 @@ class Auth {
 		this.#expiresAt = 0;
 		clearTimeout(this.#timer);
 		clearMarker(storage());
+		for (const fn of this.#onSignOut) fn();
 		this.user = null;
 		this.status = 'signed_out';
 	}
@@ -131,18 +143,24 @@ class Auth {
 	}
 
 	/** Appel authentifié ; un 401 renouvelle le jeton une fois puis réessaie. */
-	async request<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown): Promise<T> {
+	async request<T>(method: Method, path: string, body?: unknown, options: { organization?: string | null; file?: Blob } = {}): Promise<T> {
 		const status = await this.ensure();
 		if (status === 'offline') throw new NetworkError();
 		if (status === 'signed_out') throw new ApiError(401, 'SESSION_INVALID', 'Session expirée. Reconnectez-vous.');
 		try {
-			return await call<T>(method, path, { body, token: this.#token });
+			return await call<T>(method, path, { body, token: this.#token, ...options });
 		} catch (error) {
 			if (!(error instanceof ApiError) || error.status !== 401) throw error;
 			this.#token = null;
 			if ((await this.refresh()) !== 'signed_in') throw error;
-			return call<T>(method, path, { body, token: this.#token });
+			return call<T>(method, path, { body, token: this.#token, ...options });
 		}
+	}
+
+	/** Met à jour la personne affichée (Mon compte) et son repère. */
+	setUser(user: MeResponse): void {
+		this.user = { ...user };
+		writeMarker(storage(), user);
 	}
 
 	async register(input: { phone: string; name: string; password: string }): Promise<void> {

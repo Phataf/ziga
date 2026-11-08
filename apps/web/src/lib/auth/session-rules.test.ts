@@ -75,7 +75,8 @@ describe('échec du rafraîchissement', () => {
 
 describe('retour après connexion', () => {
 	it('accepte seulement un chemin interne des espaces connectés', () => {
-		expect(safeReturn('/app/biens?profil=manager')).toBe('/app/biens?profil=manager');
+		expect(safeReturn('/app/biens?tri=nom')).toBe('/app/biens?tri=nom');
+		expect(safeReturn('/invitation/abc.def')).toBe('/invitation/abc.def');
 		expect(safeReturn('/espace/appareils')).toBe('/espace/appareils');
 		expect(safeReturn('/admin')).toBe('/admin');
 		for (const bad of ['https://exemple.com', '//exemple.com', '/\\exemple.com', '/connexion', '/application', '', null]) {

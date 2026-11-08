@@ -3,6 +3,8 @@
 	import { onMount } from 'svelte';
 	import { formatDate } from '@ziga/shared/dates';
 	import type { SessionView } from '@ziga/shared/auth';
+	import type { AuditEntryView } from '@ziga/shared/organizations';
+	import AuditList from '#lib/components/org/AuditList.svelte';
 	import { Laptop, Smartphone, WifiOff } from '@lucide/svelte';
 	import LogoutButton from '#lib/components/auth/LogoutButton.svelte';
 	import FormAlert from '#lib/components/auth/FormAlert.svelte';
@@ -23,10 +25,13 @@
 	const current = $derived(sessions?.find((s) => s.current));
 	const isPhone = (label: string) => /Android|iPhone|iOS/i.test(label);
 
+	let activity = $state<AuditEntryView[] | null>(null);
+
 	async function load() {
 		message = null;
 		try {
 			sessions = await auth.sessions();
+			activity = (await auth.request<{ entries: AuditEntryView[] }>('GET', '/me/activity')).entries;
 			offline = false;
 		} catch (error) {
 			if (error instanceof NetworkError) offline = true;
@@ -52,7 +57,7 @@
 <!-- Retour du réseau : la liste se charge d'elle-même. -->
 <svelte:window ononline={() => offline && load()} />
 
-<PageHeader title={t.title} subtitle={t.subtitle} back="espace" backLabel={fr.auth.account} />
+<PageHeader title={t.title} subtitle={t.subtitle} back="espace/compte" backLabel={fr.account.title} />
 
 <main class="page-narrow space-y-4 pt-3 pb-10" data-testid="mes-appareils">
 	{#if offline}
@@ -103,6 +108,13 @@
 					<li class="text-base text-muted-foreground">{t.none}</li>
 				{/each}
 			</ul>
+		</section>
+	{/if}
+
+	{#if activity}
+		<section class="space-y-2" aria-labelledby="titre-activite">
+			<h2 id="titre-activite" class="text-lg font-semibold">{fr.account.activity}</h2>
+			<AuditList entries={activity} empty={fr.account.activityEmpty} />
 		</section>
 	{/if}
 </main>

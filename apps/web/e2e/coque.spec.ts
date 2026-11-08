@@ -3,50 +3,82 @@
  * et aucune autre ; aucun débordement horizontal sur téléphone ; application installable.
  */
 import { expect, test, type Page } from '@playwright/test';
-import { signIn } from './support';
-
-// Espaces connectés depuis le lot 02 : chaque test ouvre une session (compte administrateur, qui a accès à tous les espaces
-// tant que les organisations et leurs rôles n'existent pas, lot 03).
-test.beforeEach(async ({ page }) => {
-	await signIn(page, 'admin', '/espace');
-});
+import { openOrganization, signIn, type Account } from './support';
 
 const phone = { viewport: { width: 360, height: 800 }, isMobile: true, hasTouch: true };
 const tablet = { viewport: { width: 820, height: 1180 }, isMobile: true, hasTouch: true };
 const desktop = { viewport: { width: 1440, height: 900 }, isMobile: false, hasTouch: false };
 
-/** Profils, chemin d'accueil, onglets du téléphone, entrées du rail et du menu latéral (docs/UX.md §2). */
-const cases = [
+/**
+ * Profils, compte de démonstration, chemin d'accueil, onglets du téléphone, entrées du rail et du menu latéral
+ * (docs/UX.md §2). Depuis le lot 03, le profil vient du rôle dans l'organisation active, plus de l'URL.
+ */
+interface Case {
+	name: string;
+	account: Account;
+	/** Organisation à ouvrir depuis le choix de l'espace (personne membre de plusieurs). */
+	org?: string;
+	path: string;
+	tabs: string[];
+	menu: string[];
+	sections: string[];
+}
+
+const cases: Case[] = [
 	{
 		name: 'directeur',
-		path: '/app?profil=director',
+		account: 'director',
+		path: '/app',
+		tabs: ['Accueil', 'Biens', 'Encaissements', 'Plus'],
+		menu: [
+			'Tableau de bord',
+			'Biens et unités',
+			'Encaissements',
+			'Impayés',
+			'Propriétaires',
+			'À valider',
+			'Équipe',
+			'Paramètres de l’organisation',
+			'Journal'
+		],
+		sections: ['Pilotage', 'Gestion', 'Contrôle', 'Agence']
+	},
+	{
+		name: 'gestionnaire',
+		account: 'managerB',
+		path: '/app',
 		tabs: ['Accueil', 'Biens', 'Encaissements', 'Plus'],
 		menu: ['Tableau de bord', 'Biens et unités', 'Encaissements', 'Impayés', 'Propriétaires', 'À valider', 'Équipe'],
 		sections: ['Pilotage', 'Gestion', 'Contrôle', 'Agence']
 	},
 	{
-		name: 'gestionnaire',
-		path: '/app?profil=manager',
-		tabs: ['Accueil', 'Biens', 'Encaissements', 'Plus'],
-		menu: ['Tableau de bord', 'Biens et unités', 'Encaissements', 'Impayés', 'Propriétaires', 'À valider'],
-		sections: ['Pilotage', 'Gestion', 'Contrôle']
-	},
-	{
 		name: 'agent de terrain',
-		path: '/app?profil=field_agent',
+		account: 'fieldAgent',
+		path: '/app',
 		tabs: ['Tournée', 'Biens', 'Encaissements', 'Plus'],
 		menu: ['Ma tournée', 'Mes biens', 'Mes encaissements', 'Retards'],
 		sections: ['Terrain']
 	},
 	{
+		name: 'lecture et comptabilité',
+		account: 'viewer',
+		path: '/app',
+		tabs: ['Accueil', 'Biens', 'Encaissements', 'Plus'],
+		menu: ['Tableau de bord', 'Biens et unités', 'Encaissements', 'Impayés', 'Propriétaires', 'À valider'],
+		sections: ['Pilotage', 'Gestion', 'Contrôle']
+	},
+	{
 		name: 'bailleur particulier',
-		path: '/app?profil=landlord',
+		account: 'managerAndLandlord',
+		org: 'Mes logements',
+		path: '/app',
 		tabs: ['Accueil', 'Logements', 'Loyers', 'Plus'],
-		menu: ['Accueil', 'Mes logements', 'Loyers reçus', 'Retards'],
+		menu: ['Accueil', 'Mes logements', 'Loyers reçus', 'Retards', 'Paramètres de l’organisation', 'Journal'],
 		sections: ['Mes logements']
 	},
 	{
 		name: 'propriétaire',
+		account: 'person',
 		path: '/espace/proprietaire',
 		tabs: ['Patrimoine', 'Revenus', 'Relevés', 'Plus'],
 		menu: ['Mon patrimoine', 'Revenus', 'Relevés', 'Reversements', 'Approbations'],
@@ -54,6 +86,7 @@ const cases = [
 	},
 	{
 		name: 'locataire',
+		account: 'person',
 		path: '/espace/locataire',
 		tabs: ['Logement', 'Reçus', 'Caution', 'Plus'],
 		menu: ['Mon logement', 'Historique', 'Reçus', 'Caution et décompte', 'Signalements', 'Préavis'],
@@ -61,12 +94,23 @@ const cases = [
 	},
 	{
 		name: 'administrateur plateforme',
+		account: 'admin',
 		path: '/admin',
 		tabs: ['Organisations', 'Abonnements', 'Fonctionnalités', 'Plus'],
 		menu: ['Organisations', 'Formules et abonnements', 'Fonctionnalités', 'Journal', 'Accès d’assistance'],
 		sections: ['Plateforme', 'Contrôle']
 	}
 ];
+
+/** Ouvre la session du compte du profil, puis son espace. */
+async function open(page: Page, c: Case): Promise<void> {
+	if (c.org) {
+		await signIn(page, c.account, '/espace');
+		await openOrganization(page, c.org);
+	} else {
+		await signIn(page, c.account, c.path);
+	}
+}
 
 const mainNav = (page: Page) => page.getByRole('navigation', { name: 'Navigation principale' });
 
@@ -78,7 +122,7 @@ test.describe('Téléphone (360 × 800)', () => {
 	test.use(phone);
 	for (const c of cases) {
 		test(`${c.name} : barre d’onglets en bas, sans rail ni menu latéral`, async ({ page }) => {
-			await page.goto(c.path);
+			await open(page, c);
 			await expect(page.getByTestId('barre-onglets')).toBeVisible();
 			expect(await linkNames(page)).toEqual(c.tabs);
 			await expect(page.getByTestId('rail')).toHaveCount(0);
@@ -94,7 +138,7 @@ test.describe('Téléphone (360 × 800)', () => {
 	}
 
 	test('« Plus » rassemble les entrées sans onglet, le changement d’espace et le compte', async ({ page }) => {
-		await page.goto('/app?profil=director');
+		await signIn(page, 'director', '/app');
 		await mainNav(page).getByRole('link', { name: 'Plus' }).tap();
 		const more = page.getByTestId('ecran-plus');
 		await expect(more.getByRole('link')).toHaveText([
@@ -102,8 +146,10 @@ test.describe('Téléphone (360 × 800)', () => {
 			'Propriétaires',
 			'À valider',
 			'Équipe',
+			'Paramètres de l’organisation',
+			'Journal',
 			'Changer d’espace',
-			'Mes appareils'
+			'Mon compte'
 		]);
 		await expect(more.getByRole('button', { name: 'Se déconnecter' })).toBeVisible();
 		await more.getByRole('link', { name: 'Impayés' }).tap();
@@ -114,29 +160,43 @@ test.describe('Téléphone (360 × 800)', () => {
 	});
 
 	test('le back-office prévient qu’il est conçu pour l’ordinateur', async ({ page }) => {
-		await page.goto('/admin');
+		await signIn(page, 'admin', '/admin');
 		await expect(page.getByRole('note')).toHaveText('Le back-office est conçu pour l’ordinateur.');
 	});
 
 	test('aucun débordement horizontal', async ({ page }) => {
+		await signIn(page, 'director', '/app');
 		for (const path of [
 			'/',
 			'/louer',
 			'/app',
 			'/app/biens',
 			'/app/plus',
+			'/app/equipe',
+			'/app/organisation',
+			'/app/journal',
 			'/espace',
+			'/espace/compte',
+			'/espace/appareils',
+			'/espace/nouvelle-organisation',
 			'/espace/proprietaire',
 			'/espace/proprietaire/plus',
 			'/espace/locataire',
-			'/espace/locataire/caution',
-			'/admin',
-			'/admin/fonctionnalites'
+			'/espace/locataire/caution'
 		]) {
 			await page.goto(path);
 			await expect(page.locator('h1').first()).toBeVisible();
 			const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
 			expect(overflow, path).toBeLessThanOrEqual(0);
+		}
+	});
+
+	test('aucun débordement horizontal dans le back-office', async ({ page }) => {
+		await signIn(page, 'admin', '/admin');
+		for (const path of ['/admin', '/admin/fonctionnalites']) {
+			await page.goto(path);
+			await expect(page.locator('h1').first()).toBeVisible();
+			expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth), path).toBeLessThanOrEqual(0);
 		}
 	});
 });
@@ -145,7 +205,7 @@ test.describe('Tablette (820 × 1180)', () => {
 	test.use(tablet);
 	for (const c of cases) {
 		test(`${c.name} : rail à gauche, sans onglets ni menu latéral`, async ({ page }) => {
-			await page.goto(c.path);
+			await open(page, c);
 			await expect(page.getByTestId('rail')).toBeVisible();
 			expect(await linkNames(page)).toEqual(c.menu.map((label) => shortOf(label)));
 			await expect(page.getByTestId('barre-onglets')).toHaveCount(0);
@@ -159,7 +219,7 @@ test.describe('Ordinateur (1440 × 900)', () => {
 	test.use(desktop);
 	for (const c of cases) {
 		test(`${c.name} : menu latéral par sections et barre du haut, sans onglets ni rail`, async ({ page }) => {
-			await page.goto(c.path);
+			await open(page, c);
 			const menu = page.getByTestId('menu-lateral');
 			await expect(menu).toBeVisible();
 			await expect(page.getByTestId('barre-haut')).toBeVisible();
@@ -171,15 +231,16 @@ test.describe('Ordinateur (1440 × 900)', () => {
 		});
 	}
 
-	test('le gestionnaire ne voit pas l’équipe, réservée au directeur', async ({ page }) => {
-		await page.goto('/app?profil=manager');
+	test('la lecture et comptabilité ne voit pas l’équipe ; l’adresse directe n’affiche rien', async ({ page }) => {
+		await signIn(page, 'viewer', '/app');
 		await expect(mainNav(page).getByRole('link', { name: 'Équipe' })).toHaveCount(0);
 		await page.goto('/app/equipe');
-		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Écran introuvable.');
+		await expect(page.getByTestId('erreur-formulaire')).toHaveText('Écran introuvable.');
+		await expect(page.getByTestId('membre')).toHaveCount(0);
 	});
 
 	test('l’entrée du menu suit l’écran ouvert', async ({ page }) => {
-		await page.goto('/espace/locataire/caution');
+		await signIn(page, 'person', '/espace/locataire/caution');
 		await expect(mainNav(page).getByRole('link', { name: 'Caution et décompte' })).toHaveAttribute('aria-current', 'page');
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Caution et décompte');
 		await expect(page).toHaveTitle('Caution et décompte — Ziga');
@@ -199,7 +260,8 @@ function shortOf(label: string): string {
 		'Mon patrimoine': 'Patrimoine',
 		'Mon logement': 'Logement',
 		'Caution et décompte': 'Caution',
-		'Formules et abonnements': 'Abonnements'
+		'Formules et abonnements': 'Abonnements',
+		'Paramètres de l’organisation': 'Paramètres'
 	};
 	return short[label] ?? label;
 }
@@ -220,27 +282,28 @@ test.describe('Vitrine, choix de l’espace et chemins inconnus', () => {
 			});
 
 			test('le choix de l’espace mène à chaque espace', async ({ page }) => {
-				await page.goto('/espace');
-				await expect(page.getByTestId('choix-espace').getByRole('link')).toHaveCount(4);
+				// Gestionnaire de l'agence A, et bailleur de ses propres logements.
+				await signIn(page, 'managerAndLandlord', '/espace');
+				await expect(page.getByTestId('choix-espace').getByRole('link')).toHaveCount(2);
+				await expect(page.getByTestId('espace-organisation')).toHaveText([/Mon agence : Faso Immobilier/, /Mes logements/]);
 				await page.getByTestId('espace-owner').click();
 				await expect(page).toHaveURL('/espace/proprietaire');
 				await expect(page.getByRole('heading', { level: 1 })).toHaveText('Mon patrimoine');
-				await page.goto('/espace');
-				await page.getByTestId('espace-landlord').click();
+				await openOrganization(page, 'Mes logements');
 				await expect(page.getByRole('heading', { level: 1 })).toHaveText('Accueil');
 			});
 		});
 	}
 
 	test('un chemin absent de toute navigation affiche « Écran introuvable »', async ({ page }) => {
-		await page.goto('/app/inconnu');
+		await signIn(page, 'director', '/app/inconnu');
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Écran introuvable.');
 	});
 });
 
 test.describe('Installation (PWA)', () => {
 	test('manifeste installable et service worker actif', async ({ page, request }) => {
-		await page.goto('/app');
+		await signIn(page, 'director', '/app');
 		const href = await page.locator('link[rel="manifest"]').getAttribute('href');
 		const manifest = await (await request.get(href!)).json();
 		expect(manifest).toMatchObject({
@@ -258,7 +321,7 @@ test.describe('Installation (PWA)', () => {
 	});
 
 	test('l’application s’ouvre hors connexion une fois installée', async ({ page, context }) => {
-		await page.goto('/app');
+		await signIn(page, 'director', '/app');
 		await page.evaluate(async () => {
 			await navigator.serviceWorker.ready;
 		});

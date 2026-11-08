@@ -11,6 +11,7 @@
 	import { auth } from '#lib/auth/auth.svelte.ts';
 	import { messageOf } from '#lib/auth/forms.ts';
 	import { pendingRegistration } from '#lib/auth/pending.ts';
+	import { safeReturn } from '#lib/auth/outcome.ts';
 	import { fr } from '#lib/i18n/fr.ts';
 
 	const t = fr.auth;
@@ -32,7 +33,8 @@
 		try {
 			await auth.verifyPhone({ phone, code: parsed.data });
 			pendingRegistration.value = null;
-			await goto(resolve('espace'), { replaceState: true });
+			// eslint-disable-next-line svelte/no-navigation-without-resolve -- chemin interne vérifié par safeReturn()
+			await goto(safeReturn(page.url.searchParams.get('retour')), { replaceState: true });
 		} catch (err) {
 			message = messageOf(err);
 		} finally {

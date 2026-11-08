@@ -13,13 +13,15 @@
 		country = $bindable('226'),
 		error,
 		id = 'telephone',
-		autofocus = false
-	}: { value?: string; country?: string; error?: string; id?: string; autofocus?: boolean } = $props();
+		autofocus = false,
+		label = fr.auth.phone,
+		hint
+	}: { value?: string; country?: string; error?: string; id?: string; autofocus?: boolean; label?: string; hint?: string } = $props();
 	const t = fr.auth;
 </script>
 
 <div class="space-y-1">
-	<label for={id} class="block font-medium">{t.phone}</label>
+	<label for={id} class="block font-medium">{label}</label>
 	<div class="flex gap-2">
 		<div
 			class="relative flex min-h-12 shrink-0 items-center rounded-lg border-2 border-input bg-card px-3 font-medium tabular-nums focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/30"
@@ -53,6 +55,6 @@
 			)}
 		/>
 	</div>
-	<p id="{id}-aide" class="text-sm text-muted-foreground">{country === '226' ? t.phoneHint : t.otherCountryHint}</p>
+	<p id="{id}-aide" class="text-sm text-muted-foreground">{country === '226' ? (hint ?? t.phoneHint) : t.otherCountryHint}</p>
 	{#if error}<p id="{id}-erreur" class="text-base text-destructive">{error}</p>{/if}
 </div>

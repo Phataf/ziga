@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import { registerSchema } from '@ziga/shared/auth';
 	import { UserPlus } from '@lucide/svelte';
 	import FormAlert from '#lib/components/auth/FormAlert.svelte';
@@ -34,7 +35,10 @@
 			const input = { phone: number.phone, name: parsed.data.name, password };
 			await auth.register(input);
 			pendingRegistration.value = input;
-			await goto(resolve(`verification?numero=${encodeURIComponent(number.phone)}`));
+			const retour = page.url.searchParams.get('retour');
+			await goto(
+				resolve(`verification?numero=${encodeURIComponent(number.phone)}${retour ? `&retour=${encodeURIComponent(retour)}` : ''}`)
+			);
 		} catch (error) {
 			message = messageOf(error);
 		} finally {

@@ -19,6 +19,7 @@ import {
 	LogOut,
 	Receipt,
 	ScrollText,
+	Settings,
 	ShieldCheck,
 	Stamp,
 	ToggleRight,
@@ -31,7 +32,7 @@ import {
 import type { Path } from '$app/types';
 import { fr } from './i18n/fr';
 
-export type ProfileId = 'director' | 'manager' | 'field_agent' | 'landlord' | 'owner' | 'tenant' | 'visitor' | 'admin';
+export type ProfileId = 'director' | 'manager' | 'field_agent' | 'viewer' | 'landlord' | 'owner' | 'tenant' | 'visitor' | 'admin';
 export type Space = 'agency' | 'owner' | 'tenant' | 'public' | 'admin';
 
 export interface NavItem {
@@ -73,7 +74,20 @@ function plus(base: 'app' | 'espace/proprietaire' | 'espace/locataire' | 'admin'
 	return item({ path: `${base}/plus` as Path, label: fr.app.more, icon: Ellipsis, tab: true, phoneOnly: true });
 }
 
-function agencyNav(opts: { team: boolean }): NavItem[] {
+/** Écrans d'organisation construits au lot 03 (équipe, paramètres, journal), selon le rôle. */
+function organizationItems(opts: { team: boolean; settings: boolean }, section: string): NavItem[] {
+	return [
+		...(opts.team ? [item({ path: 'app/equipe', label: n.team, icon: Users, section })] : []),
+		...(opts.settings
+			? [
+					item({ path: 'app/organisation', label: n.settingsLong, short: n.settings, icon: Settings, section }),
+					item({ path: 'app/journal', label: n.journal, icon: ScrollText, section })
+				]
+			: [])
+	];
+}
+
+function agencyNav(opts: { team: boolean; settings: boolean }): NavItem[] {
 	return [
 		item({ path: 'app', label: n.dashboard, short: n.home, icon: LayoutDashboard, section: s.steering, tab: true, lot: '09' }),
 		item({ path: 'app/biens', label: n.propertiesLong, short: n.properties, icon: Building2, section: s.management, tab: true, lot: '07' }),
@@ -81,14 +95,16 @@ function agencyNav(opts: { team: boolean }): NavItem[] {
 		item({ path: 'app/impayes', label: n.arrears, icon: TriangleAlert, section: s.management, lot: '10' }),
 		item({ path: 'app/proprietaires', label: n.owners, icon: Users, section: s.management, lot: '06' }),
 		item({ path: 'app/a-valider', label: n.toValidate, icon: ClipboardCheck, section: s.control, lot: '09' }),
-		...(opts.team ? [item({ path: 'app/equipe', label: n.team, icon: Users, section: s.agency, lot: '03' })] : []),
+		...organizationItems(opts, s.agency),
 		plus('app')
 	];
 }
 
 export const profiles: Record<ProfileId, Profile> = {
-	director: { id: 'director', label: fr.profiles.director, space: 'agency', home: 'app', nav: agencyNav({ team: true }) },
-	manager: { id: 'manager', label: fr.profiles.manager, space: 'agency', home: 'app', nav: agencyNav({ team: false }) },
+	director: { id: 'director', label: fr.profiles.director, space: 'agency', home: 'app', nav: agencyNav({ team: true, settings: true }) },
+	// Le gestionnaire voit l'équipe en lecture (affectation des agents au lot 07).
+	manager: { id: 'manager', label: fr.profiles.manager, space: 'agency', home: 'app', nav: agencyNav({ team: true, settings: false }) },
+	viewer: { id: 'viewer', label: fr.profiles.viewer, space: 'agency', home: 'app', nav: agencyNav({ team: false, settings: false }) },
 	field_agent: {
 		id: 'field_agent',
 		label: fr.profiles.field_agent,
@@ -112,6 +128,8 @@ export const profiles: Record<ProfileId, Profile> = {
 			item({ path: 'app/biens', label: n.myHomes, short: n.homes, icon: House, section: s.myHomes, tab: true, lot: '07' }),
 			item({ path: 'app/encaissements', label: n.rentsReceived, short: n.rents, icon: Wallet, section: s.myHomes, tab: true, lot: '09' }),
 			item({ path: 'app/impayes', label: n.late, icon: TriangleAlert, section: s.myHomes, lot: '10' }),
+			// Le bailleur est directeur de son organisation : ses paramètres (logo des reçus) et son journal.
+			...organizationItems({ team: false, settings: true }, s.myHomes),
 			plus('app')
 		]
 	},
@@ -194,7 +212,7 @@ export const profiles: Record<ProfileId, Profile> = {
 	}
 };
 
-export const agencyProfiles: ProfileId[] = ['director', 'manager', 'field_agent', 'landlord'];
+export const agencyProfiles: ProfileId[] = ['director', 'manager', 'field_agent', 'viewer', 'landlord'];
 
 /** Onglets du téléphone : 4 au plus, dans l'ordre déclaré. */
 export function tabsOf(profile: Profile): NavItem[] {

@@ -2,13 +2,12 @@
 	import { resolve } from '$app/paths';
 	/** Ordinateur : menu latéral par sections, espace en tête, compte en pied. */
 	import { page } from '$app/state';
-	import { ArrowLeftRight, Building2, MonitorSmartphone } from '@lucide/svelte';
+	import { ArrowLeftRight, Building2, CircleUserRound } from '@lucide/svelte';
 	import { auth } from '#lib/auth/auth.svelte.ts';
 	import LogoutButton from '#lib/components/auth/LogoutButton.svelte';
 	import { fr } from '#lib/i18n/fr.ts';
 	import { activeNav, menuOf, sectionsOf, type Profile } from '#lib/profiles.ts';
 	import { cn } from '#lib/utils.ts';
-	import ProfilePreview from './ProfilePreview.svelte';
 
 	let { profile, spaceLabel }: { profile: Profile; spaceLabel: string } = $props();
 	const current = $derived(activeNav(menuOf(profile), page.url.pathname));
@@ -65,14 +64,13 @@
 			</a>
 		{/if}
 		<a
-			href={resolve('espace/appareils')}
+			href={resolve('espace/compte')}
 			class="flex min-h-11 items-center gap-3 rounded-lg px-3 text-foreground/80 hover:bg-accent hover:text-foreground"
 		>
-			<MonitorSmartphone class="size-5 shrink-0" aria-hidden="true" />
-			{fr.auth.devices.title}
+			<CircleUserRound class="size-5 shrink-0" aria-hidden="true" />
+			{fr.account.title}
 		</a>
 		<LogoutButton />
 		{#if auth.user}<p class="truncate px-3 text-sm text-muted-foreground" data-testid="personne-connectee">{auth.user.name}</p>{/if}
-		<ProfilePreview {profile} />
 	</div>
 </aside>

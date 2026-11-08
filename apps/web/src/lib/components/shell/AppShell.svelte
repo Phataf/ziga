@@ -9,6 +9,7 @@
 	import type { Snippet } from 'svelte';
 	import { device } from '#lib/device.svelte.ts';
 	import { fr } from '#lib/i18n/fr.ts';
+	import { organizations } from '#lib/org/organizations.svelte.ts';
 	import type { Profile } from '#lib/profiles.ts';
 	import NavRail from './NavRail.svelte';
 	import Sidebar from './Sidebar.svelte';
@@ -16,7 +17,14 @@
 	import TopBar from './TopBar.svelte';
 
 	let { profile, children }: { profile: Profile; children: Snippet } = $props();
-	const spaceLabel = $derived(profile.id === 'landlord' ? fr.spaces.landlord : fr.spaces[profile.space]);
+	// Espace de gestion : le nom de l'organisation active (une seule à la fois).
+	const spaceLabel = $derived(
+		profile.space === 'agency' && organizations.active
+			? organizations.active.name
+			: profile.id === 'landlord'
+				? fr.spaces.landlord
+				: fr.spaces[profile.space]
+	);
 </script>
 
 {#if device.isPhone}

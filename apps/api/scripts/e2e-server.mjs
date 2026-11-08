@@ -1,6 +1,7 @@
 /**
  * API des tests de bout en bout (Playwright) : base `ziga_e2e` recréée et migrée, base Redis n° 2 vidée,
- * un super administrateur de test, SMS écrits dans un fichier (lu par les tests), puis démarrage de l'API.
+ * un super administrateur de test, les données de démonstration, SMS écrits dans un fichier (lu par les tests),
+ * puis démarrage de l'API et du worker.
  * Lancé par apps/web/playwright.config.ts après `nest build`. Jamais en production.
  */
 import { spawn } from 'node:child_process';
@@ -95,6 +96,12 @@ const { seedDemo } = await import(join(api, 'dist/db/seed.js'));
 await seedDemo(createDatabase(pool), base.E2E_DEMO_PASSWORD || 'demo-de-test-e2e');
 await pool.end();
 
-const child = spawn(process.execPath, [join(api, 'dist/main.js')], { env, stdio: 'inherit' });
-for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => child.kill(signal));
-child.on('exit', (code) => process.exit(code ?? 0));
+// API HTTP et worker (logos traités par sharp) : deux processus, comme en production.
+const children = ['dist/main.js', 'dist/worker.js'].map((file) => spawn(process.execPath, [join(api, file)], { env, stdio: 'inherit' }));
+for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => children.forEach((c) => c.kill(signal)));
+for (const child of children) {
+	child.on('exit', (code) => {
+		children.forEach((c) => c.kill('SIGTERM'));
+		process.exit(code ?? 0);
+	});
+}
