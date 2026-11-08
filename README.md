@@ -67,7 +67,7 @@ pnpm --filter @ziga/api auth:keygen
 
 Copier les deux lignes affichées (`AUTH_JWT_KEYS`, `AUTH_OTP_SECRET`) dans `.env` ou dans les secrets de l'environnement. Les clés publiques sont publiées sur `/.well-known/jwks.json`.
 
-- **Premier super administrateur** : par la ligne de commande seulement, jamais par l'interface (le mot de passe est demandé sans écho, ou lu dans `SUPER_ADMIN_PASSWORD`). Une personne déjà inscrite est promue.
+- **Premier super administrateur** : par la ligne de commande seulement, jamais par l'interface. Le mot de passe est demandé deux fois ; il est masqué dans PowerShell, cmd et les terminaux Linux ou macOS, mais reste visible dans Git Bash sous Windows, où Node ne voit pas de terminal. Pour un script, il peut être lu dans `SUPER_ADMIN_PASSWORD`. Une personne déjà inscrite est promue.
 
 ```bash
 pnpm --filter @ziga/api admin:create-super-admin --phone "+226 70 12 34 56" --name "Nom Prénom"
