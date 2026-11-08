@@ -156,3 +156,19 @@ Prompt : `prompts/lot-00ter-maquette-audit.md`. Seul `maquette/` est modifié (e
 2. **Variante B** : faut-il permettre de garder une partie de la caution pour les dégâts, comme le recommande l'audit, ou laisser l'agence refuser l'accord ? La maquette affiche seulement ce qu'il restera.
 3. **Remise des clés avant la fin du préavis** : les agences rendent-elles la caution dès la remise des clés, ou seulement à la fin du préavis ?
 4. **Rendement** : les propriétaires accepteraient-ils de déclarer la valeur de leur bien ? Sinon, afficher seulement le taux d'occupation et le net.
+## Complément de l'audit : contrats de bail et documents — 08/11/2026
+
+Demande du porteur : une vraie gestion contractuelle intégrée à la gestion locative (`docs/AUDIT.md` §C7), analysée à partir du modèle de contrat d'une agence pilote.
+
+### Décisions validées
+- **D20** contrat = document du bail, cycle distinct ; modèle Word de l'organisation rempli automatiquement ; légalisation et enregistrement suivis sans bloquer ; bail en vigueur possible sans contrat signé, avec alerte.
+- **D21** signature manuscrite et scan au MVP ; un PDF déposé n'est jamais une signature électronique.
+- **D22** registre de documents avec matrice de confidentialité par type.
+- **D23** docxtemplater (cœur MIT) et Gotenberg (MIT) ajoutés à la pile.
+- **D24** bailleur désigné par le contrat ; préavis, reconduction, pénalité, garantie des factures et délai de restitution en paramètres du bail.
+
+### Fait (documentation seulement)
+`CLAUDE.md` (pile, module `documents`, règle 17, glossaire), `docs/DECISIONS.md`, `docs/LOTS.md`, `docs/UX.md` §10 (écrans, matrice), `docs/AUDIT.md` ; nouveau prompt `lot-08bis-contrats.md` ; prompts 00 ter, 03, 06, 07, 08, 09, 10 bis, 10 ter et 11 complétés.
+
+### Questions ouvertes
+Agence qui signe comme bailleur ; reconduction tacite et clauses de pénalité et de préavis ; délai et coût de la légalisation ; conservation des pièces d'identité ; modèles des deux autres pilotes.

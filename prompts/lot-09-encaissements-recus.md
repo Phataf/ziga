@@ -4,7 +4,7 @@
 C'est le geste que l'agence répète le plus : encaisser un loyer et remettre un reçu. Il doit prendre 3 gestes, marcher hors ligne et être inattaquable sur le plan financier. Ce lot crée aussi l'**interface d'adaptateur de paiement** qui recevra les agrégateurs Mobile Money au lot 14 (décision D03).
 
 ## Prérequis
-Lot 08 terminé. Question au porteur : mentions minimales d'un reçu de loyer (voir `docs/DECISIONS.md`). Proposition par défaut ci-dessous.
+Lot 08 bis terminé. Question au porteur : mentions minimales d'un reçu de loyer (voir `docs/DECISIONS.md`). Proposition par défaut ci-dessous.
 
 ## Périmètre
 1. **Tables** (module `payments`), cloisonnées, auditées, synchronisées, **ajout seul** (triggers interdisant `UPDATE` des montants et tout `DELETE`) :

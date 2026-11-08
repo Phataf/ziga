@@ -1,6 +1,6 @@
 # Audit fonctionnel et UX/UI — Plateforme immobilière (avant lot 01)
 
-Rapport d'audit du 08/11/2026, mis à jour avec les décisions du porteur. Version de travail partagée : https://claude.ai/artifact/WNYWg6QEaXPttoDzifpkyE. Les décisions qui font foi sont dans `docs/DECISIONS.md` (D12 à D19).
+Rapport d'audit du 08/11/2026, mis à jour avec les décisions du porteur. Version de travail partagée : https://claude.ai/artifact/WNYWg6QEaXPttoDzifpkyE. Les décisions qui font foi sont dans `docs/DECISIONS.md` (D12 à D24).
 
 ## Synthèse
 
@@ -18,18 +18,25 @@ Le socle de la maquette est sain : le registre des encaissements, les reçus, le
 6. **3D immersive — validé.** Écartée de la vitrine ; la visite 360° reste une option chargée à la demande.
 7. **Signature électronique — sans retour.** Je maintiens la recommandation : bail généré en PDF, signé, légalisé à la mairie, puis scanné.
 
+**Complément du 08/11/2026 : contrats de bail et documents (section C7).** Le contrat devient le document officiel du bail, avec son propre cycle. Après votre retour : chaque organisation garde son modèle Word, que la plateforme remplit automatiquement ; la légalisation et l'enregistrement sont suivis sans bloquer ; un bail peut être en vigueur sans contrat signé, avec une alerte. Le modèle transmis par une agence pilote révèle des paramètres que le bail doit porter (garantie des factures, pénalité, préavis, reconduction) et une question juridique : l'agence y signe comme bailleur. D23 et D24 restent à valider.
+
 **Décisions à écrire dans `docs/DECISIONS.md` avant de coder :**
 
 | N° | Décision proposée | Avant le lot | Statut |
 | --- | --- | --- | --- |
 | D12 | L'unité d'isolement devient l'**organisation** : une agence ou un bailleur particulier | 01 | Validée |
-| D13 | Une **personne** (compte global) peut être liée aux fiches propriétaire ou locataire de plusieurs organisations ; son espace présente l'ensemble de ses biens ou de son historique | 02 | Validée |
+| D13 | Une **personne** (compte global) peut être liée aux fiches propriétaire ou locataire de plusieurs organisations ; son espace présente l'ensemble de ses biens ou de son historique, dès le lancement | 02 | Validée |
 | D14 | Statut d'une unité en quatre dimensions ; occupation calculée | 07 | Validée |
 | D15 | Compte de caution et décompte de sortie unique ; aucune retenue sans ligne d'état des lieux et justificatif | 08 | Validée |
 | D16 | Un seul mandat de gestion actif par unité ; transfert de gestion guidé | 06 | Validée |
 | D17 | Aucune information sur un locataire ou un propriétaire ne passe d'une organisation à une autre ; seule la personne concernée voit l'ensemble de ses données | 02 | Validée |
 | D18 | Moyens de paiement acceptés : réglage de l'agence, pas un interrupteur commercial | 04 | Validée |
 | D19 | Pas de 3D sur la vitrine ; visite 360° en option, chargée à la demande | 12 | Validée |
+| D20 | Le contrat est le **document du bail**, avec son propre cycle (brouillon, vérification, prêt à signer, signé) séparé de celui du bail ; légalisation et enregistrement suivis sans bloquer ; **modèle Word de l'organisation rempli automatiquement**, relu puis figé ; versions avec empreinte ; avenants ; bail en vigueur possible sans contrat signé, avec alerte | 08 bis | Validée |
+| D21 | Signature **manuscrite** au MVP, puis scan déposé ; un PDF déposé n'est jamais présenté comme une signature électronique ; signature qualifiée plus tard par une interface dédiée | 08 bis | Validée |
+| D22 | **Registre de documents** avec une matrice de confidentialité par type (restreindre possible, élargir impossible) ; aucun document d'une organisation visible par une autre ; le locataire et le propriétaire voient les documents dont ils sont parties | 07 | Validée |
+| D23 | Génération des contrats avec **docxtemplater** (remplissage du modèle Word) et **Gotenberg** (conversion en PDF) : deux nouvelles dépendances | 08 bis | Validée |
+| D24 | Le contrat **désigne le bailleur** (propriétaire représenté par l'organisation, ou organisation en son nom). Préavis et indemnités, reconduction, jour d'échéance, pénalité de retard, garantie des factures et délai de restitution sont des **paramètres du bail** issus du contrat, avec les valeurs légales par défaut | 08 | Validée |
 
 Le lot 01 peut démarrer dès que D12 est tranchée, car elle fixe le nom de la colonne d'isolement dans tout le code.
 
@@ -188,9 +195,7 @@ Le scénario B est le plus risqué pour le propriétaire : si toute la caution p
 
 C'est ce qui répond à votre exemple : à la fin du bail, l'unité passe « à remettre en état ». Elle ne redevient disponible qu'une fois l'état des lieux clos et les travaux terminés.
 
-*Schéma (version texte) — cycle de vie d'une unité :*
-
-Brouillon → (fiche complète) → **Disponible** → (bail signé) → Réservée → (entrée, état des lieux) → Occupée → (préavis donné) → En préavis → (sortie, état des lieux) → À remettre en état → soit (rien à réparer) → Disponible, soit (travaux à faire) → En travaux → (travaux terminés) → Disponible. « Indisponible » et « archivée » s'appliquent à tout moment, avec un motif. Une annonce est possible en « Disponible » et « En préavis ».
+*Schéma (version texte) — cycle de vie d'une unité :* Brouillon → (fiche complète) → **Disponible** → (bail signé) → Réservée → (entrée, état des lieux) → Occupée → (préavis donné) → En préavis → (sortie, état des lieux) → À remettre en état → soit (rien à réparer) → Disponible, soit (travaux à faire) → En travaux → (travaux terminés) → Disponible. « Indisponible » et « archivée » s'appliquent à tout moment, avec un motif. Une annonce est possible en « Disponible » et « En préavis ».
 
 La fin du bail ne ramène pas l'unité à « Disponible » : elle passe d'abord par « À remettre en état », puis, si nécessaire, par « En travaux ».
 
@@ -253,6 +258,177 @@ Concrètement :
 - **Le compte du locataire est lié à chacune de ces fiches**, après vérification par code SMS et accord de l'agence.
 - **Son espace présente une chronologie unique** : tous ses baux, reçus, cautions et décomptes, chaque élément indiquant l'agence concernée.
 - **Aucune agence ne voit les baux d'une autre**, ni directement ni par une attestation. Ce choix respecte aussi la loi n° 001-2021/AN et la nouvelle loi sur les données votée le 3 août 2026.
+
+### C7. Contrats de bail et documents contractuels (complément du 08/11/2026)
+
+**Le contrat doit devenir le document officiel du bail déjà enregistré, pas un module à part.** Le bail porte les données qui font tourner la gestion (dates, loyer, caution, échéances) ; le contrat en est la version rédigée, signée, légalisée et archivée. Deux modules séparés finiraient par afficher un loyer différent dans le contrat et dans l'échéancier.
+
+Le cadre burkinabè impose trois étapes que votre liste ne mentionne pas. Depuis la loi de 2015, le bail doit être écrit, puis légalisé auprès de la commune où se trouve le logement. La commune garde un exemplaire et en transmet un autre à la division fiscale, qui l'enregistre. Le module doit suivre ces trois étapes, sinon le contrat « signé » dans la plateforme n'est pas en règle.
+
+#### 1. Ce que prévoit la maquette aujourd'hui
+
+Rien de spécifique : le bail n'existe que comme une ligne de données (unité, locataire, loyer, dates). Il n'y a ni modèle, ni projet de contrat, ni registre de documents, ni rubrique « Mes contrats » pour le locataire. Trois composants existants sont réutilisables : le rendu de document du reçu et du relevé (aperçu avec panneau d'actions), les panneaux latéraux et les menus d'actions par ligne.
+
+#### 2. Deux cycles distincts : le bail et son contrat
+
+Votre liste de dix étapes mélange, comme pour les biens, deux choses qui changent pour des raisons différentes. Je propose de les séparer :
+
+| Dimension | Étapes | Ce qui la fait avancer |
+| --- | --- | --- |
+| **Bail** (la relation) | Brouillon, signé à venir, en vigueur, en préavis, terminé (motif : expiration, résiliation par le locataire ou le bailleur, accord, décision de justice), annulé | Les dates et les événements de gestion |
+| **Contrat** (le document) | Brouillon, en vérification, prêt à signer (figé), signé par le bailleur, signé par le locataire, **légalisé**, **enregistré** | Les actions des personnes, chacune datée |
+
+Trois étapes de votre liste ne sont pas des statuts :
+
+- **« Renouvelé »** est un événement : un avenant qui prolonge le même bail. Le bail reste le même, avec sa caution et son historique. Selon la loi, un bail à durée déterminée maintenu au-delà de son terme devient à durée indéterminée ; la plateforme doit le signaler plutôt que d'exiger un nouveau contrat chaque année.
+- **« Archivé »** est un état de consultation : tout bail terminé reste consultable, en lecture seule, sans limite.
+- **« En vigueur », « résilié », « expiré »** appartiennent au bail, pas au document.
+
+**Bail en vigueur sans contrat signé : validé (08/11/2026).** Il est permis, avec une alerte visible et une ligne d'audit ; le tableau de bord liste les baux « sans contrat signé ».
+
+**Légalisation et enregistrement : suivis, jamais bloquants.** Comme vous le soulignez, la plateforme apporte la traçabilité. Pour chaque contrat, elle enregistre si et quand il a été légalisé et enregistré, avec la référence et le document. Pour la plateforme, le contrat est complet dès sa signature ; un filtre « non légalisés » aide l'agence à régulariser.
+
+*Schéma (version texte) — bail et contrat :* Bail : Brouillon → (loyer, caution, dates) → Signé, à venir → (date d'effet) → En vigueur → (préavis donné) → En préavis → (date de sortie) → Terminé (motif obligatoire). Contrat : Modèle Word rempli → (relecture) → En vérification → (champs complets) → Prêt à signer (figé) → (signatures datées) → Signé par les deux parties → Légalisé à la commune (suivi) → Enregistré aux impôts (suivi). Le contrat signé rend le bail « signé » ; un avenant depuis un bail en vigueur suit le même cycle. Un bail peut être en vigueur sans contrat signé, avec une alerte.
+
+Les deux étapes en couleur sont propres au Burkina Faso. Elles sont suivies pour la traçabilité, sans bloquer : le contrat est complet dès sa signature.
+
+#### 3. Le modèle de l'organisation, rempli automatiquement (révisé après votre retour)
+
+Votre retour change ma recommandation : chaque organisation garde **son propre modèle**, et la plateforme le remplit avec les données déjà saisies. Le modèle transmis par une agence pilote (cinq pages, imprimé depuis Word) est un document structuré, avec des blancs à remplir et des cases à cocher. Le reproduire clause par clause dans un éditeur de la plateforme coûterait cher et ne serait pas adopté.
+
+- **Mise en place** : l'organisation dépose son modèle Word, et l'on y place une fois les champs (`{locataire.nom}`, `{loyer.montant_lettres}`…) à partir d'un catalogue fourni. Pour les trois pilotes, l'équipe de la plateforme s'en charge à l'accueil.
+- **Génération** : depuis le bail, la plateforme remplit le modèle ; le gestionnaire relit le projet, le corrige au besoin, puis le fige (« prêt à signer »).
+- **Contrôles au lieu de clauses verrouillées** : le texte du modèle reste sous la responsabilité de l'organisation. La plateforme vérifie les valeurs qu'elle y insère (caution au-delà de deux mois, champ vide, dates incohérentes) et les signale avant la génération.
+- **Modèle de base de la plateforme** : seulement pour les organisations qui n'en ont pas, surtout les bailleurs particuliers, après validation par un juriste.
+- **Avenants** : même mécanisme, avec un modèle d'avenant.
+
+**Ce que montre le modèle de l'agence pilote :**
+
+| Constat dans le modèle | Conséquence pour la plateforme |
+| --- | --- |
+| L'agence est désignée comme « le Bailleur » ; le propriétaire n'apparaît pas | Le contrat doit pouvoir désigner comme bailleur soit l'organisation, soit le propriétaire représenté par l'organisation. Question au juriste : en signant en son nom, l'agence endosse les obligations du bailleur |
+| Deux dépôts : la caution (au plus deux mois, plus un mois de loyer) et une somme forfaitaire pour les factures d'eau et d'électricité restées impayées | Le compte de caution distingue la caution et la garantie des factures, chacune avec son montant et ses retenues |
+| Restitution dans un délai maximal d'un mois après la remise des clés | Délai de restitution enregistré dans le bail, alerte avant son terme |
+| Les dépôts ne peuvent servir à payer les loyers en cours du bail | L'imputation de la caution sur les derniers loyers (scénario B) exige un avenant ou un accord écrit explicite |
+| Loyer payable au plus tard le 5 du mois ; intérêt de retard de 0,75 % par mois après 10 jours, au profit de l'agence | Jour d'échéance et pénalité sont des paramètres du bail ; le relevé doit savoir à qui reviennent les pénalités |
+| Préavis par lettre recommandée ou acte d'huissier ; deux ou trois mois selon la durée ; un mois dans des cas listés (premier emploi, mutation…) ; indemnité en cas de départ anticipé | Le préavis enregistre son mode de notification et sa preuve. La demande faite par le locataire dans son espace n'est qu'une demande, pas un congé. Délais et indemnités viennent du bail, pas d'une règle fixe |
+| Reconduction tacite pour une durée égale | Le comportement à l'échéance est un paramètre du bail (même durée, ou durée indéterminée) ; sa compatibilité avec la loi est à vérifier |
+| Clause résolutoire deux mois après un commandement de payer resté sans effet | Le commandement de payer devient un événement daté du suivi des impayés (P2) |
+| Signatures de l'agence (le gérant) et du locataire, précédées de « lu et approuvé » ; nombre d'exemplaires à remplir | Confirme la signature manuscrite au départ ; lieu, date et nombre d'exemplaires sont des champs |
+
+**Champs à remplir automatiquement et leur source :**
+
+| Groupe | Champs du modèle | Source | Ce qui manque aujourd'hui |
+| --- | --- | --- | --- |
+| Organisation | Raison sociale, siège, RCCM, IFU, boîte postale, téléphones, logo | Fiche organisation (lot 03) | Boîte postale, logo |
+| Représentant | Nom, profession, domicile, nationalité, pièce d'identité (numéro, date, autorité), qualité | Fiche organisation (lot 03) | Tout le bloc |
+| Locataire | Civilité, nom, date et lieu de naissance, pièce (type, numéro, date, autorité), nationalité, profession, domicile, téléphones | Fiche locataire (lot 08) | Naissance, nationalité, profession, détail de la pièce |
+| Logement | Destination (meublé, usage), type, chambres, salon, cuisine, salle de bain, garage, terrasse, buanderie, surface, terrain, clôture, localisation | Fiche unité (lot 07) | Pièces détaillées, surface, usage, clôture |
+| Conditions | Durée, début, fin, loyer en chiffres et en lettres, jour limite, modalités de paiement, caution, garantie des factures, délai de restitution, pénalité, règles de préavis, reconduction, visites | Bail (lot 08) | Montant en lettres, pénalité, garantie des factures, préavis, reconduction |
+| Signature | Lieu, date, nombre d'exemplaires | Saisie à la génération | — |
+
+Ces champs complètent les lots 03, 07 et 08. Les données d'état civil du locataire ne sont collectées que parce que le contrat les demande. Le montant en lettres (« soixante-quinze mille francs CFA ») est une fonction pure de `packages/shared`.
+
+#### 4. Signature : ce qui est possible aujourd'hui
+
+La loi n° 045-2009/AN reconnaît la signature électronique et présume fiable la signature sécurisée reposant sur un certificat qualifié. Une plateforme nationale, **FasoSign**, a été lancée en septembre 2026 par le ministère de la Transition digitale ; l'article qui l'annonce ne dit pas si elle est ouverte aux entreprises et aux particuliers. Et même signé électroniquement, le bail resterait à légaliser à la commune.
+
+| Mode | Ce qu'il prouve | Priorité |
+| --- | --- | --- |
+| PDF généré, imprimé, signé à la main, légalisé, puis scanné et déposé | Le contrat en règle ; la plateforme en garde la copie, avec qui l'a déposée, quand, et son empreinte | P1 |
+| Dépôt d'un contrat signé hors plateforme (anciens baux, modèle de l'agence) | Une archive. **Jamais présentée comme une signature électronique** | P1 |
+| Acceptation en ligne par code SMS | Que la personne a lu et accepté ce texte précis, à telle date. Ne remplace ni la signature ni la légalisation ; libellé « accepté en ligne » | P3 |
+| Signature électronique qualifiée (prestataire agréé ou FasoSign) | Même valeur que la signature manuscrite | P3, à réévaluer quand l'accès privé sera connu |
+
+La signature passe par une interface `SignatureProvider`, avec une seule implémentation « manuscrite » au MVP. Un prestataire qualifié pourra s'y brancher plus tard sans toucher au reste.
+
+#### 5. Documents et confidentialité
+
+Chaque document porte : type, organisation, objets liés (bail, unité, personnes, mandat), version, auteur, date d'ajout, empreinte, statut (actif, remplacé, retiré). Les droits de consultation viennent d'une **matrice par type de document**, que l'organisation peut restreindre mais jamais élargir.
+
+**Mon désaccord** : choisir à la main, pour chaque document, les personnes autorisées serait source d'erreurs (une pièce d'identité ouverte par mégarde). La matrice décide par défaut ; la main ne sert qu'à restreindre.
+
+| Type de document | Organisation (direction, gestionnaire) | Agent de terrain | Propriétaire | Locataire |
+| --- | --- | --- | --- | --- |
+| Contrat signé, annexes, avenants | Oui | Non | Oui (il est le bailleur) | Oui |
+| Projet de contrat | Oui | Non | Si son accord est requis | À partir de « prêt à signer » |
+| État des lieux, inventaire | Oui | Oui, sur ses unités | Oui | Oui |
+| Justificatifs retenus sur la caution | Oui | Non | Oui | Oui |
+| Pièce d'identité du locataire | Oui | Non | Non | Oui (la sienne) |
+| Pièce d'identité du propriétaire, titre foncier | Oui | Non | Oui (les siens) | Non |
+| Mandat de gestion (contient la commission) | Oui | Non | Oui | Non |
+| Notes internes | Oui | Selon le rôle | Non | Non |
+
+**Une autre organisation n'a jamais accès à aucun de ces documents** (règle 15). Chaque téléchargement est journalisé. La durée de conservation des copies de pièces d'identité après la fin du bail est à fixer avec le juriste.
+
+#### 6. Espace locataire : « Mes contrats » et changement d'agence
+
+- Rubrique « Mes contrats », avec trois onglets : en vigueur, à signer, terminés (expirés et résiliés). Chaque carte affiche : logement, agence ou bailleur, dates, loyer, caution, statut du bail et du document, prochaine échéance ou date de renouvellement.
+- Fiche contrat : lecture du contrat et des avenants, documents autorisés, téléchargement par lien signé de courte durée.
+- **Changement d'agence** : votre exemple (maison chez l'agence A, puis appartement chez l'agence B) est déjà couvert par D13 et D17. Le locataire retrouve les deux contrats dans son compte. L'agence B ne voit ni le contrat de A ni la pièce d'identité déposée chez A ; elle demande ses propres pièces. Le locataire peut télécharger ses documents et les remettre lui-même, hors plateforme, s'il le souhaite.
+
+#### 7. Échéances et alertes
+
+| Échéance | Quand | Qui est prévenu |
+| --- | --- | --- |
+| Fin d'un bail à durée déterminée | 4 mois puis 3 mois avant, pour laisser le temps du préavis | Organisation, propriétaire |
+| Terme atteint sans congé | Le lendemain du terme | Gestionnaire : reconduction appliquée selon le bail (même durée ou durée indéterminée) |
+| Contrat en attente de signature | Après 7 jours | Gestionnaire, personne qui doit signer |
+| Contrat signé non légalisé ou non enregistré | Rappel mensuel, désactivable | Gestionnaire |
+| Fin de préavis | 30 jours et 7 jours avant | Organisation, agent (état des lieux), locataire |
+| Restitution de la caution | Avant la fin du délai prévu au bail (un mois dans le modèle pilote) | Organisation, détenteur de la caution, locataire |
+| Avenant à valider ou à signer | À sa création | Valideur, locataire, propriétaire si concerné |
+| Révision du loyer possible | Tous les trois ans | Gestionnaire, propriétaire |
+
+Au MVP, les alertes apparaissent dans l'application et dans les espaces personnels. Leur envoi par WhatsApp ou SMS vient en P2, par le module `notifications`.
+
+#### 8. Responsabilités
+
+| Question | Réponse proposée |
+| --- | --- |
+| Qui est le bailleur ? | Celui que le contrat désigne : le propriétaire représenté par l'organisation, ou l'organisation en son nom, comme dans le modèle de l'agence pilote. La plateforme enregistre ce choix et l'affiche au propriétaire ; sa portée juridique est à confirmer par un juriste. |
+| L'agence est-elle mandataire ? | Toujours vis-à-vis du propriétaire : un mandat de gestion actif doit couvrir l'unité, même quand l'agence signe en son nom. Sans mandat actif, pas de contrat. |
+| Qui crée et modifie un contrat ? | Directeur et gestionnaire. L'agent de terrain, non. |
+| Qui valide ? | Le directeur, ou le gestionnaire s'il y est autorisé ; le propriétaire aussi si son mandat l'exige (P2). |
+| Qui signe pour le bailleur ? | Le représentant de l'organisation (le gérant dans le modèle pilote) ; le propriétaire lui-même s'il est désigné bailleur, ou l'agence pour lui si son mandat le permet (`can_sign_leases`). |
+| Qui ajoute un avenant ? | Les mêmes personnes, avec le même circuit que le contrat. |
+| Qui conserve les documents ? | L'organisation gestionnaire, pour l'archive numérique. Au transfert de gestion, la remise du dossier est enregistrée (lot 10 bis). |
+| Qui consulte et télécharge ? | Selon la matrice du point 5. |
+
+#### 9. Liens avec le reste de la gestion locative
+
+| Élément du contrat | Effet dans la gestion |
+| --- | --- |
+| Date de prise d'effet | Occupation calculée (réservée avant, occupée ensuite) et première échéance |
+| Loyer, périodicité, jour de paiement | Échéancier ; un avenant de loyer crée les échéances suivantes |
+| Caution et détenteur | Compte de caution (D15), reçus de versement |
+| Avance | Échéances payées d'avance |
+| Durée et date de fin | Alertes ; à la fin, déclenchement de la sortie (préavis, état des lieux, impayés, décompte) |
+| Inventaire et état des lieux d'entrée | Annexes du contrat ; référence pour la sortie |
+| Clause d'entretien et de réparations | Classement usure normale ou dégradation à la sortie |
+| Résiliation | Préavis, date de sortie, décompte, remise en état |
+
+#### 10. Écrans nécessaires
+
+| Espace | Écrans |
+| --- | --- |
+| Organisation | Liste des contrats (filtres par statut du bail et du document, alertes) ; assistant de création depuis une unité disponible et un locataire retenu ; éditeur de projet (clauses, champs, aperçu, champs manquants) ; suivi de signature, légalisation et enregistrement avec dépôt du scan ; fiche contrat (versions, avenants, documents, chronologie) ; création d'avenant ; modèles de contrat (réglages, direction) ; registre des documents |
+| Propriétaire | Contrats de ses biens par gestionnaire ; documents dont il est partie ; validation d'un projet si son mandat l'exige (P2) |
+| Locataire | « Mes contrats », fiche contrat, lecture d'un projet « prêt à signer », documents autorisés |
+
+#### 11. Solutions techniques
+
+- **Remplissage des modèles Word** : bibliothèque docxtemplater, dans une tâche BullMQ. Nouvelle dépendance, à inscrire dans `docs/DECISIONS.md` (D23), licence à vérifier avant de l'adopter.
+- **Conversion en PDF** : Gotenberg, service conteneurisé fondé sur LibreOffice, ajouté à l'infrastructure. Le PDF sert à la relecture sur téléphone, au partage et au calcul de l'empreinte. Nouvelle dépendance d'infrastructure (D23). pdf-lib reste utilisé pour les reçus et les relevés.
+- **Stockage** : compartiment S3 privé, une version = un objet jamais écrasé, empreinte SHA-256 en base, chiffrement côté serveur, liens signés de courte durée, aucun cache CDN (règle 11).
+- **Scan sur téléphone** : photos de plusieurs pages assemblées en un PDF compressé, utilisable hors ligne et envoyé à la synchronisation.
+- **Signature** : interface `SignatureProvider`, implémentation manuscrite au MVP.
+
+#### 12. Ce qui entre dans la première version
+
+- **P1** : les deux cycles séparés ; modèle Word de l'organisation rempli automatiquement (mis en place par la plateforme pour les pilotes) ; relecture puis figement ; Word et PDF ; versions avec empreinte ; signature manuscrite et dépôt du scan ; légalisation et enregistrement suivis sans bloquer ; avenants ; paramètres du bail issus du modèle (jour d'échéance, pénalité, garantie des factures, délai de restitution, préavis, reconduction) ; bailleur désigné et `can_sign_leases` ; registre des documents et matrice de confidentialité ; alertes dans l'application ; « Mes contrats » ; bail en vigueur possible sans contrat signé, avec alerte.
+- **P2** : modèle de base de la plateforme validé par un juriste ; outil qui permet à l'organisation de placer elle-même les champs ; calcul automatique des pénalités de retard ; commandement de payer ; envoi des alertes par WhatsApp et SMS ; validation par le propriétaire ; durées de conservation automatiques.
+- **P3** : acceptation en ligne par code SMS ; signature électronique qualifiée (prestataire agréé ou FasoSign, si ouvert au privé) ; dématérialisation de la légalisation et de l'enregistrement, si l'administration la propose.
 
 ## D. Recommandations UX/UI par espace
 
@@ -350,6 +526,15 @@ La priorité 1 ajoute surtout la **sortie du locataire** et la **structure des d
 | **Espaces propriétaire et locataire avec compte**, regroupant toutes les organisations : patrimoine, revenus, baux, cautions, reçus, signalements suivis | 10 ter (nouveau) |
 | Demandes de location depuis l'annonce | 12 |
 
+Ajouts du complément sur les contrats (P1) :
+
+- Registre de documents et matrice de confidentialité (lot 07, étendu au lot 08 bis).
+- Champs requis par les contrats : représentant légal, boîte postale et logo de l'organisation (lot 03) ; pièces détaillées, surface, usage et clôture de l'unité (lot 07) ; état civil et pièce détaillée du locataire, paramètres du bail (lot 08).
+- Bailleur désigné et autorisation `can_sign_leases` (lots 06 et 08).
+- Contrats (lot 08 bis, nouveau) : modèle Word de l'organisation rempli automatiquement, relecture, Word et PDF, versions, signature manuscrite et scan, légalisation et enregistrement suivis, avenants, alertes.
+- « Mes contrats » pour le locataire et contrats pour le propriétaire (lot 10 ter).
+- Import des contrats existants scannés (lot 11).
+
 ### Priorité 2 : à intégrer pendant le pilote
 
 | Recommandation | Remarque |
@@ -409,7 +594,7 @@ Pour valider cette direction avant de l'appliquer, je propose deux écrans de r�
 
 **Mise à jour du 08/11/2026 : les décisions sont écrites dans le dépôt, le lot 01 peut démarrer dès la fusion.** Les lots 01 à 05 posent le socle technique et ne dépendent pas des écrans métier. Le complément de maquette et le test avec les pilotes se font donc en parallèle, et doivent être terminés avant le lot 06.
 
-*Schéma (version texte) — feuille de route :* Préparer (maquette 00 ter, test des pilotes, en parallèle des lots 01 à 05) ; Socle (01 à 05) ; Registre (06, 07, 08) ; Encaisser (09, 10, 10 bis, 10 ter, 11) ; Publier (12, 13, puis pilote). Décisions utilisées : D12 avant 01 ; D13 et D17 avant 02 ; D16 avant 06 ; D14 avant 07 ; D15 avant 08.
+*Schéma (version texte) — feuille de route :* Préparer (maquette 00 ter, test des pilotes, en parallèle des lots 01 à 05) ; Socle (01 à 05) ; Registre (06, 07, 08, 08 bis contrats) ; Encaisser (09, 10, 11, 10 bis sortie, 10 ter espaces) ; Publier (12, 13, puis pilote). Décisions utilisées : D12 avant 01 ; D13 et D17 avant 02 ; D16 avant 06 ; D14 avant 07 ; D15 avant 08 ; D20 à D22 avant 07 et 08 bis.
 
 Chaque décision doit être écrite avant le lot qui l'utilise : D12 conditionne le départ, les autres peuvent suivre au fil des lots.
 
@@ -444,6 +629,8 @@ Chaque décision doit être écrite avant le lot qui l'utilise : D12 conditionne
 | 12 Vitrine | Disponibilité calculée, demandes, direction éditoriale, variante « mise en avant » |
 | 13 Production | Formalités auprès de l'ARCOD (nouvelle loi), tests d'accès du module `portals` |
 
+Effets du complément sur les contrats : nouveau **lot 08 bis « Contrats et documents contractuels »**, entre les lots 08 et 09 (il a besoin du bail et du compte de caution). Le lot 06 ajoute `can_sign_leases`, le lot 07 crée le registre de documents, le lot 10 ter affiche les contrats dans les espaces personnels, le lot 11 importe les contrats existants, et le lot 00 ter maquette la création, la signature et « Mes contrats ».
+
 Les lots 05, 09, 11, 13 et 14 ne changent pas sur le fond. Ils héritent seulement du renommage en `organization_id`.
 
 ## Questions ouvertes
@@ -461,9 +648,30 @@ Ces points ne se tranchent pas par la technique ; ils conditionnent les lots ind
 | Nouvelle loi sur les données du 3 août 2026 : promulgation, démarches auprès de l'ARCOD, hébergement des données | Juriste | 02 et 13 |
 | « Bailleur particulier » : le terme parle-t-il aux propriétaires qui gèrent eux-mêmes ? | Entretiens | 03 |
 
+Questions ajoutées par le complément sur les contrats :
+
+| Question | À qui la poser | Avant le lot |
+| --- | --- | --- |
+| Une agence peut-elle se désigner « bailleur » en son nom, et quelles obligations endosse-t-elle alors ? | Juriste | 08 |
+| Reconduction tacite pour une durée égale : compatible avec la loi, qui prévoit le passage à durée indéterminée ? | Juriste | 08 |
+| Intérêts de retard au profit de l'agence, préavis réduit à un mois, indemnité de départ anticipé : clauses valables ? | Juriste | 10 |
+| Délai et coût de la légalisation et de l'enregistrement ; qui s'en charge en pratique | Juriste, agences pilotes | 08 bis |
+| Une agence peut-elle signer au nom du propriétaire, et avec quel mandat ? | Juriste | 06 |
+| Durée de conservation des copies de pièces d'identité après la fin du bail | Juriste | 07 |
+| Modèle de base pour les organisations sans modèle | Juriste | P2 |
+| Modèles des deux autres pilotes, pour vérifier que le catalogue de champs les couvre | Agences pilotes | 08 bis |
+| FasoSign ou un prestataire agréé sont-ils accessibles aux entreprises privées et aux particuliers ? | ANSSI, ministère de la Transition digitale | Phase 3 |
+
 ## Sources
 
 - [Loi n° 103-2015/CNT portant bail d'habitation privée au Burkina Faso](https://academiedepolice.bf/index.php/telechargement/category/28-urbanisme-et-construction?download=75:loi-portant-bail-d-habitation-privee-au-burkina-faso) (texte consulté le 08/11/2026)
 - [Loi n° 001-2021/AN portant protection des personnes à l'égard du traitement des données à caractère personnel](https://assembleenationale.bf/storage/Loi/kDsWHXOTUCQFVESChh8BlBdiZnCrdTsOpXe1rzmH.pdf)
 - [Adoption de la loi sur la protection des données et création de l'ARCOD, AllAfrica, 4 août 2026](https://fr.allafrica.com/stories/202608040299.html)
 - Dépôt `Phataf/ziga` : maquette, `docs/LOTS.md`, `docs/DECISIONS.md`, `docs/FEATURE-FLAGS.md`, prompts des lots 06, 07, 08 et 10
+
+Sources du complément sur les contrats :
+
+- [Loi sur le bail locatif : bail écrit, légalisation à la commune et enregistrement, L'Économiste du Faso, 8 janvier 2016](https://www.leconomistedufaso.com/2016/01/08/loi-sur-le-bail-locatif-locataires-et-bailleurs-a-vos-marques)
+- [Loi n° 045-2009/AN portant réglementation des services et des transactions électroniques](https://data.sante.gov.bf/legisante/uploads/Loi%20n%C2%B0045-2009%20AN%20portant%20r%C3%A8glementation%20des%20services%20et%20des%20transactions%20%C3%A9lectroniques%20au%20Burkina%20Faso.pdf)
+- [Lancement de FasoSign, plateforme nationale de signature électronique, KOACI, 17 septembre 2026](https://www.koaci.com/article/2026/09/17/burkina-faso/politique/burkina-faso-cap-zero-papier-une-plateforme-nationale-de-signature-electronique-lancee_200617.html)
+- [L'administration passe à la signature électronique, OSIRIS, 14 septembre 2026](https://www.osiris.sn/burkina-faso-l-administration-passe-a-la-signature-electronique.html)

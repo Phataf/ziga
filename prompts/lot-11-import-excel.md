@@ -7,7 +7,7 @@ Une agence n'adoptera pas l'outil si elle doit ressaisir 100 baux à la main. Le
 Lot 10 ter terminé.
 
 ## Périmètre
-1. **Modèle Excel téléchargeable** (un classeur, un onglet par type, avec en-têtes en français, exemples, listes déroulantes et notice) : Propriétaires, Biens, Unités, Locataires, Baux, Cautions (montant reçu et détenteur), Soldes d'ouverture (montant dû par bail à la date de démarrage).
+1. **Modèle Excel téléchargeable** (un classeur, un onglet par type, avec en-têtes en français, exemples, listes déroulantes et notice) : Propriétaires, Biens, Unités, Locataires, Baux, Cautions (montant reçu et détenteur), Soldes d'ouverture ; les contrats existants s'importent ensuite en lot, scan par scan, rattachés à leur bail (statut « signé, scan déposé ») (montant dû par bail à la date de démarrage).
 2. **Parcours d'import** (directeur ou gestionnaire, protégé par `imports.excel`), sur ordinateur de préférence, possible sur téléphone :
    1. Envoi du fichier (`.xlsx`, `.csv`).
    2. Correspondance des colonnes : automatique sur les en-têtes du modèle, manuelle pour un fichier libre (glisser une colonne vers un champ).
