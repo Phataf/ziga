@@ -105,6 +105,17 @@ const url = process.env.DATABASE_URL;
 if (!url) fail('DATABASE_URL manquante (copiez .env.example en .env).');
 const password = await askPassword();
 
+/** Erreurs de base les plus courantes, expliquées sans pile d'erreur. */
+function explain(error: unknown): string | null {
+	for (let e = error as { code?: string; cause?: unknown } | undefined; e; e = e.cause as typeof e) {
+		if (e.code === '42P01') return 'La base n’est pas à jour (table « users » absente). Lancez d’abord : pnpm db:migrate';
+		if (e.code === '28P01') return 'Connexion refusée à PostgreSQL : vérifiez DATABASE_URL dans .env, puis relancez pnpm db:migrate.';
+		if (e.code === '3D000') return 'Base introuvable : vérifiez DATABASE_URL dans .env et que pnpm infra:up a démarré PostgreSQL.';
+		if (e.code === 'ECONNREFUSED') return 'PostgreSQL ne répond pas : démarrez-le avec pnpm infra:up.';
+	}
+	return null;
+}
+
 const pool = createPool({ url, max: 1, connectionTimeoutMs: 5_000, applicationName: 'ziga-cli' });
 try {
 	const result = await createSuperAdmin(createDatabase(pool), { phone: phone.data, name: name.data, password });
@@ -113,6 +124,11 @@ try {
 			? `Super administrateur créé : ${name.data} (${phone.data}).\n`
 			: `${phone.data} est maintenant super administrateur.\n`
 	);
+} catch (error) {
+	const message = explain(error);
+	if (!message) throw error;
+	process.stderr.write(`${message}\n`);
+	process.exitCode = 1;
 } finally {
 	await pool.end();
 }
