@@ -27,6 +27,14 @@
 		"./auth": {
 			"types": "./dist/auth.d.ts",
 			"default": "./dist/auth.js"
+		},
+		"./permissions": {
+			"types": "./dist/permissions.d.ts",
+			"default": "./dist/permissions.js"
+		},
+		"./organizations": {
+			"types": "./dist/organizations.d.ts",
+			"default": "./dist/organizations.js"
 		}
 	},
 	"files": [

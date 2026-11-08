@@ -33,7 +33,7 @@ export type LoginInput = z.input<typeof loginSchema>;
 export const PLATFORM_ROLES = ['super_admin', 'support', 'sales', 'finance'] as const;
 export type PlatformRole = (typeof PLATFORM_ROLES)[number];
 
-export const OTP_PURPOSES = ['verify_phone', 'reset_password'] as const;
+export const OTP_PURPOSES = ['verify_phone', 'reset_password', 'change_phone'] as const;
 export type OtpPurpose = (typeof OTP_PURPOSES)[number];
 
 /** Messages identiques quel que soit le cas, pour ne jamais révéler si un numéro existe. */
@@ -44,7 +44,10 @@ export const AUTH_MESSAGES = {
 	tooManyRequests: 'Trop de demandes. Réessayez dans un instant.',
 	retryLater: (seconds: number) => `Trop d’essais. Réessayez dans ${seconds} seconde${seconds > 1 ? 's' : ''}.`,
 	accountExistsSms: 'Un compte Ziga existe déjà pour ce numéro. Utilisez « Mot de passe oublié ».',
-	codeSms: (code: string) => `Votre code Ziga : ${code}. Il est valable 10 minutes. Ne le communiquez à personne.`
+	codeSms: (code: string) => `Votre code Ziga : ${code}. Il est valable 10 minutes. Ne le communiquez à personne.`,
+	/** Envoyé à l'ancien numéro après un changement de numéro (lot 03, « Mon compte »). */
+	phoneChangedSms: (newPhone: string) =>
+		`Le numéro de votre compte Ziga a été remplacé par ${newPhone}. Si vous n’êtes pas à l’origine de ce changement, contactez sans attendre l’assistance Ziga.`
 } as const;
 
 /** Vue publique d'une personne connectée (réponse de GET /me). */
