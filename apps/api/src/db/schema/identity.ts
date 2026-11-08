@@ -35,6 +35,8 @@ export const refreshTokens = pgTable('refresh_tokens', {
 	id: uuid('id').primaryKey(),
 	userId: uuid('user_id').notNull(),
 	sessionId: uuid('session_id').notNull(),
+	/** Jeton remplacé par celui-ci (délai de grâce, D28). */
+	parentId: uuid('parent_id'),
 	tokenHash: bytea('token_hash').notNull().unique(),
 	issuedAt: tstz('issued_at').notNull().defaultNow(),
 	usedAt: tstz('used_at')

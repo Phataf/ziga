@@ -7,7 +7,7 @@
  * - mot de passe en argon2id, jetons en SHA-256, codes en HMAC : rien en clair en base ni dans les journaux ;
  * - sessions et jetons ne se lisent que dans le contexte de leur personne (withUser, RLS par app.user_id) ;
  * - un jeton de rafraîchissement déjà utilisé et présenté de nouveau révoque toutes les sessions de la personne,
- *   sauf dans les 10 secondes qui suivent sa rotation (connexion lente, onglets) : simple refus.
+ *   sauf réponse perdue dans les 10 secondes de la rotation (D28) : le dernier jeton, jamais servi, est remplacé.
  */
 import { randomBytes } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
@@ -188,9 +188,10 @@ export class AuthService {
 		return user;
 	}
 
-	private async insertToken(tx: Tx, userId: string, sessionId: string): Promise<string> {
+	/** Émet un jeton de rafraîchissement ; `parentId` est le jeton qu'il remplace (chaîne de la session, D28). */
+	private async insertToken(tx: Tx, userId: string, sessionId: string, parentId: string | null = null): Promise<string> {
 		const token = newRefreshToken(userId);
-		await tx.insert(refreshTokens).values({ id: newId(), userId, sessionId, tokenHash: sha256(token) });
+		await tx.insert(refreshTokens).values({ id: newId(), userId, sessionId, parentId, tokenHash: sha256(token) });
 		return token;
 	}
 
@@ -338,10 +339,42 @@ export class AuthService {
 				.limit(1);
 			if (!row) return { kind: 'invalid' as const };
 			const now = new Date();
+			const sessionActive = !row.session.revokedAt && row.session.expiresAt.getTime() > now.getTime();
 			if (row.token.usedAt) {
-				return now.getTime() - row.token.usedAt.getTime() <= graceMs ? { kind: 'conflict' as const } : { kind: 'reuse' as const };
+				/*
+				 * Jeton déjà utilisé. Réponse perdue (le navigateur n'a pas reçu le nouveau cookie) si, et seulement si :
+				 * il est le prédécesseur direct du dernier jeton émis pour cette session, ce dernier n'a jamais servi,
+				 * la rotation date de moins de 10 s et la session est active. Alors le dernier jeton est invalidé et un
+				 * nouveau est émis. Dans tous les autres cas : vol présumé.
+				 */
+				const [latest] = await tx
+					.select()
+					.from(refreshTokens)
+					.where(eq(refreshTokens.sessionId, row.token.sessionId))
+					.orderBy(desc(refreshTokens.issuedAt), desc(refreshTokens.id))
+					.limit(1)
+					.for('update');
+				const lostResponse =
+					sessionActive &&
+					!!latest &&
+					latest.parentId === row.token.id &&
+					!latest.usedAt &&
+					now.getTime() - latest.issuedAt.getTime() <= graceMs;
+				if (!lostResponse) return { kind: 'reuse' as const };
+				const invalidated = await tx
+					.update(refreshTokens)
+					.set({ usedAt: now })
+					.where(and(eq(refreshTokens.id, latest.id), isNull(refreshTokens.usedAt)))
+					.returning({ id: refreshTokens.id });
+				if (!invalidated.length) return { kind: 'reuse' as const };
+				const refreshToken = await this.insertToken(tx, userId, row.session.id, row.token.id);
+				await this.event(tx, { id: userId }, 'auth.refresh_grace_reissue', row.session.id, {
+					system: true,
+					after: { reason: 'lost_response' }
+				});
+				return { kind: 'rotated' as const, sessionId: row.session.id, refreshToken };
 			}
-			if (row.session.revokedAt || row.session.expiresAt.getTime() <= now.getTime()) return { kind: 'invalid' as const };
+			if (!sessionActive) return { kind: 'invalid' as const };
 			// Marque le jeton utilisé ; si une autre requête l'a fait entre-temps, c'est elle qui l'emporte.
 			const marked = await tx
 				.update(refreshTokens)
@@ -354,9 +387,14 @@ export class AuthService {
 				.update(sessions)
 				.set({ lastUsedAt: now, expiresAt: new Date(now.getTime() + this.refreshTtlMs()) })
 				.where(eq(sessions.id, row.session.id));
-			return { kind: 'rotated' as const, sessionId: row.session.id, refreshToken: await this.insertToken(tx, userId, row.session.id) };
+			return {
+				kind: 'rotated' as const,
+				sessionId: row.session.id,
+				refreshToken: await this.insertToken(tx, userId, row.session.id, row.token.id)
+			};
 		});
 
+		// Deux requêtes simultanées avec le même jeton : la seconde est refusée, le client réessaie une fois.
 		if (outcome.kind === 'conflict') throw new AppError('REFRESH_CONFLICT', 'Session déjà renouvelée. Réessayez.', 409);
 		if (outcome.kind === 'reuse') {
 			this.logger.warn({ userId }, 'Jeton de rafraîchissement réutilisé : toutes les sessions sont révoquées');

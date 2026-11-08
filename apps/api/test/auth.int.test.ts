@@ -168,15 +168,95 @@ describe('rotation du jeton de rafraîchissement', () => {
 		}
 	});
 
-	it('dans le délai de grâce (10 s), une réutilisation est simplement refusée, sans révocation', async () => {
+	/** Actions de plateforme journalisées pour la personne (lecture directe, rôle propriétaire). */
+	async function actionsOf(phone: string): Promise<string[]> {
+		const { rows } = await admin.query(
+			`select a.action from audit_log a join users u on u.id = a.subject_user_id where u.phone = $1 order by a.id`,
+			[phone]
+		);
+		return rows.map((r) => r.action as string);
+	}
+
+	it('réponse perdue : le jeton précédent, présenté dans les 10 s, obtient un nouveau jeton (sans révocation)', async () => {
+		const { client, phone } = await signedUp(t);
+		const t1 = client.cookie;
+		// Le serveur fait tourner T1 en T2, mais la réponse se perd : le navigateur garde T1.
+		expect((await client.call('POST', '/auth/refresh')).status).toBe(200);
+		const t2 = client.cookie;
+		client.cookie = t1;
+		const reissued = await client.call('POST', '/auth/refresh');
+		expect(reissued.status).toBe(200);
+		expect(client.cookie).not.toBe(t1);
+		expect(client.cookie).not.toBe(t2);
+		// Le dernier jeton émis (T2, jamais reçu) est invalidé ; le nouveau fonctionne normalement.
+		const { rows } = await admin.query(
+			`select r.used_at is not null as used from refresh_tokens r where r.token_hash = sha256(convert_to($1, 'UTF8'))`,
+			[decodeURIComponent(t2!.split('=')[1]!)]
+		);
+		expect(rows).toEqual([{ used: true }]);
+		expect((await client.call('POST', '/auth/refresh')).status).toBe(200);
+		expect(await actionsOf(phone)).toContain('auth.refresh_grace_reissue');
+		expect(await actionsOf(phone)).not.toContain('auth.refresh_reuse_detected');
+		const { rows: sessions } = await admin.query(
+			`select count(*)::int as n from sessions s join users u on u.id = s.user_id where u.phone = $1 and s.revoked_at is not null`,
+			[phone]
+		);
+		expect(sessions[0].n).toBe(0);
+	});
+
+	it('réponses perdues deux fois de suite : le même jeton précédent sert encore, dans les 10 s', async () => {
 		const { client } = await signedUp(t);
-		const old = client.cookie;
+		const t1 = client.cookie;
+		await client.call('POST', '/auth/refresh');
+		client.cookie = t1;
 		expect((await client.call('POST', '/auth/refresh')).status).toBe(200);
-		const slowTab = new Client(t.url);
-		slowTab.cookie = old;
-		const r = await slowTab.call('POST', '/auth/refresh');
-		expect(r).toMatchObject({ status: 409, body: { code: 'REFRESH_CONFLICT' } });
+		client.cookie = t1;
 		expect((await client.call('POST', '/auth/refresh')).status).toBe(200);
+		expect((await client.call('POST', '/auth/refresh')).status).toBe(200);
+	});
+
+	it('vol : le successeur du jeton présenté a déjà servi → toutes les sessions révoquées', async () => {
+		const { client, phone, password } = await signedUp(t);
+		const other = new Client(t.url, '203.0.113.98');
+		await other.call('POST', '/auth/login', { phone, password });
+		const stolen = client.cookie;
+		expect((await client.call('POST', '/auth/refresh')).status).toBe(200); // T1 → T2, reçu
+		expect((await client.call('POST', '/auth/refresh')).status).toBe(200); // T2 → T3 : T2 a servi
+		const thief = new Client(t.url);
+		thief.cookie = stolen;
+		expect((await thief.call('POST', '/auth/refresh')).status).toBe(401);
+		expect((await client.call('POST', '/auth/refresh')).status).toBe(401);
+		expect((await other.call('POST', '/auth/refresh')).status).toBe(401);
+		expect(await actionsOf(phone)).toContain('auth.refresh_reuse_detected');
+		expect(await actionsOf(phone)).not.toContain('auth.refresh_grace_reissue');
+	});
+
+	it('vol : le délai de 10 s est dépassé → toutes les sessions révoquées', async () => {
+		const short = await startApp({ AUTH_REFRESH_REUSE_GRACE_SECONDS: '1' });
+		try {
+			const { client, phone } = await signedUp(short);
+			const t1 = client.cookie;
+			expect((await client.call('POST', '/auth/refresh')).status).toBe(200); // réponse « perdue »
+			const t2 = client.cookie;
+			await new Promise((r) => setTimeout(r, 1_300));
+			const late = new Client(short.url);
+			late.cookie = t1;
+			expect((await late.call('POST', '/auth/refresh')).status).toBe(401);
+			client.cookie = t2;
+			expect((await client.call('POST', '/auth/refresh')).status).toBe(401);
+			expect(await actionsOf(phone)).toContain('auth.refresh_reuse_detected');
+		} finally {
+			await short.close();
+		}
+	});
+
+	it('deux requêtes simultanées avec le même jeton : une seule rotation, la seconde est refusée (409)', async () => {
+		const { client } = await signedUp(t);
+		const twin = new Client(t.url);
+		twin.cookie = client.cookie;
+		const [a, b] = await Promise.all([client.call('POST', '/auth/refresh'), twin.call('POST', '/auth/refresh')]);
+		expect([a.status, b.status].sort()).toEqual(expect.arrayContaining([200]));
+		expect([a.status, b.status].every((s) => s === 200 || s === 409)).toBe(true);
 	});
 
 	it('ne stocke que l’empreinte des jetons de rafraîchissement', async () => {

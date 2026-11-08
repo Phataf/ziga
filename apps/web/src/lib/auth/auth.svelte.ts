@@ -2,7 +2,7 @@
  * Session de la personne connectée, côté navigateur (lot 02).
  * - Le jeton d'accès (15 min) vit en mémoire seulement ; le jeton de rafraîchissement est un cookie httpOnly de l'API.
  * - Les rafraîchissements sont sérialisés entre onglets (Web Locks) : deux onglets n'envoient jamais le même cookie
- *   en même temps. Un 409 (rotation faite par un autre onglet à l'instant) est réessayé.
+ *   en même temps. Un 409 (rotation simultanée) est réessayé une seule fois.
  * - Hors connexion, la coque reste affichée grâce au repère non secret (marker.ts) ; seul un 401 renvoie vers /connexion.
  */
 import type { MeResponse, PlatformRole, SessionView, TokenResponse } from '@ziga/shared/auth';
@@ -79,10 +79,11 @@ class Auth {
 			this.#accept(await call<TokenResponse>('POST', '/auth/refresh'));
 			return 'signed_in';
 		} catch (error) {
-			if (error instanceof ApiError && error.status === 409 && attempt < 2) {
-				// Un autre onglet vient de renouveler : le navigateur a déjà reçu le nouveau cookie.
-				await wait(300 * (attempt + 1));
-				return this.#refreshOnce(attempt + 1);
+			if (error instanceof ApiError && error.status === 409 && attempt === 0) {
+				// Deux rafraîchissements simultanés (navigateur sans Web Locks) : un seul nouvel essai, jamais de boucle.
+				// Une réponse perdue n'aboutit plus à un 409 : le serveur réémet un jeton dans le délai de grâce (D28).
+				await wait(300);
+				return this.#refreshOnce(1);
 			}
 			if (!(error instanceof ApiError) && !(error instanceof NetworkError)) throw error;
 			// Coupure passagère (réseau tout juste revenu, changement d'antenne) : un nouvel essai si le navigateur se dit en ligne.

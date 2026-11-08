@@ -481,3 +481,16 @@ Prompt : `prompts/lot-03-agences-roles-audit.md`. Plan validé par le porteur av
 
 ### Questions ouvertes pour le porteur
 1. ~~**Porte 0**~~ : aucun entretien formel ; les démonstrations aux trois agences pilotes en tiendront lieu (réponse du 08/11/2026).
+
+## Correctifs après le lot 03 — 08/11/2026
+
+- **Mise en page sur téléphone (échec de la CI sur `main`)** : un bouton au libellé long (`whitespace-nowrap`) faisait 380 px sur `/espace/compte` en 360 × 800. En CI, sans la police Inter, le champ du mot de passe recouvrait le lien « Mes appareils ».
+  - `Button` passe à la ligne.
+  - Le débordement se mesure contre la largeur de l'écran (`clientWidth`).
+  - Nouveau test `e2e/polices.spec.ts` : chaque écran avec une police de secours large.
+- **Délai de grâce du rafraîchissement (D28 mise à jour, validée par le porteur)** : une réponse de rafraîchissement perdue laissait le navigateur avec l'ancien jeton. Il en résultait des 409 en boucle, puis, après 10 s, la révocation de toutes les sessions.
+  - Migration `0003_refresh_token_chain` : chaque jeton retient son prédécesseur.
+  - Le serveur réémet un jeton aux quatre conditions de D28 et journalise `auth.refresh_grace_reissue`. Dans tous les autres cas, détection de vol, comme avant.
+  - Le navigateur ne réessaie un 409 qu'une fois.
+  - Tests d'intégration : réponse perdue (une et deux fois), vol quand le successeur a déjà servi, vol au-delà du délai, requêtes simultanées.
+  - Le test Playwright hors connexion vérifie l'absence de 409 ; il passe 24 fois sur 24 sous charge (2 échecs sur 12 avant).

@@ -127,10 +127,14 @@ test.describe('Téléphone : parcours complet', () => {
 		await expect(page.getByTestId('barre-onglets')).toBeVisible();
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tableau de bord');
 		await expect(page).toHaveURL('/app');
-		// Au retour du réseau, la session se renouvelle d'elle-même.
+		// Au retour du réseau, la session se renouvelle d'elle-même : jamais de 409 en boucle, même si une réponse de
+		// rafraîchissement se perd au changement de page (délai de grâce, D28).
+		const conflicts: string[] = [];
+		page.on('response', (r) => r.url().endsWith('/auth/refresh') && r.status() === 409 && conflicts.push(r.url()));
 		await context.setOffline(false);
 		await page.goto('/espace/appareils');
 		await expect(page.getByTestId('appareil-courant')).toBeVisible();
+		expect(conflicts).toEqual([]);
 	});
 
 	test('session refusée par le serveur (401) : renvoi vers la connexion', async ({ page, context }) => {

@@ -170,8 +170,9 @@ describe('événements d’authentification (plateforme, sans organisation)', ()
 		await stolen.call('POST', '/auth/login', { phone, password });
 		const old = stolen.cookie;
 		await stolen.call('POST', '/auth/refresh', {});
+		// Rotation vieille d'une minute : hors du délai de grâce, la réutilisation est un vol (D28).
 		await owner.query(
-			`update refresh_tokens set used_at = now() - interval '1 minute' where used_at is not null and user_id = (select id from users where phone = $1)`,
+			`update refresh_tokens set issued_at = now() - interval '1 minute', used_at = coalesce(used_at - interval '1 minute', null) where user_id = (select id from users where phone = $1)`,
 			[phone]
 		);
 		stolen.cookie = old;

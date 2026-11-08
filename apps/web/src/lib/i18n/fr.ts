@@ -333,6 +333,7 @@ export const fr = {
 		'auth.logout': 'Déconnexion',
 		'auth.session_revoked': 'Appareil déconnecté',
 		'auth.refresh_reuse_detected': 'Session suspecte : tous les appareils déconnectés',
+		'auth.refresh_grace_reissue': 'Session renouvelée après une réponse perdue',
 		'auth.password_reset': 'Mot de passe réinitialisé par SMS',
 		'auth.password_change': 'Mot de passe changé',
 		'auth.phone_change': 'Numéro changé',
