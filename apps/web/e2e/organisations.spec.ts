@@ -45,7 +45,8 @@ test.describe('Invitation d’un collaborateur', () => {
 		expect(wa).toContain(`wa.me/226${newcomer.national}`);
 		expect(decodeURIComponent(wa!)).toContain(link);
 		await page.keyboard.press('Escape');
-		await expect(page.getByTestId('invitation')).toContainText(newcomer.national.slice(-2));
+		// D'autres tests invitent en parallèle dans la même agence : on cherche cette invitation, par son numéro.
+		await expect(page.getByTestId('invitation').filter({ hasText: new RegExp(newcomer.national.match(/../g)!.join('\\s')) })).toBeVisible();
 
 		// Second téléphone : la personne ouvre le lien, se connecte, accepte.
 		const other = await phonePage(browser);

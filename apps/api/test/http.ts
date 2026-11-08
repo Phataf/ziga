@@ -76,13 +76,18 @@ export class Client {
 	}
 }
 
-let counter = 0;
-/** Numéro du Burkina unique pour chaque test (la base est partagée par les fichiers de test). */
+/**
+ * Numéro du Burkina unique pour chaque test (la base est partagée par les fichiers de test, qui tournent en
+ * parallèle). Le chiffre du processus de Vitest sépare les fichiers simultanés ; le départ aléatoire sépare les
+ * fichiers qui se suivent dans un même processus ; le préfixe 6 évite les numéros fixes des tests (70…).
+ * Avant, trois chiffres de l'horloge et un compteur par fichier pouvaient donner le même numéro à deux fichiers :
+ * la seconde inscription recevait « compte existant », sans code.
+ */
+const worker = Number(process.env.VITEST_POOL_ID ?? process.env.VITEST_WORKER_ID ?? 0) % 10;
+let next = Math.floor(Math.random() * 1_000_000);
 export function newPhone(): string {
-	counter += 1;
-	return `+22670${String(Date.now() % 100_000)
-		.padStart(5, '0')
-		.slice(-3)}${String(counter).padStart(3, '0')}`;
+	next = (next + 1) % 1_000_000;
+	return `+2266${worker}${String(next).padStart(6, '0')}`;
 }
 
 /** Inscrit et vérifie une personne ; renvoie le client connecté. */
