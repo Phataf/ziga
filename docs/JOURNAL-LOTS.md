@@ -494,3 +494,77 @@ Prompt : `prompts/lot-03-agences-roles-audit.md`. Plan validé par le porteur av
   - Le navigateur ne réessaie un 409 qu'une fois.
   - Tests d'intégration : réponse perdue (une et deux fois), vol quand le successeur a déjà servi, vol au-delà du délai, requêtes simultanées.
   - Le test Playwright hors connexion vérifie l'absence de 409 ; il passe 24 fois sur 24 sous charge (2 échecs sur 12 avant).
+
+## Lot 04 — Interrupteurs de fonctionnalités, formules et back-office minimal — 08/11/2026
+
+Prompt : `prompts/lot-04-interrupteurs-backoffice.md` ; spécification `docs/FEATURE-FLAGS.md`. Plan validé par le porteur, avec ses compléments et réponses :
+- route et écran du back-office pour les événements de plateforme, par une connexion `app_admin` distincte ;
+- accès d'assistance motivé, 24 heures au plus, chaque lecture visible dans le journal de l'organisation, aucune connexion « en tant que » ;
+- moyens de paiement acceptés : un réglage de l'organisation (D18), au moins un actif, pas un interrupteur ;
+- abonnements saisis à la main, rôles `sales` et `finance` ;
+- écrans pensés d'abord pour l'ordinateur ;
+- formules : `notifications.whatsapp_api`, `media.virtual_tour_360` et `listings.facebook_publish` dans Pro seulement ; `payments.direct` en option pour Essentiel, par une exception posée organisation par organisation ; formule « Sur mesure » validée ;
+- abonnement échu : rappel 7 jours avant la fin, 15 jours de grâce, puis blocage des créations ;
+- organisation suspendue : consultation et export pour ses membres, sans création ni modification, annonces retirées.
+
+### Fait
+- **`packages/shared`** :
+  - `features.ts` : catalogue des 17 clés (description, dépendances, `plan_bound`, mode par défaut), formules et leurs quotas, résolution pure en 7 étapes puis dépendances (`resolveFeature`, `isEnabled`, `resolveAll`, motif et numéro d'étape) ; 23 tests, un par ligne du tableau de résolution ;
+  - `subscriptions.ts` : paliers d'un abonnement (gratuit, actif, rappel, grâce, bloqué) ; 8 tests ;
+  - `admin.ts` : schémas Zod du back-office (mode, exception, formule, quota, abonnement, paiement reçu, suspension, accès d'assistance) ;
+  - `permissions.ts` : matrice des rôles plateforme (`super_admin`, `support`, `sales`, `finance`) ;
+  - `organizations.ts` : moyens de paiement acceptés (au moins un), réglage d'une fonctionnalité par l'organisation.
+- **Base** (migration `0004_features_plans_admin`) :
+  - `plans`, `features`, `plan_features`, `feature_overrides` (une exception active par cible), `quota_overrides`, `organization_feature_settings` (RLS d'organisation) ;
+  - `organizations` : formule (texte, Découverte par défaut), moyens de paiement acceptés (contrainte : au moins un), dates de vérification et de suspension avec motif ;
+  - `subscriptions` (lue par l'organisation, écrite par `app_admin`) et `support_accesses` (24 heures au plus, contrainte en base) ;
+  - `app_admin` durci : aucune écriture par défaut, aucun droit sur les sessions, les jetons et les codes, pas de lecture du mot de passe ; annuaire des organisations et des membres par fonctions `SECURITY DEFINER` (`platform_*`) ; lecture des données d'une organisation seulement dans son contexte.
+- **API** :
+  - module `features` : instantané en mémoire et dans Redis, invalidé par publication à chaque modification ; expiration de la mémoire en 15 s (`FEATURES_CACHE_TTL_SECONDS`, 25 au plus), d'où une propagation garantie en moins de 30 s ;
+  - gardes `@RequiresFeature(key)` (`403 FEATURE_DISABLED`) et `@Creation()` (`403 SUBSCRIPTION_EXPIRED`), service des quotas (`QUOTA_EXCEEDED`, appelé à l'invitation d'un membre) ;
+  - `GET /me/features`, `GET /organization/features`, `PUT /organization/features/:key` (désactiver seulement), `GET /organization/subscription`, `PUT /organization/payment-methods` ;
+  - module `admin` : connexion `app_admin` à part (`DATABASE_ADMIN_URL`), garde `@PlatformCan` qui relit le rôle en base à chaque requête ; organisations (liste, fiche, validation, suspension, réintégration, formule), personnes, interrupteurs (mode, impact, exceptions, simulateur), formules, quotas, abonnements et paiement reçu, accès d'assistance (ouverture, fermeture, lecture du compte et du journal), journal de plateforme ;
+  - chaque modification écrit au journal d'audit, avec avant et après ; une action sur une organisation est aussi dans le journal de celle-ci.
+- **Web** :
+  - store `features` (copie locale pour le hors connexion) et `<FeatureGate>` ; 4 tests de composant ;
+  - paramètres de l'organisation : moyens de paiement, fonctionnalités (désactiver pour son organisation), formule et abonnement ; bandeau d'abonnement (rappel, grâce, blocage) ;
+  - back-office : Organisations (filtres, tableau, panneau latéral avec compte, abonnement et fonctionnalités avec la raison), Personnes (fiche, appartenances, fonctionnalités avec la raison, événements de sécurité), Formules et abonnements, Fonctionnalités (sélecteur à trois positions, confirmation avec le nombre d'organisations touchées et le motif), fiche d'une fonctionnalité (formules, exceptions), simulateur, Journal, Accès d'assistance et lecture d'assistance ;
+  - le journal affiche les valeurs en clair : moyens de paiement, formules, modes, dates, montants (`src/lib/audit/format.ts`, partagé).
+- **Seed** : comptes plateforme `support` (+226 70 03 00 01), `sales` (+226 70 03 00 02) et `finance` (+226 70 03 00 03) ; Faso Immobilier en Pro avec un abonnement payé, Sahel Habitat en Essentiel échu depuis 10 jours (période de grâce).
+- **Tests** :
+  - 168 tests d'intégration de l'API, dont 28 pour ce lot : matrice des rôles plateforme, utilisateur sans rôle refusé, accès d'assistance (sans motif, expiré, clos, ouvert par un autre agent), lecture journalisée et visible par l'organisation, abonnement échu (création refusée, consultation et export permis), quota Découverte et exception, moyens de paiement, propagation, accès croisé pour chaque nouvelle table ;
+  - 5 tests d'architecture et une règle ESLint : seul le module `features` lit les tables d'interrupteurs, seul le module `admin` utilise la connexion `app_admin` ;
+  - Playwright (`e2e/backoffice.spec.ts`) : parcours d'acceptation, rôle commercial en lecture, moyens de paiement, écrans du back-office sur téléphone, tablette et ordinateur sans débordement.
+
+### Critères d'acceptation
+- [x] Depuis le back-office, en moins d'une minute : couper `listings.publication` pour tous, l'ouvrir pour une seule agence, la fermer pour une seule personne de cette agence ; chaque état vérifié par le simulateur et par `GET /me/features`. Test Playwright qui échoue au-delà d'une minute (le parcours prend une dizaine de secondes).
+- [x] Le simulateur explique chaque résultat : étape (1 à 7, ou dépendance) et motif.
+- [x] Aucune lecture directe des tables d'interrupteurs hors du module `features` : règle ESLint d'import et test d'architecture.
+- [x] Journal des lots mis à jour.
+
+### Écarts par rapport au prompt
+- **Rôles du back-office** : le prompt réserve `/admin` à `super_admin` et `support` ; selon le complément du porteur, `sales` (formules et abonnements) et `finance` (paiements reçus) y accèdent aussi, chacun à sa partie. Tous lisent ; l'accès d'assistance est réservé à `super_admin` et `support`.
+- **Prix des formules** : hypothèses du cadrage (Essentiel 15 000 FCFA par mois, Pro 35 000 FCFA, Sur mesure sur devis), modifiables par `sales` depuis l'écran des formules, avec motif ; chaque modification est journalisée.
+- **Durées de l'abonnement** réglables sans modifier le code : `SUBSCRIPTION_REMINDER_DAYS` (7) et `SUBSCRIPTION_GRACE_DAYS` (15).
+- **Exceptions de quota** par organisation (avec motif et date de fin), en plus des exceptions d'interrupteur : nécessaire pour « sauf exception » du test de quota.
+- **Lecture du journal par le back-office** (reportée du lot 03) : endpoint `GET /admin/audit` et écran Journal ; les événements d'une organisation ne se lisent que pendant un accès d'assistance.
+- **Inclure ou exclure une fonctionnalité d'une formule** est réservé à `super_admin` (c'est un interrupteur) ; `sales` modifie prix et quotas.
+- **Typage des menus** : au-delà de 25 routes, TypeScript ne sait plus vérifier `resolve(item.path)` ; `src/lib/nav.ts` (`resolvePath`) appelle `resolve()` pour un chemin déjà typé. La règle `svelte/no-navigation-without-resolve` est suspendue autour de ces seuls liens, avec un commentaire.
+- **Corrections au passage** :
+  - le bandeau d'abonnement est une note (`role="note"`), pas une zone annoncée ;
+  - les cases des moyens de paiement couvrent toute leur ligne de 48 px ;
+  - liste des organisations en cartes sur tablette (le tableau débordait de 41 px) ;
+  - espace manquant avant « · » dans la barre du haut.
+- **Tests stabilisés** :
+  - `newPhone()` des tests d'intégration : deux fichiers en parallèle pouvaient tirer le même numéro (trois chiffres de l'horloge et un compteur par fichier), la seconde inscription recevait « compte existant », sans code. Numéro désormais tiré du processus de Vitest et d'un départ aléatoire, préfixe 6 ;
+  - test d'invitation du lot 03 : d'autres tests invitent en parallèle dans la même agence ; il cherche maintenant son invitation par son numéro.
+
+### Dette technique
+- Une fois, le test d'audit « une personne ne peut pas écrire un événement au nom d'une autre » a échoué dans une exécution complète, sans que je puisse en lire la cause ; il est passé dans les 10 exécutions suivantes (4 complètes, 4 de l'intégration seule, 2 isolées). Je pense à la même collision de numéros, sans en être sûr. À surveiller en CI.
+- Pas de tâche planifiée pour les rappels d'abonnement (le palier est calculé à la lecture ; l'envoi d'un SMS de rappel viendra avec les notifications).
+- Les écrans du back-office lisent l'API à l'ouverture : ils ne sont pas hors connexion (choix assumé, le back-office n'est pas local-first).
+- La saisie d'une date passe par le champ natif du navigateur ; son format suit la langue du système.
+
+### Questions ouvertes pour le porteur
+1. **Lot 10 ter** : quand une organisation est suspendue, propriétaires et locataires gardent l'accès en lecture à leurs données dans leurs espaces personnels (votre réponse au plan) ; à appliquer quand ces espaces seront construits.
+2. **Prix des formules** : hypothèses à confirmer après les démonstrations aux agences pilotes ; ils se changent depuis le back-office, sans développement.
