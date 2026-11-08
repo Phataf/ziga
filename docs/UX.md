@@ -22,6 +22,7 @@ Ce document fait foi pour toute interface du projet (maquette et produit). `CLAU
 | --- | --- | --- | --- | --- | --- |
 | Directeur d'agence | Agence | Compte | Piloter : encaissements, retards, équipe, contrôle | Tableau de bord | Toute l'agence |
 | Gestionnaire | Agence | Compte | Encaisser, relancer, publier, envoyer les relevés | Tableau de bord | Toute l'agence |
+| Lecture et comptabilité | Agence | Compte | Consulter, exporter (si l'export est ouvert) | Tableau de bord | Toute l'agence, en lecture ; pas l'équipe |
 | Agent de terrain | Agence | Compte | Encaisser en espèces, visiter ses biens | « Ma tournée » | Ses biens affectés seulement |
 | Bailleur particulier | Organisation de type bailleur (D12) | Compte | Gérer lui-même quelques logements | Accueil « Mes logements » | Ses logements |
 | Propriétaire | Espace personnel (D13) | Compte personnel vérifié par SMS, dès le lancement ; le lien d'un relevé reste partageable | Suivre tous ses biens, quelle que soit l'organisation qui les gère, et ses revenus | « Mon patrimoine » | Ses biens dans chaque organisation liée, avec le gestionnaire de chacun ; relevés, reversements, cautions détenues ; pas les coordonnées des locataires |
@@ -33,14 +34,17 @@ Ce document fait foi pour toute interface du projet (maquette et produit). `CLAU
 
 | Profil | Onglets du téléphone (4 au plus) | Menu latéral de l'ordinateur |
 | --- | --- | --- |
-| Directeur | Accueil, Biens, Encaissements, Plus | Pilotage, Gestion (biens, encaissements, impayés, propriétaires), Contrôle (à valider), Agence (équipe) |
-| Gestionnaire | Accueil, Biens, Encaissements, Plus | Même chose, sans l'équipe |
+| Directeur | Accueil, Biens, Encaissements, Plus | Pilotage, Gestion (biens, encaissements, impayés, propriétaires), Contrôle (à valider), Agence (équipe, paramètres de l'organisation, journal) |
+| Gestionnaire | Accueil, Biens, Encaissements, Plus | Même chose, avec l'équipe en lecture, sans les paramètres ni le journal |
+| Lecture et comptabilité | Accueil, Biens, Encaissements, Plus | Comme le gestionnaire, en lecture, sans l'équipe |
 | Agent de terrain | Tournée, Biens, Encaissements, Plus | Terrain : tournée, mes biens, mes encaissements, retards |
 | Bailleur particulier | Accueil, Logements, Loyers, Plus | Mes logements |
 | Propriétaire | Patrimoine, Revenus, Relevés, Plus | Mon patrimoine (filtre par gestionnaire), revenus, relevés, reversements, approbations |
 | Locataire | Logement, Reçus, Caution, Plus | Mon logement, historique, reçus, caution et décompte, signalements, préavis |
 | Visiteur ou acheteur | Pas d'onglets : en-tête de site avec Louer et Acheter | Même en-tête, filtres à gauche |
 | Administrateur plateforme | Non prévu (back-office pensé pour l'ordinateur, utilisable sur tablette) | Organisations, formules et abonnements, fonctionnalités, journal, accès d'assistance |
+
+**Mon compte** (toute personne connectée) : nom, mot de passe, numéro de téléphone, appareils connectés et activité récente du compte. Accessible depuis le choix de l'espace, le pied du menu latéral, le rail et l'écran « Plus ».
 
 **Plusieurs espaces pour une même personne** : une personne peut être membre d'une organisation, propriétaire chez deux agences et locataire ailleurs. Elle choisit son espace dans le menu du compte. Un écran de gestion n'affiche jamais deux organisations à la fois ; seuls les espaces personnels (propriétaire, locataire) regroupent plusieurs organisations, en lecture seule, chaque élément indiquant l'organisation concernée (`CLAUDE.md` règle 15).
 
