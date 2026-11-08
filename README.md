@@ -75,6 +75,12 @@ pnpm --filter @ziga/api admin:create-super-admin --phone "+226 70 12 34 56" --na
 
 - **Sessions** : jeton d'accès de 15 minutes, en mémoire du navigateur ; jeton de rafraîchissement de 30 jours dans le cookie `__Host-ziga_rt` (httpOnly, Secure, SameSite=Lax), renouvelé à chaque usage. Hors connexion, la coque reste affichée ; seul un refus du serveur (401) renvoie vers `/connexion`.
 
+## Données de démonstration (lot 03)
+
+`pnpm db:seed` crée, sans jamais rien écraser, l'agence Faso Immobilier (un directeur, un gestionnaire, un agent de terrain, une lecture et comptabilité), l'agence Sahel Habitat (mêmes rôles), un bailleur particulier dirigé par la gestionnaire de Faso Immobilier et une personne sans organisation. Les numéros et les rôles s'affichent à la fin de la commande ; le mot de passe de tous ces comptes est `SEED_DEMO_PASSWORD` (dans `.env`). Refusé en production.
+
+La commande s'applique après `pnpm db:migrate`.
+
 ## Organisation
 
 | Chemin                     | Rôle                                                                                                              |

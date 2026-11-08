@@ -237,7 +237,7 @@ Prompt : `prompts/lot-01-socle.md`. Décisions du porteur avant le lot : porte 0
 - [x] `docs/JOURNAL-LOTS.md` contient l'entrée du lot.
 
 ### Écarts par rapport au prompt
-- **Porte 0** : les 3 agences pilotes sont engagées (confirmé par le porteur). Le nombre d'entretiens réalisés (10 prévus, D04) n'est pas consigné ; à compléter.
+- **Porte 0** : les 3 agences pilotes sont engagées (confirmé par le porteur). Le nombre d'entretiens réalisés (10 prévus, D04) n'est toujours pas consigné : l'emplacement prévu pour le chiffre est resté vide dans les réponses du porteur aux lots 02 et 03. Si aucun entretien formel n'a eu lieu, la mention retenue sera : « aucun entretien formel ; les démonstrations aux trois agences pilotes en tiendront lieu ».
 - **SeaweedFS au lieu de MinIO** (D27), l'image MinIO n'étant plus publiée.
 - **Guide de migration vers SvelteKit 3** : svelte.dev est bloqué par le réseau de la session. La configuration suit les sources officielles distribuées par npm, et pas le site :
   - le modèle de projet de `sv` 1.3.0 ;
@@ -344,12 +344,140 @@ Prompt : `prompts/lot-02-authentification.md`. Plan validé par le porteur avec 
 - **`/verification`, « Renvoyer le code »** : l'inscription en cours reste en mémoire de l'onglet (jamais dans le stockage du navigateur) ; après un rechargement, l'écran invite à se connecter, ce qui renvoie un code.
 
 ### Dette technique
-- Pas encore de journal d'audit des événements d'authentification (connexion, révocation, réutilisation détectée) : à brancher quand le module `audit` existera.
+- ~~Pas encore de journal d'audit des événements d'authentification~~ : fait au lot 03.
 - Pas de tâche de nettoyage des codes et des jetons de rafraîchissement expirés.
 - Pas de vrai prestataire SMS (hors périmètre).
 - Les rôles plateforme `sales` et `finance` existent sans usage avant le lot 04.
 
 ### Questions ouvertes pour le porteur
 1. Nombre d'entretiens réalisés pendant la phase 0 : l'emplacement est resté vide dans votre message (« [nombre] entretiens réalisés »). Quel est le chiffre ?
-2. Préproduction : `ziga-staging.com` (inscrit dans D28 comme recommandé) ou `staging.ziga.com` ?
-3. Marge d'échecs par IP : 20 échecs vous conviennent-ils avant que l'adresse ait son propre délai ?
+2. ~~Préproduction~~ : `ziga-staging.com`, D28 inchangée (réponse du 08/11/2026).
+3. ~~Marge d'échecs par IP~~ : 20 échecs, validée (réponse du 08/11/2026).
+
+## Lot 03 — Organisations, rôles, cloisonnement et journal d'audit — 08/11/2026
+
+Prompt : `prompts/lot-03-agences-roles-audit.md`. Plan validé par le porteur avec ses réponses et compléments :
+- membres `active` et `removed` seulement ;
+- le gestionnaire voit l'équipe en lecture (`member.read`), le rôle `viewer` ne la voit pas ;
+- l'envoi du logo est fait dans ce lot ;
+- liste des pièces d'identité validée, « Autre » demande une précision ;
+- compléments a (paramètres de l'organisation avec aperçu de l'en-tête des reçus), b (D29) et c (« Mon compte ») ;
+- événements d'authentification du lot 02 au journal ;
+- retrait de `?profil=`.
+
+### Fait
+- **Documentation** :
+  - D29 dans `docs/DECISIONS.md` : un document émis fige les données de l'organisation ;
+  - `docs/UX.md` : profil « Lecture et comptabilité », section Agence (équipe, paramètres, journal), « Mon compte » ;
+  - gabarit de cloisonnement dans `apps/api/src/db/README.md`.
+- **`packages/shared`** :
+  - `permissions.ts` : rôles, matrice des actions (8 avec endpoint au lot 03, 13 déclarées pour les lots suivants), `can()`, profil de navigation d'un membre ;
+  - `organizations.ts` : création, paramètres, représentant légal (D24), invitation, logo, « Mon compte », vues de l'API.
+- **Migration `0002_organizations_audit`** :
+  - fonction `enable_organization_rls(table)` : RLS activée **et forcée**, politique `organization_id = current_organization_id()` ;
+  - `organizations` avec le représentant légal, contrainte RCCM et IFU pour une agence vérifiée, `plan_id` nullable ;
+  - `organization_members` : triggers « bailleur à un seul membre directeur » et « dernier directeur », sous verrou de l'organisation ;
+  - `organization_invitations` : empreinte du lien, 7 jours, usage unique, refusée pour un bailleur ;
+  - `organization_logos` : versions jamais écrasées, clé composite `(id, logo_id)` depuis `organizations` ;
+  - `audit_log` en ajout seul : triggers sur `UPDATE`, `DELETE` et `TRUNCATE`, droits retirés aux rôles applicatifs.
+- **Événements de plateforme** : `audit_log` a deux portées.
+  - Avec `organization_id` : l'événement est visible dans le seul contexte de son organisation, par la politique du gabarit, inchangée.
+  - Sans organisation : l'événement est visible par la personne concernée (`subject_user_id`), en contexte personnel seulement, et par `app_admin`.
+  - Une transaction a soit `app.organization_id`, soit `app.user_id`, jamais les deux. Les aides SQL le garantissent, et les politiques personnelles exigent `current_organization_id() IS NULL`.
+- **API** :
+  - `RequestContext` (AsyncLocalStorage) : identifiant de requête, adresse IP, origine (`app` si l'origine est celle du web) ;
+  - garde `@OrganizationScoped()` : en-tête `X-Organization-Id`, appartenance relue à chaque requête, intercepteur qui ouvre `withOrganization` autour du handler ;
+  - `@Can('action')` : 403 `FORBIDDEN_ACTION` ;
+  - `AuditService.record(tx, …)` toujours dans la transaction de l'action ; tâches lancées seulement après validation (`afterCommit`) ;
+  - règles de la base traduites en erreurs 409 claires (`LANDLORD_SINGLE_MEMBER`, `LAST_DIRECTOR`).
+- **Endpoints** :
+  - `GET /me/organizations`, `POST /organizations` ;
+  - `GET` et `PATCH /organization`, `PUT /organization/logo` ;
+  - membres : liste, changement de rôle, retrait ;
+  - invitations : liste, création, révocation ; aperçu public `GET /invitations/:token` et acceptation ;
+  - `GET /organization/audit` (curseur) ;
+  - logos publics `GET /logos/:org/:logo/web.webp|print.png`, sans lecture en base, cache permanent ; l'original n'est jamais servi ;
+  - « Mon compte » : `PATCH /me`, `POST /me/password`, `POST /me/phone` et `/me/phone/confirm`, `GET /me/activity`.
+- **Logo** :
+  - PNG, JPEG ou WebP de 2 Mo au plus, type vérifié sur le contenu ; SVG refusé ;
+  - traité par sharp 0.35.5 dans une tâche BullMQ du worker : WebP de 512 px pour le web, PNG de 1 000 px pour les PDF, métadonnées retirées, jamais agrandi ;
+  - une image illisible est marquée en échec sans remplacer le logo en place.
+- **Journal** :
+  - toute action du lot écrit sa ligne avec avant et après (seuls les champs qui changent) ;
+  - événements de plateforme : `auth.account_created`, `login`, `logout`, `session_revoked`, `refresh_reuse_detected`, `password_reset`, `password_change`, `phone_change`, `profile_update`.
+- **`pnpm db:seed`** :
+  - agences Faso Immobilier (A) et Sahel Habitat (B), chacune avec un membre par rôle ;
+  - un bailleur particulier dirigé par la gestionnaire de A ;
+  - une personne sans organisation ;
+  - mot de passe dans `SEED_DEMO_PASSWORD`, refusé en production, rejouable.
+- **Web** :
+  - organisation active gardée sur l'appareil (pour la coque hors connexion), envoyée dans `X-Organization-Id`, effacée à la déconnexion ;
+  - profil déduit du rôle ; `?profil=` et le sélecteur d'aperçu retirés ;
+  - écrans :
+    - `/espace` : vraies organisations, espaces personnels, compte ;
+    - `/espace/nouvelle-organisation` ;
+    - `/app/organisation` : paramètres, logo, aperçu de l'en-tête des reçus ;
+    - `/app/equipe` : cartes sur téléphone, tableau et menu d'actions sur ordinateur, invitation par WhatsApp ;
+    - `/app/journal` ;
+    - `/invitation/[token]` ;
+    - `/espace/compte` ;
+    - activité récente sur « Mes appareils » ;
+  - nom de l'organisation active dans la coque ; un membre retiré revient au choix de l'espace avec un message.
+- **Correctifs Windows** :
+  - dépendances réinstallées avant chaque script (`verifyDepsBeforeRun`) ;
+  - `@ziga/shared` compilé avant les commandes de l'API ;
+  - saisie du mot de passe du super administrateur sous Git Bash ;
+  - message clair quand la base n'est pas migrée.
+- **Tests** : 248 tests Vitest et 67 tests Playwright.
+  - 67 tests de `packages/shared` : matrice complète par rôle, schémas.
+  - 22 tests unitaires de l'API.
+  - 136 tests d'intégration, dont 87 pour le lot :
+    - accès croisé par l'API et en SQL avec `app_api`, pour chacune des 5 tables : lire, modifier, écrire, référencer, supprimer ;
+    - sans contexte, aucune ligne ;
+    - contexte personnel ;
+    - matrice par rôle sur chaque endpoint du lot ;
+    - retrait immédiat ; organisation active ; bailleur ; dernier directeur ;
+    - invitations expirée, utilisée, révoquée, d'un autre numéro, altérée ;
+    - journal en ajout seul, même pour le propriétaire ; atomicité dans les deux sens ;
+    - événements de plateforme invisibles depuis une organisation et pour une autre personne ;
+    - « Mon compte » et logo (worker réel).
+  - 23 tests unitaires du web, dont l'organisation active et les appartenances gardées.
+  - 67 tests Playwright, dont 16 nouveaux (12 dans `organisations.spec.ts`, 4 dans la coque : profil « Lecture et comptabilité » sur trois appareils, back-office sans débordement) :
+    - invitation acceptée depuis un autre téléphone, puis retrait ;
+    - lien utilisé par un autre numéro ;
+    - équipe en lecture pour le gestionnaire ;
+    - création des deux types d'organisation ;
+    - organisation active ;
+    - paramètres et logo avec l'aperçu ;
+    - « Mon compte » ;
+    - trois tailles d'écran sans débordement, cibles de 44 px ;
+    - la coque se connecte désormais avec un compte de démonstration par rôle.
+
+### Critères d'acceptation
+- [x] Les tests d'accès croisé couvrent chaque table du lot (`organizations`, `organization_members`, `organization_invitations`, `organization_logos`, `audit_log`) et passent.
+- [x] La matrice de permissions est une source unique (`packages/shared/src/permissions.ts`), lue par la garde `@Can` de l'API et par l'interface.
+- [x] Le gabarit RLS et clé composite est documenté (`apps/api/src/db/README.md`) et prêt à réutiliser (`enable_organization_rls`, testé sur la clé composite du logo).
+- [x] Un directeur invite un gestionnaire, qui accepte depuis un autre téléphone, en moins de 2 minutes : vérifié par le test Playwright, qui échoue au-delà de 2 minutes (toute la suite tourne en moins d'une minute).
+- [x] Journal des lots mis à jour.
+
+### Écarts par rapport au prompt
+- **Statut des membres** : `active` et `removed` seulement (validé). L'état « invité » est porté par `organization_invitations`.
+- **Lecture du journal par le back-office** : la politique `app_admin` est en place et testée en SQL (événements de plateforme oui, ceux d'une organisation non). L'endpoint et l'écran arrivent au lot 04, avec la connexion `app_admin` de l'API et l'accès d'assistance motivé : aujourd'hui l'API n'a qu'une connexion, `app_api`.
+- **« Sessions coupées sur l'agence »** : un jeton d'accès ne porte aucune organisation. L'appartenance est relue à chaque requête, donc un membre retiré perd l'accès à sa requête suivante, avec le même jeton. La synchronisation (lot 05) devra appliquer la même règle.
+- **Invitation** : acceptée seulement par la personne dont le numéro vérifié est celui de l'invitation. Sans compte, la personne s'inscrit d'abord avec ce numéro.
+- **Pagination du journal** par identifiant (UUIDv7, ordonné dans le temps), pour ne sauter aucune ligne à la milliseconde près.
+- **Création d'une organisation** dans le contexte de la nouvelle organisation (`WITH CHECK id = current_organization_id()`) : aucune exception au cloisonnement.
+- **Dépendance ajoutée** : `sharp` 0.35.5 (dans la pile de `CLAUDE.md` §2), binaires précompilés pour Linux et Windows, sans script d'installation.
+- **Gestionnaire** : ajout de l'entrée « Équipe » (lecture) dans sa navigation, conformément à la réponse du porteur.
+- **Bailleur particulier** : ses paramètres (logo des reçus) et son journal dans sa navigation, sans équipe.
+- **Logo affiché** : l'écran montre le dernier envoi s'il est en cours ou en échec, sinon le logo en place.
+- **Lot 08 bis** : le cœur gratuit de docxtemplater n'insère pas d'image (note de D29). Le logo devra venir de l'image déjà présente dans le modèle Word, ou remplacée dans le fichier du modèle.
+
+### Dette technique
+- Pas de nettoyage des invitations expirées, des codes ni des jetons de rafraîchissement (tâche planifiée à prévoir).
+- Pas de recadrage du logo à l'écran : il est redimensionné en gardant ses proportions.
+- `users` reste sans RLS (table de plateforme, lue par l'API pour les noms des membres) ; à revoir quand le back-office aura sa connexion (lot 04).
+- Les adresses publiques du logo passent par l'API ; en production, Cloudflare les mettra en cache (fichiers jamais réécrits).
+
+### Questions ouvertes pour le porteur
+1. **Porte 0** : l'emplacement du nombre d'entretiens est encore vide dans votre message. Quel chiffre consigner, ou bien la mention « aucun entretien formel ; les démonstrations aux trois agences pilotes en tiendront lieu » ?
