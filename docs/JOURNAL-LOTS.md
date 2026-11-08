@@ -176,3 +176,91 @@ Agence qui signe comme bailleur ; reconduction tacite et clauses de pénalité e
 ### Décision ajoutée le 08/11/2026
 - **D25** : modèle de contrat par défaut conforme à la loi n° 103-2015/CNT, pour toute organisation sans modèle (deux des trois pilotes, bailleurs particuliers) ; relu par un juriste avant la première signature réelle. Clauses listées dans `prompts/lot-08bis-contrats.md`.
 - Les écrans de contrats ajoutés au prompt du lot 00 ter après sa réalisation ne sont pas maquettés ; ils le seront au lot 08 bis ou dans une reprise de la maquette si le porteur la demande.
+
+## Lot 01 — Socle technique — 08/11/2026
+
+Prompt : `prompts/lot-01-socle.md`. Décisions du porteur avant le lot : porte 0 franchie (3 agences pilotes engagées), SvelteKit 3 (D26), dépendances hors liste validées, Express, SeaweedFS à la place de MinIO (D27), préparation à la montée en charge dans le périmètre.
+
+### Fait
+- **Monorepo** pnpm 10 + Turborepo : `apps/api`, `apps/web`, `packages/shared`, `infra/`, `scripts/`. TypeScript 6.0.3 `strict` partout (avec `noUncheckedIndexedAccess`), ESLint 10 (`typescript-eslint`, `eslint-plugin-svelte`) et Prettier communs. `maquette/` reste hors du workspace (D10).
+- **`packages/shared`** (ESM, compilé dans `dist/`) : `money.ts` (`formatFcfa`, `parseFcfa`, `fcfaSchema` ; décimales, négatifs et valeurs non sûres refusés), `phone.ts` (E.164 `+226`, formatage, `phoneSchema`), `ids.ts` (UUIDv7 par `uuid`), `dates.ts` (jj/mm/aaaa, heure de Ouagadougou).
+- **API NestJS 12 sur Express** :
+  - configuration validée par Zod au démarrage, qui refuse de démarrer en nommant chaque variable manquante ;
+  - journaux pino en JSON avec identifiant de requête (`x-request-id`, repris s'il est sûr, sinon UUIDv7) ;
+  - erreurs uniformes `{ code, message, details }`, sans jamais exposer une erreur interne ;
+  - Sentry désactivable (vide = coupé), sans données personnelles.
+- **Montée en charge** (demande du porteur) :
+  - deux points d'entrée, `main.ts` (HTTP) et `worker.ts` (BullMQ), lancés comme deux processus ;
+  - API sans état ;
+  - `DATABASE_POOL_MAX` et `DATABASE_STATEMENT_TIMEOUT_MS` réglables, le délai étant appliqué par `SET LOCAL` dans chaque transaction (compatible PgBouncer en mode transaction) ;
+  - `/health/live` et `/health/ready` (base, Redis, stockage ; 503 dès le début d'un arrêt) ;
+  - arrêt propre sur SIGTERM et SIGINT avec délai maximal (`SHUTDOWN_TIMEOUT_MS`).
+- **Base** : Drizzle ORM 0.45 et drizzle-kit, migrations SQL versionnées. Migration `0000_socle` : rôles `app_api` et `app_admin` sans `BYPASSRLS` ni superutilisateur, privilèges par défaut sur les futures tables, fonction `current_organization_id()`. Les mots de passe des rôles sont lus dans les URL de `.env` par `pnpm db:migrate`, jamais écrits dans une migration. `withOrganization(organizationId, fn)` ouvre une transaction et fixe `app.organization_id` par `set_config(…, true)`, l'équivalent paramétré de `SET LOCAL`.
+- **Files de tâches** : BullMQ 6 sur Redis (`ioredis` 6, conforme à la dépendance paire `>=5` de BullMQ), processeur d'exemple dans le worker seulement, concurrence réglable (`WORKER_CONCURRENCY`), tableau de bord bull-board sur `/admin/queues` coupé en production.
+- **Stockage** derrière une interface : S3 (`@aws-sdk/client-s3`, SeaweedFS en développement) ou dossier local (tests et sessions sans Docker, refusé en production).
+- **Web SvelteKit 3** :
+  - `adapter-node`, Tailwind 4, thème de la maquette, composants au format shadcn-svelte, icônes Lucide ;
+  - configuration dans `vite.config.ts`, alias `#lib`, textes dans `src/lib/i18n/fr.ts` ;
+  - manifeste PWA et service worker natif (`src/service-worker/index.ts`, `$app/manifest`, ouverture hors connexion) ;
+  - coque responsive (onglets, rail, menu latéral et barre du haut) avec le store `device` et un rendu `{#if}` ;
+  - navigation déclarée pour les 8 profils, écrans vides avec le lot qui les construit, espaces `/espace/proprietaire` et `/espace/locataire`, choix de l'espace `/espace`, back-office `/admin`, vitrine rendue côté serveur ;
+  - composants `Sheet`, `ActionMenu`, `PageHeader`, `page` et `page-narrow` ; test anti-émoji.
+- **Infrastructure locale** : `infra/docker-compose.dev.yml` (PostgreSQL 16.15 avec `wal_level=logical`, Redis 7.4, SeaweedFS 4.51) ; `pnpm infra:up` attend que les services soient sains et crée le compartiment S3.
+- **Sessions Claude Code en ligne** : `.claude/settings.json` appelle `scripts/session-start.sh`. Le script ne fait rien hors session cloud. Il saute `pnpm install` si les manifestes et le fichier de verrouillage n'ont pas changé, démarre les services, puis applique les migrations. Mesures : 10 s depuis des services arrêtés, 6 s ensuite.
+- **CI** GitHub Actions (`.github/workflows/ci.yml`) :
+  - un job installation, lint, typecheck et tests unitaires et d'intégration, avec PostgreSQL 16 et Redis en services ;
+  - un job Playwright séparé.
+- **Tests** : 82 tests Vitest et 35 tests Playwright.
+  - 35 tests de `packages/shared` : formats, arrondi refusé, négatifs refusés, 10 milliards de FCFA, numéros du Burkina dans des formats variés, UUIDv7.
+  - 20 tests unitaires de l'API : configuration et refus de démarrer, erreurs uniformes, arrêt propre et délai, santé, stockage, identifiant de requête.
+  - 17 tests d'intégration sur une vraie base `ziga_test` recréée à chaque exécution :
+    - `app_api` et `app_admin` sans `BYPASSRLS` ;
+    - `withOrganization` visible dans la transaction et absente en dehors (même connexion) ;
+    - `statement_timeout` appliqué puis effacé ;
+    - migrations rejouables ;
+    - `/health` complet, et 503 quand PostgreSQL est injoignable ;
+    - tâche traitée par le worker.
+  - 10 tests unitaires du web : navigation par profil, type d'appareil, anti-émoji.
+  - 35 tests Playwright sur 360 × 800, 820 × 1180 et 1440 × 900 :
+    - bonne navigation pour chaque profil, et aucune autre ;
+    - « Plus » ;
+    - aucun débordement horizontal sur téléphone ;
+    - vitrine ;
+    - choix de l'espace ;
+    - manifeste et service worker ;
+    - ouverture hors connexion.
+
+### Critères d'acceptation
+- [ ] `pnpm install && pnpm dev` démarre tout depuis un clone neuf, en suivant uniquement le `README.md`. **Vérifié en partie** : dans la session en ligne, `pnpm dev:apps` démarre l'API, le worker et le web sur PostgreSQL et Redis natifs, et `/health/ready` répond. La partie Docker (`pnpm infra:up`) n'a pas pu être exécutée ici : Docker Hub refuse les téléchargements anonymes (429) et les miroirs sont bloqués par le proxy. À constater par le porteur sur son poste.
+- [x] `pnpm lint`, `pnpm typecheck` et `pnpm test` passent en local. **La CI est écrite mais n'a pas encore tourné** : elle se déclenche sur `main` et sur les pull requests.
+- [x] La barre d'onglets s'affiche en émulation mobile et l'application est installable : manifeste `standalone` avec icônes 192, 512 et masquable, service worker actif, ouverture hors connexion vérifiée par Playwright.
+- [x] `docs/JOURNAL-LOTS.md` contient l'entrée du lot.
+
+### Écarts par rapport au prompt
+- **Porte 0** : les 3 agences pilotes sont engagées (confirmé par le porteur). Le nombre d'entretiens réalisés (10 prévus, D04) n'est pas consigné ; à compléter.
+- **SeaweedFS au lieu de MinIO** (D27), l'image MinIO n'étant plus publiée.
+- **Guide de migration vers SvelteKit 3** : svelte.dev est bloqué par le réseau de la session. La configuration suit les sources officielles distribuées par npm, et pas le site :
+  - le modèle de projet de `sv` 1.3.0 ;
+  - les tâches de la migration `sveltekit-3` de `sv` ;
+  - les types et les messages d'erreur de `@sveltejs/kit` 3.1.1.
+
+  Points appliqués : `vite.config.ts` sans `svelte.config.js` ; `#lib` avec extensions explicites ; `$app/env`, `$app/manifest` et `resolve()` ; `paths.origin` à la place d'`ORIGIN` ; `tsconfig` du service worker.
+- **`paths.relative: false`** dans le web : sinon la coquille hors ligne `/app` charge ses fichiers sous `/app/_app/` quand elle sert une autre page.
+- **Session en ligne** : le script utilise Docker seulement si les images sont déjà présentes ; sinon PostgreSQL 16 et Redis de la machine, avec `STORAGE_DRIVER=local` écrit dans `.env` (fichier local, ignoré par git).
+- **Profil de l'espace de gestion** : avant l'authentification (lot 02) et les rôles (lot 03), il se choisit par `?profil=` (aperçu des navigations), avec un sélecteur visible en développement seulement. Les espaces propriétaire, locataire et back-office ont un profil fixe.
+- **Écrans vides** : une route générique par espace (`[...path]`) affiche l'écran déclaré dans la navigation, ou « Écran introuvable ». La réponse HTTP reste 200, puisque l'application est rendue côté client (`ssr = false` sur `/app`, `/espace` et `/admin`).
+- **Composants shadcn-svelte** écrits au format shadcn (le registre `shadcn-svelte.com` est bloqué par le réseau) ; `bits-ui` n'est pas installé tant qu'aucun composant ne l'utilise.
+- **Outillage ESLint** ajouté : `@eslint/js`, `eslint-config-prettier`, `globals` (configuration ESLint commune demandée par le prompt).
+- **Deux composants génériques** (`Button`, `ActionMenu`) désactivent localement la règle `svelte/no-navigation-without-resolve` : ils reçoivent des liens déjà résolus par l'appelant. Tous les autres liens passent par `resolve()`.
+
+### Dette technique
+- `app_admin` n'a pas encore de politiques ni de journalisation de ses accès : lot 04.
+- `pnpm db:seed` n'a rien à semer avant les tables métier (lot 03).
+- La recherche globale (Ctrl+K) de la maquette n'est pas reprise : elle arrivera avec les premiers écrans métier.
+- Nom de l'application (« Gestion locative ») provisoire, dans `i18n/fr.ts` et le manifeste.
+- Le test d'intégration du worker vérifie le traitement ; l'attente des tâches en cours à l'arrêt est couverte par les tests unitaires de l'arrêt et par le comportement de BullMQ, pas par un test de bout en bout.
+
+### Questions ouvertes pour le porteur
+1. Nombre d'entretiens réalisés pendant la phase 0 (pour clore l'écart sur la porte 0).
+2. Nom de la plateforme pour le manifeste et l'interface.
+3. Ouvrir `svelte.dev` et `shadcn-svelte.com` dans le réseau de l'environnement en ligne, pour suivre directement la documentation et le CLI.
