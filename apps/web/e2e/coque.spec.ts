@@ -3,6 +3,13 @@
  * et aucune autre ; aucun débordement horizontal sur téléphone ; application installable.
  */
 import { expect, test, type Page } from '@playwright/test';
+import { signIn } from './support';
+
+// Espaces connectés depuis le lot 02 : chaque test ouvre une session (compte administrateur, qui a accès à tous les espaces
+// tant que les organisations et leurs rôles n'existent pas, lot 03).
+test.beforeEach(async ({ page }) => {
+	await signIn(page, 'admin', '/espace');
+});
 
 const phone = { viewport: { width: 360, height: 800 }, isMobile: true, hasTouch: true };
 const tablet = { viewport: { width: 820, height: 1180 }, isMobile: true, hasTouch: true };
@@ -86,11 +93,19 @@ test.describe('Téléphone (360 × 800)', () => {
 		});
 	}
 
-	test('« Plus » rassemble les entrées sans onglet et le changement d’espace', async ({ page }) => {
+	test('« Plus » rassemble les entrées sans onglet, le changement d’espace et le compte', async ({ page }) => {
 		await page.goto('/app?profil=director');
 		await mainNav(page).getByRole('link', { name: 'Plus' }).tap();
 		const more = page.getByTestId('ecran-plus');
-		await expect(more.getByRole('link')).toHaveText(['Impayés', 'Propriétaires', 'À valider', 'Équipe', 'Changer d’espace']);
+		await expect(more.getByRole('link')).toHaveText([
+			'Impayés',
+			'Propriétaires',
+			'À valider',
+			'Équipe',
+			'Changer d’espace',
+			'Mes appareils'
+		]);
+		await expect(more.getByRole('button', { name: 'Se déconnecter' })).toBeVisible();
 		await more.getByRole('link', { name: 'Impayés' }).tap();
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Impayés');
 		await expect(page.getByTestId('ecran-vide')).toContainText('lot 10');

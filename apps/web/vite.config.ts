@@ -16,6 +16,8 @@ export default defineConfig({
 				runes: ({ filename }) => (filename.split(/[/\\]/).includes('node_modules') ? undefined : true)
 			},
 			adapter: adapter({ out: 'build' }),
+			// Le fichier .env est à la racine du dépôt, partagé avec l'API.
+			env: { dir: '../..' },
 			paths: {
 				// Origine publique (remplace la variable ORIGIN d'adapter-node).
 				origin: process.env.PUBLIC_ORIGIN || 'http://localhost:5173',

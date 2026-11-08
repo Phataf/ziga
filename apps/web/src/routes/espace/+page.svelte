@@ -5,7 +5,9 @@
 	 * Choix de l'espace (docs/UX.md §2) : une personne peut être membre d'une agence, propriétaire et locataire.
 	 * Au lot 01, tous les espaces sont proposés ; à partir du lot 10 ter, seulement ceux de la personne connectée.
 	 */
-	import { Building2, ChevronRight, House, KeyRound, Lock, Wallet } from '@lucide/svelte';
+	import { Building2, ChevronRight, House, KeyRound, Lock, MonitorSmartphone, Wallet } from '@lucide/svelte';
+	import LogoutButton from '#lib/components/auth/LogoutButton.svelte';
+	import { auth } from '#lib/auth/auth.svelte.ts';
 	import PageHeader from '#lib/components/PageHeader.svelte';
 	import { fr } from '#lib/i18n/fr.ts';
 
@@ -18,9 +20,9 @@
 	];
 </script>
 
-<PageHeader title={t.title} subtitle={t.subtitle} />
-<main class="page-narrow space-y-4 pt-3 pb-10" data-testid="choix-espace">
-	<ul class="space-y-3">
+<PageHeader title={auth.user ? fr.auth.hello(auth.user.name) : t.title} subtitle={t.subtitle} />
+<main class="page-narrow space-y-4 pt-3 pb-10">
+	<ul class="space-y-3" data-testid="choix-espace">
 		{#each spaces as s (s.id)}
 			<li>
 				<a
@@ -41,4 +43,15 @@
 		{/each}
 	</ul>
 	<p class="flex items-start gap-2 text-base text-muted-foreground"><Lock class="mt-1 size-4 shrink-0" aria-hidden="true" />{t.privacy}</p>
+	<section class="space-y-2" aria-labelledby="titre-compte">
+		<h2 id="titre-compte" class="text-lg font-semibold">{fr.auth.account}</h2>
+		<div class="divide-y rounded-xl border bg-card p-1">
+			<a href={resolve('espace/appareils')} class="flex min-h-14 items-center gap-3 px-3 hover:bg-accent" data-testid="lien-appareils">
+				<MonitorSmartphone class="size-5 shrink-0" aria-hidden="true" />
+				<span class="flex-1">{fr.auth.devices.title}</span>
+				<ChevronRight class="size-5 text-muted-foreground" aria-hidden="true" />
+			</a>
+			<LogoutButton class="min-h-14" />
+		</div>
+	</section>
 </main>
