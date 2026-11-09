@@ -5,7 +5,8 @@
 #
 # Chaque requête ne sélectionne que les colonnes utiles à l'application (jamais SELECT *). Le représentant légal
 # (pièce d'identité) n'est pas dans ce stream, ouvert à tous les membres. Ajouter une table :
-# docs/SYNC.md. Les règles sont vérifiées par apps/api/test/sync-streams.int.test.ts avec le moteur de PowerSync.
+# docs/SYNC.md. apps/api/test/sync-streams.int.test.ts les vérifie avec le moteur de PowerSync contre le schéma
+# réel ; ce que chaque personne reçoit est vérifié contre le service par les tests Playwright (lot 05, étape 2).
 config:
   edition: 3
 

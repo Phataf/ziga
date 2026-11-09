@@ -47,6 +47,7 @@
 	"devDependencies": {
 		"@nestjs/cli": "12.0.12",
 		"@nestjs/testing": "12.4.0",
+		"@powersync/service-sync-rules": "0.45.0",
 		"@swc/core": "1.16.22",
 		"@types/express": "5.0.6",
 		"@types/pg": "8.23.1",
