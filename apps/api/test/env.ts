@@ -45,7 +45,7 @@ export function integrationEnv(): Record<string, string> {
 		STORAGE_DRIVER: 'local',
 		STORAGE_LOCAL_DIR: join(tmpdir(), 'ziga-test-storage'),
 		JOBS_DASHBOARD: 'false',
-		// Base Redis à part (n° 1), vidée à chaque exécution : les compteurs de débit repartent de zéro.
+		// Base Redis à part (n° 1), vidée au début du lancement, puis remise à zéro avant chaque fichier (test/file-setup.ts).
 		REDIS_URL: withRedisDb(base.REDIS_URL!, 1),
 		API_PUBLIC_URL: base.API_PUBLIC_URL || 'http://localhost:3000',
 		CORS_ORIGINS: 'http://localhost:5173',

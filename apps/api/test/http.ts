@@ -2,9 +2,11 @@
 import { Writable } from 'node:stream';
 import type { Type } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import { AUTH_MESSAGES } from '@ziga/shared/auth';
 import { createApp } from '../src/app.factory.js';
 import { parseConfig } from '../src/config/env.js';
 import { SMS_SENDER, type MemorySmsSender } from '../src/modules/notifications/sms-sender.js';
+import { reservePhoneBlock, testRedis } from './test-redis.js';
 
 export const ORIGIN = 'http://localhost:5173';
 
@@ -77,17 +79,38 @@ export class Client {
 }
 
 /**
- * Numéro du Burkina unique pour chaque test (la base est partagée par les fichiers de test, qui tournent en
- * parallèle). Le chiffre du processus de Vitest sépare les fichiers simultanés ; le départ aléatoire sépare les
- * fichiers qui se suivent dans un même processus ; le préfixe 6 évite les numéros fixes des tests (70…).
- * Avant, trois chiffres de l'horloge et un compteur par fichier pouvaient donner le même numéro à deux fichiers :
- * la seconde inscription recevait « compte existant », sans code.
+ * Numéros de téléphone des tests : chaque fichier réserve dans Redis un bloc de numéros pour tout le lancement
+ * (compteur `ziga:test:phone-block`, remis à zéro avec la base au début du lancement). Deux fichiers ne tirent
+ * jamais le même numéro, qu'ils tournent l'un après l'autre ou en même temps.
+ * Avant : un départ aléatoire par fichier, puis des numéros qui se suivent. Si la suite d'un fichier entrait dans
+ * celle d'un fichier précédent, chaque inscription suivante tombait sur un compte existant (« compte existant »,
+ * sans code) : c'est l'échec de la CI sur 3ffa720.
+ * Le préfixe 6 évite les numéros fixes des tests (70…, 25…).
  */
-const worker = Number(process.env.VITEST_POOL_ID ?? process.env.VITEST_WORKER_ID ?? 0) % 10;
-let next = Math.floor(Math.random() * 1_000_000);
+export const PHONE_BLOCK_SIZE = 10_000;
+
+/** Le `index`-ième numéro du bloc `block` (pur, testé). */
+export function phoneInBlock(block: number, index: number): string {
+	if (!Number.isInteger(block) || block < 1 || !Number.isInteger(index) || index < 0 || index >= PHONE_BLOCK_SIZE)
+		throw new Error(`Numéro de test hors bloc : bloc ${block}, rang ${index}`);
+	const n = block * PHONE_BLOCK_SIZE + index;
+	if (n >= 10_000_000) throw new Error('Plus de blocs de numéros de test disponibles.');
+	return `+2266${String(n).padStart(7, '0')}`;
+}
+
+/** Bloc de ce fichier. */
+export const phoneBlock = await (async () => {
+	const redis = testRedis();
+	try {
+		await redis.connect();
+		return await reservePhoneBlock(redis);
+	} finally {
+		redis.disconnect();
+	}
+})();
+let used = 0;
 export function newPhone(): string {
-	next = (next + 1) % 1_000_000;
-	return `+2266${worker}${String(next).padStart(6, '0')}`;
+	return phoneInBlock(phoneBlock, used++);
 }
 
 /** Inscrit et vérifie une personne ; renvoie le client connecté. */
@@ -98,9 +121,19 @@ export async function signedUp(
 	ip?: string
 ): Promise<{ client: Client; phone: string; password: string }> {
 	const client = new Client(t.url, ip);
+	const sent = t.sms.messages.length;
 	const r = await client.call('POST', '/auth/register', { phone, name: 'Awa Ouédraogo', password });
 	if (r.status !== 202) throw new Error(`inscription : ${r.status} ${JSON.stringify(r.body)}`);
-	const code = t.sms.lastCode(phone);
+	// Seul le SMS de cette inscription compte : un code plus ancien au même numéro ne doit pas masquer un « compte existant ».
+	const reply = t.sms.messages
+		.slice(sent)
+		.filter((m) => m.to === phone)
+		.at(-1);
+	const code = reply?.text.match(/\b(\d{6})\b/)?.[1];
+	if (!code)
+		throw new Error(
+			`inscription : aucun code pour ${phone}${reply?.text === AUTH_MESSAGES.accountExistsSms ? ' (numéro déjà inscrit)' : ''}`
+		);
 	const v = await client.call('POST', '/auth/verify-phone', { phone, code });
 	if (v.status !== 200) throw new Error(`vérification : ${v.status} ${JSON.stringify(v.body)}`);
 	return { client, phone, password };

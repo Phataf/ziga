@@ -9,7 +9,10 @@ export default defineConfig({
 		environment: 'node',
 		env: integrationEnv(),
 		globalSetup: ['test/global-setup.ts'],
-		// Une seule base partagée : les fichiers s'exécutent l'un après l'autre.
+		// Avant chaque fichier : compteurs de débit remis à zéro (test/file-setup.ts, test/test-isolation.int.test.ts).
+		setupFiles: ['test/file-setup.ts'],
+		// Une seule base partagée : les fichiers s'exécutent l'un après l'autre. Redis aussi : chaque fichier la remet
+		// à zéro au départ, sauf les clés ziga:test:* (blocs de numéros, test/test-redis.ts).
 		fileParallelism: false,
 		testTimeout: 20_000,
 		hookTimeout: 30_000
