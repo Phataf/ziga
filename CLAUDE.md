@@ -110,7 +110,9 @@ Une seule violation de ces règles fait échouer le lot, même si tout le reste 
    - Chaque table métier porte `organization_id NOT NULL`.
    - Les clés étrangères entre tables métier sont **composites** `(organization_id, id)`, pour qu'une ligne ne puisse jamais pointer vers une autre organisation.
    - RLS activée sur chaque table métier. Chaque requête de l'API s'exécute dans une transaction qui fait `SET LOCAL app.organization_id = '<uuid>'`. Le rôle base de données de l'API n'a **pas** `BYPASSRLS`.
-   - Seul le back-office utilise un rôle distinct, et chaque accès de ce rôle aux données d'une organisation est journalisé, avec un motif.
+   - Deux rôles distincts existent, sans `BYPASSRLS` (D30) :
+     - `app_admin`, réservé au back-office : chaque accès de ce rôle aux données d'une organisation est journalisé, avec un motif ;
+     - `app_sync`, réservé à la réplication de PowerSync : lecture seule, limitée aux tables publiées (droit de lecture et politique `sync_read` explicites, table par table).
    - Les règles PowerSync ne synchronisent que les données de l'organisation (ou des organisations) dont l'utilisateur est membre.
    - Chaque lot qui crée une table ajoute un **test d'accès croisé** (une organisation A tente de lire, modifier, référencer une donnée de B → refus).
 2. **Montants en entiers FCFA.** Type `bigint` en base, `number` entier côté TypeScript (validé par Zod `int().nonnegative()`), jamais de flottant, jamais de centimes. Affichage : `75 000 FCFA` (espace fine insécable comme séparateur de milliers) via `packages/shared/money`.
@@ -202,7 +204,7 @@ Interdits pour « faire passer » un test : le désactiver, l'affaiblir, contour
 ```
 pnpm install
 cp .env.example .env
-pnpm infra:up       # PostgreSQL, Redis et SeaweedFS (Docker), puis le compartiment S3
+pnpm infra:up       # PostgreSQL, Redis et SeaweedFS (Docker), puis le compartiment S3 et PowerSync (lot 05)
 pnpm db:migrate     # applique les migrations
 pnpm dev            # infra docker + api (HTTP et worker) + web
 pnpm db:seed        # démonstration : 2 agences et 1 bailleur particulier ; un propriétaire présent dans les 3, un locataire passé de l'une à l'autre (tables à partir du lot 03)
