@@ -11,3 +11,6 @@ playwright-report/
 .env.*
 !.env.example
 *.log
+
+# Sondes de santé écrites par PowerSync dans son dossier de travail (lot 05)
+.probes/
