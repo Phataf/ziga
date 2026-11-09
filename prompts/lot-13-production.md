@@ -4,7 +4,7 @@
 Avant de confier l'outil à 3 à 5 agences réelles, il faut qu'il soit déployé, surveillé, sauvegardé, testé en charge et revu sur le plan de la sécurité et des données personnelles. Après ce lot commence la phase 2 (pilote de 12 semaines).
 
 ## Prérequis
-Lot 12 terminé. Question au porteur : formalités imposées par la nouvelle loi sur les données personnelles votée le 3 août 2026 (autorité ARCOD, qui reprend le rôle de la CIL), et hébergement des données (voir `docs/DECISIONS.md`).
+Lot 12 bis terminé. Question au porteur : formalités imposées par la nouvelle loi sur les données personnelles votée le 3 août 2026 (autorité ARCOD, qui reprend le rôle de la CIL), et hébergement des données (voir `docs/DECISIONS.md`).
 
 ## Périmètre
 1. **Déploiement** (palier 1 du cadrage) :
