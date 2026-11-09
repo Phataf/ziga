@@ -141,6 +141,31 @@ describe('POST /sync/upload : modèle de référence (paramètres de l’organis
 		expect(await organizationRow(a)).toMatchObject({ rep_name: 'Awa Kaboré', rep_title: 'Gérante' });
 	});
 
+	it('un enregistrement qui touche la fiche et le représentant : deux lignes d’audit, le même request_id, celui de l’envoi', async () => {
+		const sent = await a.director.client.call<{ results: SyncOperationResult[] }>('POST', '/sync/upload', {
+			operations: [
+				patchOrganization(a, { trade_name: 'Fiche et représentant' }),
+				{ key: key(), op: 'PATCH', table: 'organization_representatives', id: a.id, data: { rep_title: 'Directrice générale' } }
+			]
+		});
+		expect(sent.body.results.map((x) => x.status)).toEqual(['applied', 'applied']);
+		const requestId = sent.headers.get('x-request-id');
+		expect(requestId).toMatch(/^[0-9a-f-]{36}$/);
+		const rows = await owner.query(`select origin, after from audit_log where organization_id = $1 and request_id = $2 order by id`, [
+			a.id,
+			requestId
+		]);
+		expect(rows.rows).toEqual([
+			{ origin: 'sync', after: expect.objectContaining({ tradeName: 'Fiche et représentant' }) },
+			{ origin: 'sync', after: expect.objectContaining({ representative: expect.objectContaining({ title: 'Directrice générale' }) }) }
+		]);
+		// Le journal de l'organisation le montre aussi ; un autre envoi a un autre identifiant.
+		const journal = await a.director.call<{ entries: { requestId: string | null }[] }>('GET', '/organization/audit');
+		expect(journal.body.entries.filter((e) => e.requestId === requestId)).toHaveLength(2);
+		const next = await a.director.client.call('POST', '/sync/upload', { operations: [patchOrganization(a, { commune: 'Koudougou' })] });
+		expect(next.headers.get('x-request-id')).not.toBe(requestId);
+	});
+
 	it('un lot garde l’ordre de la file et rend un résultat par opération', async () => {
 		const r = await upload(a.director, [
 			patchOrganization(a, { trade_name: 'Premier' }),

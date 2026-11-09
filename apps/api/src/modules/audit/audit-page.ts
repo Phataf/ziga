@@ -39,6 +39,7 @@ export async function auditPage(
 			before: a.before,
 			after: a.after,
 			origin: a.origin,
+			requestId: a.requestId,
 			organizationId: a.organizationId,
 			subjectUserId: a.subjectUserId
 		})),

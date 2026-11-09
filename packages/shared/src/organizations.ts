@@ -221,6 +221,11 @@ export interface AuditEntryView {
 	before: unknown;
 	after: unknown;
 	origin: string;
+	/**
+	 * Identifiant de la requête qui a écrit la ligne (en-tête `x-request-id`) : les lignes écrites par un même
+	 * envoi, par exemple les opérations d'un même lot de synchronisation, portent le même.
+	 */
+	requestId: string | null;
 	/** Organisation et personne concernées (journal du back-office). */
 	organizationId?: string | null;
 	subjectUserId?: string | null;

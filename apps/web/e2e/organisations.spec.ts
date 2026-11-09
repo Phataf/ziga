@@ -5,6 +5,7 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import {
 	accounts,
+	API_URL,
 	apiIdle,
 	expectNoHorizontalOverflow,
 	openOrganization,
@@ -182,6 +183,11 @@ test.describe('Paramètres de l’organisation', () => {
 		await expect(page).toHaveURL('/app');
 
 		await page.goto('/app/organisation');
+		// Identifiant de requête de chaque envoi de la synchronisation (en-tête x-request-id).
+		const uploads: string[] = [];
+		page.on('response', (r) => {
+			if (r.url() === `${API_URL}/sync/upload` && r.request().method() === 'POST') uploads.push(r.headers()['x-request-id'] ?? '');
+		});
 		await page.getByLabel('Nom commercial').fill('Yaméogo Gestion');
 		await page.getByLabel('Boîte postale').fill('01 BP 4321 Ouagadougou 01');
 		await page.getByLabel('RCCM').fill('bf oua 2021 b 777');
@@ -210,6 +216,19 @@ test.describe('Paramètres de l’organisation', () => {
 		await expect(updates.filter({ hasText: 'RCCM' })).toContainText('BF OUA 2021 B 777');
 		await expect(updates.filter({ hasText: 'Représentant légal' })).toContainText('Clarisse Yaméogo, Gérante');
 		await expect(page.getByTestId('evenement').filter({ hasText: 'Nouveau logo en place' })).toHaveCount(1);
+		// Les deux lignes viennent d'un même enregistrement : elles portent le même request_id, celui de l'envoi.
+		const login = await request.post(`${API_URL}/auth/login`, { data: { phone: who.phone, password: who.password } });
+		const headers = { Authorization: `Bearer ${((await login.json()) as { accessToken: string }).accessToken}` };
+		const [mine] = (await (await request.get(`${API_URL}/me/organizations`, { headers })).json()) as { organizationId: string }[];
+		const journal = (await (
+			await request.get(`${API_URL}/organization/audit`, { headers: { ...headers, 'X-Organization-Id': mine!.organizationId } })
+		).json()) as { entries: { action: string; origin: string; requestId: string | null }[] };
+		const saved = journal.entries.filter((e) => e.action === 'organization.update');
+		expect(saved).toHaveLength(2);
+		expect(saved.map((e) => e.origin)).toEqual(['sync', 'sync']);
+		expect(saved[0]!.requestId).toBeTruthy();
+		expect(saved[1]!.requestId).toBe(saved[0]!.requestId);
+		expect(uploads).toContain(saved[0]!.requestId);
 	});
 
 	test('les autres rôles n’ont pas les paramètres dans le menu', async ({ page }) => {
