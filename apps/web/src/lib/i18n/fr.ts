@@ -256,6 +256,7 @@ export const fr = {
 			`Bonjour, vous êtes invité(e) à rejoindre ${org} sur Ziga comme ${role}. Ouvrez ce lien pour accepter : ${link}`,
 		pending: 'Invitations en attente',
 		noPending: 'Aucune invitation en attente.',
+		pendingOffline: 'Les invitations en attente s’affichent quand la connexion revient.',
 		expires: (date: string) => `Valable jusqu’au ${date}`,
 		revoke: 'Annuler l’invitation',
 		changeRole: 'Changer le rôle',

@@ -22,6 +22,7 @@
 	import { device } from '#lib/device.svelte.ts';
 	import { fr } from '#lib/i18n/fr.ts';
 	import { auth } from '#lib/auth/auth.svelte.ts';
+	import { NetworkError } from '#lib/auth/http.ts';
 	import { organizations } from '#lib/org/organizations.svelte.ts';
 	import { LOCAL_QUERIES } from '#lib/sync/queries.ts';
 	import { sync } from '#lib/sync/sync.svelte.ts';
@@ -56,23 +57,36 @@
 	let removeTarget = $state<LocalMember | null>(null);
 	let removeOpen = $state(false);
 
+	// Invitations en attente : lues en ligne (elles portent des numéros, non synchronisés). Hors ligne, la section le dit
+	// sans alarmer : l'équipe, elle, vient de l'appareil.
+	let invitationsOffline = $state(false);
 	async function load() {
 		message = null;
 		try {
 			invitations = manage ? await organizations.call<InvitationView[]>('GET', '/organization/invitations') : [];
+			invitationsOffline = false;
 		} catch (error) {
-			message = messageOf(error);
+			if (error instanceof NetworkError) invitationsOffline = true;
+			else message = messageOf(error);
 		}
 	}
 	onMount(() => {
 		if (!allowed) return;
-		if (manage) void load();
-		return sync.watch<Record<string, unknown>>(
+		const reload = () => void load();
+		if (manage) {
+			reload();
+			window.addEventListener('online', reload);
+		}
+		const stop = sync.watch<Record<string, unknown>>(
 			LOCAL_QUERIES.members,
 			[organizations.activeId],
 			(rows) => (members = rows.map((r) => toMember(r, auth.user?.id))),
 			(error) => (message = messageOf(error))
 		);
+		return () => {
+			stop();
+			window.removeEventListener('online', reload);
+		};
 	});
 
 	function openInvite() {
@@ -258,7 +272,7 @@
 							<Button variant="outline" onclick={() => revoke(i)}>{t.revoke}</Button>
 						</li>
 					{:else}
-						<li class="text-base text-muted-foreground">{t.noPending}</li>
+						<li class="text-base text-muted-foreground">{invitationsOffline ? t.pendingOffline : t.noPending}</li>
 					{/each}
 				</ul>
 			</section>

@@ -228,7 +228,11 @@ test.describe('Synchronisation : la base locale du navigateur', () => {
 		await expect(page.getByTestId('etat-synchro')).toHaveAttribute('data-etat', 'offline');
 		await expect(page.getByTestId('etat-synchro')).toHaveText('Hors ligne');
 		await expect(page.getByTestId('membre')).toHaveCount(1);
+		// Les invitations en attente (lues en ligne) le disent, sans message d'erreur.
+		await expect(page.getByText('Les invitations en attente s’affichent quand la connexion revient.')).toBeVisible();
+		await expect(page.getByTestId('erreur-formulaire')).toHaveCount(0);
 		await context.setOffline(false);
+		await expect(page.getByText('Aucune invitation en attente.')).toBeVisible();
 		await synced(page);
 
 		// Déconnexion : plus rien de l'organisation sur l'appareil.
