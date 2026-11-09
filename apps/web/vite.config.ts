@@ -15,7 +15,8 @@ export default defineConfig({
 				// Runes partout dans le projet, sauf les bibliothèques.
 				runes: ({ filename }) => (filename.split(/[/\\]/).includes('node_modules') ? undefined : true)
 			},
-			adapter: adapter({ out: 'build' }),
+			// Dossier de sortie réglable : le test de la version de production construit à part (e2e-hook.build.test.ts).
+			adapter: adapter({ out: process.env.ZIGA_BUILD_OUT || 'build' }),
 			// Le fichier .env est à la racine du dépôt, partagé avec l'API.
 			env: { dir: '../..' },
 			paths: {
@@ -26,6 +27,8 @@ export default defineConfig({
 			}
 		})
 	],
+	// Accès des tests de bout en bout (lot 05) : compilé seulement si PUBLIC_E2E=1 au moment du build ; sinon éliminé.
+	define: { __ZIGA_E2E__: JSON.stringify(process.env.PUBLIC_E2E === '1') },
 	// PowerSync (lot 05) : le SDK contient des workers et du WebAssembly, que Vite ne doit pas pré-assembler ;
 	// ses workers sont des modules ES.
 	optimizeDeps: { exclude: ['@powersync/web'] },

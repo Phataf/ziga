@@ -5,9 +5,7 @@
  * - Vidée à la déconnexion, ou quand l'API refuse la session (401) : rien ne reste sur l'appareil.
  * - Les écrans lisent par `watch` : la requête est relancée à chaque changement des tables qu'elle lit.
  */
-import { PUBLIC_E2E } from '$app/env/public';
 import type { PowerSyncDatabase, SyncStatus } from '@powersync/web';
-import { SYNCED_TABLES } from '@ziga/shared/sync-schema';
 import { auth } from '../auth/auth.svelte';
 import { syncState, type SyncState } from './status';
 
@@ -44,9 +42,10 @@ class Sync {
 
 	constructor() {
 		auth.onSignOut(() => void this.clear());
-		// Tests de bout en bout seulement (PUBLIC_E2E=1) : nombre de lignes par table locale, jamais leur contenu.
-		if (typeof window !== 'undefined' && PUBLIC_E2E) {
-			(window as unknown as { __zigaLocalCounts: () => Promise<Record<string, number>> }).__zigaLocalCounts = () => this.#counts();
+		// Tests de bout en bout seulement : constante fixée au build (PUBLIC_E2E=1). Absente, ce code et le module
+		// e2e-hook disparaissent de la version construite.
+		if (__ZIGA_E2E__ && typeof window !== 'undefined') {
+			void import('./e2e-hook').then((m) => m.installE2EHook(() => this.db, DB_FILE));
 		}
 		if (typeof window !== 'undefined') {
 			window.addEventListener('online', () => (this.online = true));
@@ -119,20 +118,6 @@ class Sync {
 			(error: Error) => onError?.(error)
 		);
 		return () => controller.abort();
-	}
-
-	async #counts(): Promise<Record<string, number>> {
-		let db = this.db;
-		if (!db) {
-			const [{ PowerSyncDatabase }, { AppSchema }] = await Promise.all([import('@powersync/web'), import('./schema')]);
-			db = new PowerSyncDatabase({ schema: AppSchema, database: { dbFilename: DB_FILE } });
-		}
-		const counts: Record<string, number> = {};
-		for (const table of [...Object.keys(SYNCED_TABLES), 'ps_crud']) {
-			counts[table] = Number((await db.get<{ n: number }>(`SELECT count(*) AS n FROM ${table}`)).n);
-		}
-		if (db !== this.db) await db.close();
-		return counts;
 	}
 
 	/** Déconnexion : synchronisation arrêtée et base locale vidée (lot 05, point 9). */
