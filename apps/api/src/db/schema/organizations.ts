@@ -53,6 +53,8 @@ export const organizationMembers = pgTable('organization_members', {
 	joinedAt: tstz('joined_at').notNull().defaultNow(),
 	removedAt: tstz('removed_at'),
 	removedBy: uuid('removed_by'),
+	/** Nom affiché, recopié de `users.name` : l'équipe se synchronise sans répliquer `users` (D30). */
+	displayName: text('display_name').notNull().default(''),
 	createdAt: tstz('created_at').notNull().defaultNow(),
 	updatedAt: tstz('updated_at').notNull().defaultNow()
 });

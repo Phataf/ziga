@@ -12,6 +12,6 @@ function required(name: string): string {
 
 await runMigrations({
 	migrationUrl: required('DATABASE_MIGRATION_URL'),
-	roleUrls: [required('DATABASE_URL'), required('DATABASE_ADMIN_URL')]
+	roleUrls: [required('DATABASE_URL'), required('DATABASE_ADMIN_URL'), required('DATABASE_SYNC_URL')]
 });
 process.stdout.write('Migrations appliquées.\n');

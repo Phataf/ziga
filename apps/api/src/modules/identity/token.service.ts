@@ -1,4 +1,5 @@
 /** Jetons d'accès : JWT signés en EdDSA, 15 minutes, avec l'identifiant de la clé (`kid`) dans l'en-tête. */
+import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, type OnModuleInit } from '@nestjs/common';
 import type { PlatformRole } from '@ziga/shared/auth';
 import { jwtVerify, SignJWT, type JWTPayload } from 'jose';
@@ -8,6 +9,11 @@ import type { AppConfig } from '../../config/env.js';
 import { generateKey, parseKeys, type KeyRing } from './keys.js';
 
 export const AUDIENCE = 'ziga';
+/**
+ * Audience du jeton de synchronisation (lot 05, D30) : seul PowerSync l'accepte, jamais l'API (vérification de
+ * l'audience ci-dessous). Même clé et même JWKS que les jetons d'accès, sans secret partagé.
+ */
+export const SYNC_AUDIENCE = 'ziga-sync';
 
 export interface AccessClaims {
 	/** Personne. */
@@ -33,7 +39,9 @@ export class TokenService implements OnModuleInit {
 		if (this.config.AUTH_JWT_KEYS) {
 			this.ring = parseKeys(this.config.AUTH_JWT_KEYS);
 		} else {
-			this.ring = generateKey('dev-ephemere').ring;
+			// Identifiant propre à chaque démarrage : PowerSync relit le JWKS dès qu'il voit un `kid` inconnu, alors qu'une
+			// nouvelle clé sous un `kid` déjà connu serait refusée jusqu'à son prochain rafraîchissement (5 minutes).
+			this.ring = generateKey(`dev-${randomUUID().slice(0, 8)}`).ring;
 			this.logger.warn('AUTH_JWT_KEYS absente : clé de signature éphémère (développement et tests seulement)');
 		}
 	}
@@ -52,6 +60,26 @@ export class TokenService implements OnModuleInit {
 			.setIssuedAt()
 			.setExpirationTime(`${this.ttlSeconds}s`)
 			.sign(key.privateKey);
+	}
+
+	/**
+	 * Jeton de synchronisation : la personne seulement (`sub`), aucune organisation. Le stream de PowerSync lit les
+	 * appartenances en direct, si bien qu'un membre retiré perd l'accès à la synchronisation suivante, sans attendre
+	 * l'expiration du jeton.
+	 */
+	async signSync(userId: string): Promise<{ token: string; expiresAt: string }> {
+		const key = this.ring.current;
+		const ttl = this.config.SYNC_TOKEN_TTL_SECONDS;
+		const now = Math.floor(Date.now() / 1000);
+		const token = await new SignJWT({})
+			.setProtectedHeader({ alg: 'EdDSA', kid: key.kid, typ: 'JWT' })
+			.setSubject(userId)
+			.setIssuer(this.config.API_PUBLIC_URL)
+			.setAudience(SYNC_AUDIENCE)
+			.setIssuedAt(now)
+			.setExpirationTime(now + ttl)
+			.sign(key.privateKey);
+		return { token, expiresAt: new Date((now + ttl) * 1000).toISOString() };
 	}
 
 	/** Vérifie signature, émetteur, audience et expiration ; renvoie null si le jeton n'est pas valable. */

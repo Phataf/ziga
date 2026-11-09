@@ -54,6 +54,11 @@ export function toMe(user: User): MeResponse {
 @Injectable()
 export class AuthService {
 	private readonly otpSecret: string;
+	/**
+	 * Personnes prévenues d'un changement de nom, après validation (lot 05) : le module organizations recopie le nom
+	 * affiché de ses membres. Le module identity ne dépend ainsi d'aucun autre module.
+	 */
+	private readonly nameListeners: ((userId: string, name: string) => Promise<void>)[] = [];
 
 	constructor(
 		@Inject(APP_CONFIG) private readonly config: AppConfig,
@@ -485,6 +490,10 @@ export class AuthService {
 		await this.throttle.clear(key);
 	}
 
+	onNameChange(listener: (userId: string, name: string) => Promise<void>): void {
+		this.nameListeners.push(listener);
+	}
+
 	async updateName(userId: string, name: string): Promise<MeResponse> {
 		const user = await this.activeUser(userId);
 		if (user.name === name) return toMe(user);
@@ -493,6 +502,7 @@ export class AuthService {
 			await this.event(tx, user, 'auth.profile_update', null, { before: { name: user.name }, after: { name } });
 			return row!;
 		});
+		for (const listener of this.nameListeners) await listener(userId, name);
 		return toMe(updated);
 	}
 

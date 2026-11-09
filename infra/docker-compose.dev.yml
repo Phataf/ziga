@@ -1,5 +1,5 @@
 # Services du développement local (CLAUDE.md §3) : PostgreSQL 16, Redis, stockage S3 (SeaweedFS, D27).
-# PowerSync s'ajoute au lot 05, Gotenberg au lot 08 bis (D23).
+# PowerSync (lot 05, D30) ; Gotenberg au lot 08 bis (D23).
 # Démarrage : `pnpm infra:up` (attend que chaque service soit sain, puis crée le compartiment S3).
 name: ziga
 
@@ -55,6 +55,30 @@ services:
       interval: 3s
       timeout: 3s
       retries: 40
+
+  # Synchronisation hors ligne (lot 05, D30). Démarré par `pnpm infra:up` après PostgreSQL, une fois sa base de
+  # stockage créée. Il attend ensuite la migration 0006 (rôle app_sync, publication) et l'API (JWKS) : tant qu'elles
+  # manquent, il réessaie seul.
+  powersync:
+    image: journeyapps/powersync-service:1.28.1
+    command: ['start', '-r', 'unified']
+    restart: unless-stopped
+    environment:
+      POWERSYNC_CONFIG_PATH: /config/service.yaml
+      # Mots de passe de développement, identiques à DATABASE_SYNC_URL et POWERSYNC_STORAGE_URL de .env.example.
+      PS_SOURCE_URI: postgresql://app_sync:app_sync_dev@postgres:5432/ziga
+      PS_STORAGE_URI: postgresql://powersync_storage:powersync_storage_dev@postgres:5432/ziga_powersync
+      PS_SSLMODE: disable
+      # L'API tourne sur la machine (pnpm dev), pas dans Docker.
+      PS_JWKS_URI: http://host.docker.internal:3000/.well-known/jwks.json
+      PS_PORT: '8080'
+      NODE_OPTIONS: --max-old-space-size=1000
+    extra_hosts: ['host.docker.internal:host-gateway']
+    ports: ['8080:8080']
+    volumes: ['./powersync:/config:ro']
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   postgres-data:

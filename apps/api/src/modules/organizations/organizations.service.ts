@@ -4,7 +4,7 @@
  * ligne d'audit dans la même transaction, avec les valeurs avant et après.
  */
 import { randomBytes } from 'node:crypto';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, type OnModuleInit } from '@nestjs/common';
 import { isUuid, newId } from '@ziga/shared/ids';
 import {
 	INVITATION_TTL_DAYS,
@@ -33,6 +33,7 @@ import { auditPage } from '../audit/audit-page.js';
 import { AuditService, diff } from '../audit/audit.service.js';
 import { FeaturesService } from '../features/features.service.js';
 import { QuotasService } from '../features/quotas.service.js';
+import { AuthService } from '../identity/auth.service.js';
 import { sha256 } from '../identity/secrets.js';
 
 type OrganizationRow = typeof organizations.$inferSelect;
@@ -89,14 +90,46 @@ function settingsOf(o: OrganizationRow) {
 }
 
 @Injectable()
-export class OrganizationsService {
+export class OrganizationsService implements OnModuleInit {
 	constructor(
 		private readonly database: DatabaseService,
 		private readonly audit: AuditService,
 		@Inject(APP_CONFIG) private readonly config: AppConfig,
 		private readonly features: FeaturesService,
-		private readonly quotas: QuotasService
+		private readonly quotas: QuotasService,
+		private readonly auth: AuthService
 	) {}
+
+	onModuleInit(): void {
+		this.auth.onNameChange((userId, name) => this.renameMember(userId, name));
+	}
+
+	/** Nom affiché d'un membre (lot 05, D30) : recopié du compte, pour synchroniser l'équipe sans répliquer `users`. */
+	private async nameOf(tx: Tx, userId: string): Promise<string> {
+		const [row] = await tx.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
+		return row?.name ?? '';
+	}
+
+	/**
+	 * Changement de nom d'une personne : son nom affiché suit dans chacune de ses organisations, une à la fois,
+	 * chacune dans son propre contexte (règle 1).
+	 */
+	async renameMember(userId: string, name: string): Promise<void> {
+		const memberships = await this.database.withUser(userId, (tx) =>
+			tx
+				.select({ organizationId: organizationMembers.organizationId })
+				.from(organizationMembers)
+				.where(eq(organizationMembers.userId, userId))
+		);
+		for (const { organizationId } of memberships) {
+			await this.database.withOrganization(organizationId, (tx) =>
+				tx
+					.update(organizationMembers)
+					.set({ displayName: name, updatedAt: new Date() })
+					.where(and(eq(organizationMembers.organizationId, organizationId), eq(organizationMembers.userId, userId)))
+			);
+		}
+	}
 
 	private actor() {
 		const ctx = RequestContext.get();
@@ -167,7 +200,16 @@ export class OrganizationsService {
 				})
 				.returning();
 			const memberId = newId();
-			await tx.insert(organizationMembers).values({ id: memberId, organizationId: org!.id, userId, role: 'director', status: 'active' });
+			await tx
+				.insert(organizationMembers)
+				.values({
+					id: memberId,
+					organizationId: org!.id,
+					userId,
+					role: 'director',
+					status: 'active',
+					displayName: await this.nameOf(tx, userId)
+				});
 			const actor = { type: 'user' as const, userId, role: 'director' };
 			await this.audit.record(tx, {
 				actor,
@@ -585,13 +627,28 @@ export class OrganizationsService {
 				memberId = existing.id;
 				await tx
 					.update(organizationMembers)
-					.set({ status: 'active', role: i.role, removedAt: null, removedBy: null, invitedBy: i.invitedBy, joinedAt: now, updatedAt: now })
+					.set({
+						status: 'active',
+						role: i.role,
+						removedAt: null,
+						removedBy: null,
+						invitedBy: i.invitedBy,
+						joinedAt: now,
+						updatedAt: now,
+						displayName: await this.nameOf(tx, userId)
+					})
 					.where(eq(organizationMembers.id, existing.id));
 			} else {
 				memberId = newId();
-				await tx
-					.insert(organizationMembers)
-					.values({ id: memberId, organizationId, userId, role: i.role, status: 'active', invitedBy: i.invitedBy });
+				await tx.insert(organizationMembers).values({
+					id: memberId,
+					organizationId,
+					userId,
+					role: i.role,
+					status: 'active',
+					invitedBy: i.invitedBy,
+					displayName: await this.nameOf(tx, userId)
+				});
 			}
 			await tx.update(organizationInvitations).set({ acceptedAt: now, acceptedBy: userId }).where(eq(organizationInvitations.id, i.id));
 			await this.audit.record(tx, {

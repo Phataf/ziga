@@ -15,7 +15,15 @@ const api = resolve(import.meta.dirname, '..');
 const root = resolve(api, '../..');
 const file = join(root, '.env');
 const base = { ...(existsSync(file) ? parseEnv(readFileSync(file, 'utf8')) : {}), ...process.env };
-for (const key of ['DATABASE_URL', 'DATABASE_ADMIN_URL', 'DATABASE_MIGRATION_URL', 'REDIS_URL', 'E2E_SMS_FILE']) {
+for (const key of [
+	'DATABASE_URL',
+	'DATABASE_ADMIN_URL',
+	'DATABASE_SYNC_URL',
+	'DATABASE_MIGRATION_URL',
+	'POWERSYNC_STORAGE_URL',
+	'REDIS_URL',
+	'E2E_SMS_FILE'
+]) {
 	if (!base[key]) throw new Error(`Tests de bout en bout : ${key} manquante.`);
 }
 
@@ -35,6 +43,7 @@ const env = {
 	API_PORT: base.E2E_API_PORT || '3100',
 	DATABASE_URL: withPath(base.DATABASE_URL, `/${name}`),
 	DATABASE_ADMIN_URL: withPath(base.DATABASE_ADMIN_URL, `/${name}`),
+	DATABASE_SYNC_URL: withPath(base.DATABASE_SYNC_URL, `/${name}`),
 	DATABASE_MIGRATION_URL: withPath(base.DATABASE_MIGRATION_URL, `/${name}`),
 	REDIS_URL: withPath(base.REDIS_URL, '/2'),
 	STORAGE_DRIVER: 'local',
@@ -56,8 +65,21 @@ const env = {
 
 const server = new pg.Client({ connectionString: withPath(env.DATABASE_MIGRATION_URL, '/postgres') });
 await server.connect();
+// Les créneaux de réplication de PowerSync (lot 05) d'une exécution précédente empêcheraient de supprimer la base.
+await server.query('SELECT pg_drop_replication_slot(slot_name) FROM pg_replication_slots WHERE database = $1 AND NOT active', [name]);
 await server.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);
 await server.query(`CREATE DATABASE ${name}`);
+// Stockage interne de PowerSync, vide à chaque exécution (scripts/e2e-powersync.mjs démarre le service).
+const storage = new URL(base.POWERSYNC_STORAGE_URL);
+const storageRole = decodeURIComponent(storage.username);
+const storageName = `${name}_powersync`;
+await server.query(`DROP DATABASE IF EXISTS ${storageName} WITH (FORCE)`);
+const { rowCount } = await server.query('SELECT 1 FROM pg_roles WHERE rolname = $1', [storageRole]);
+if (!rowCount)
+	await server.query(
+		`CREATE ROLE ${server.escapeIdentifier(storageRole)} LOGIN PASSWORD ${server.escapeLiteral(decodeURIComponent(storage.password))}`
+	);
+await server.query(`CREATE DATABASE ${storageName} OWNER ${server.escapeIdentifier(storageRole)}`);
 await server.end();
 
 const redis = new Redis(env.REDIS_URL);
@@ -66,7 +88,10 @@ redis.disconnect();
 rmSync(env.SMS_FILE, { force: true });
 
 const { runMigrations } = await import(join(api, 'dist/db/migrate.js'));
-await runMigrations({ migrationUrl: env.DATABASE_MIGRATION_URL, roleUrls: [env.DATABASE_URL, env.DATABASE_ADMIN_URL] });
+await runMigrations({
+	migrationUrl: env.DATABASE_MIGRATION_URL,
+	roleUrls: [env.DATABASE_URL, env.DATABASE_ADMIN_URL, env.DATABASE_SYNC_URL]
+});
 
 // Super administrateur de test (base jetable ; mot de passe de test, pas un secret).
 const { createDatabase, createPool } = await import(join(api, 'dist/db/database.js'));

@@ -27,7 +27,7 @@ export function integrationEnv(): Record<string, string> {
 	const fromFile = existsSync(file) ? parseEnv(readFileSync(file, 'utf8')) : {};
 	const base = { ...fromFile, ...process.env } as Record<string, string>;
 	const name = base.TEST_DATABASE_NAME || 'ziga_test';
-	for (const key of ['DATABASE_URL', 'DATABASE_ADMIN_URL', 'DATABASE_MIGRATION_URL', 'REDIS_URL']) {
+	for (const key of ['DATABASE_URL', 'DATABASE_ADMIN_URL', 'DATABASE_SYNC_URL', 'DATABASE_MIGRATION_URL', 'REDIS_URL']) {
 		if (!base[key]) throw new Error(`Tests d'intégration : ${key} manquante (copiez .env.example en .env).`);
 	}
 	return {
@@ -38,6 +38,7 @@ export function integrationEnv(): Record<string, string> {
 		API_PORT: '0',
 		DATABASE_URL: withDatabase(base.DATABASE_URL!, name),
 		DATABASE_ADMIN_URL: withDatabase(base.DATABASE_ADMIN_URL!, name),
+		DATABASE_SYNC_URL: withDatabase(base.DATABASE_SYNC_URL!, name),
 		DATABASE_MIGRATION_URL: withDatabase(base.DATABASE_MIGRATION_URL!, name),
 		DATABASE_POOL_MAX: base.DATABASE_POOL_MAX || '5',
 		DATABASE_STATEMENT_TIMEOUT_MS: base.DATABASE_STATEMENT_TIMEOUT_MS || '15000',

@@ -1,0 +1,24 @@
+# Sync Streams (lot 05, D30) : ce que chaque appareil reçoit. La règle 1 de CLAUDE.md s'applique ici comme en base :
+# une personne ne reçoit que les lignes des organisations dont elle est membre active, et rien d'une organisation
+# suspendue. L'appartenance est lue en direct : un membre retiré, ou une organisation suspendue, sort du stream à la
+# synchronisation suivante, et PowerSync efface ces données de l'appareil.
+#
+# Chaque requête ne sélectionne que les colonnes utiles à l'application (jamais SELECT *). Le représentant légal
+# (pièce d'identité) n'est pas dans ce stream, ouvert à tous les membres. Ajouter une table :
+# docs/SYNC.md. Les règles sont vérifiées par apps/api/test/sync-streams.int.test.ts avec le moteur de PowerSync.
+config:
+  edition: 3
+
+streams:
+  organization_data:
+    auto_subscribe: true
+    with:
+      my_organizations: |
+        SELECT organization_members.organization_id FROM organization_members
+          JOIN organizations ON organizations.id = organization_members.organization_id
+        WHERE organization_members.user_id = auth.user_id()
+          AND organization_members.status = 'active'
+          AND organizations.verification_status != 'suspended'
+    queries:
+      - SELECT id, type, legal_name, trade_name, phone, address, commune, po_box, rccm, ifu, verification_status, plan_id, accepted_payment_methods, logo_id, updated_at FROM organizations WHERE id IN my_organizations
+      - SELECT id, organization_id, user_id, role, status, display_name, joined_at FROM organization_members WHERE organization_id IN my_organizations

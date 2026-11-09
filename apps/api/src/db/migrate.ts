@@ -13,7 +13,7 @@ export const MIGRATIONS_FOLDER = join(import.meta.dirname, 'migrations');
 export interface MigrateOptions {
 	/** Rôle propriétaire du schéma (pas `app_api`) : il crée les tables, les rôles et les politiques. */
 	migrationUrl: string;
-	/** URL de `app_api` et de `app_admin` : leur mot de passe y est lu, jamais écrit dans le code. */
+	/** URL de `app_api`, `app_admin` et `app_sync` : leur mot de passe y est lu, jamais écrit dans le code. */
 	roleUrls: string[];
 }
 
@@ -29,7 +29,7 @@ export async function runMigrations(options: MigrateOptions): Promise<void> {
 		await migrate(drizzle(client), { migrationsFolder: MIGRATIONS_FOLDER });
 		for (const url of options.roleUrls) {
 			const { user, password } = roleFromUrl(url);
-			if (!['app_api', 'app_admin'].includes(user)) throw new Error(`Rôle inattendu dans l'URL : ${user}`);
+			if (!['app_api', 'app_admin', 'app_sync'].includes(user)) throw new Error(`Rôle inattendu dans l'URL : ${user}`);
 			if (!password) throw new Error(`Mot de passe manquant pour ${user}`);
 			// ALTER ROLE n'accepte pas de paramètre : on échappe la valeur comme un littéral SQL.
 			await client.query(`ALTER ROLE ${client.escapeIdentifier(user)} PASSWORD ${client.escapeLiteral(password)}`);

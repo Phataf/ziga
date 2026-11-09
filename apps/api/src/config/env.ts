@@ -40,6 +40,10 @@ export const envSchema = z
 		AUTH_OTP_SECRET: optional(z.string().min(32)),
 		AUTH_ACCESS_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
 		AUTH_REFRESH_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
+		/** Jeton de synchronisation (lot 05, audience ziga-sync) : 5 minutes ; PowerSync refuse plus de 60 minutes. */
+		SYNC_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(300),
+		/** Adresse du service PowerSync pour les navigateurs (lot 05). */
+		POWERSYNC_URL: z.url().default('http://localhost:8080'),
 		AUTH_REFRESH_COOKIE: z
 			.string()
 			.regex(/^[A-Za-z0-9_-]+$/)

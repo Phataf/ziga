@@ -151,9 +151,14 @@ export async function seedDemo(db: Database, password: string, admin?: Database)
 			});
 			for (const m of o.members) {
 				const memberId = newId();
-				await tx
-					.insert(organizationMembers)
-					.values({ id: memberId, organizationId: o.id, userId: ids.get(m.person)!, role: m.role, status: 'active' });
+				await tx.insert(organizationMembers).values({
+					id: memberId,
+					organizationId: o.id,
+					userId: ids.get(m.person)!,
+					role: m.role,
+					status: 'active',
+					displayName: DEMO_PEOPLE.find((p) => p.key === m.person)!.name
+				});
 				await tx.insert(auditLog).values({
 					id: newId(),
 					actorType: 'system',

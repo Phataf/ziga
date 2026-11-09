@@ -1,0 +1,36 @@
+# Service PowerSync (lot 05, D30) : réplique les tables publiées de PostgreSQL et les répartit entre les appareils.
+# Une seule configuration pour le développement (infra/docker-compose.dev.yml), les tests de bout en bout
+# (apps/api/scripts/e2e-powersync.mjs) et la production : tout ce qui change vient de l'environnement.
+#   PS_SOURCE_URI   rôle app_sync (lecture seule des tables publiées, sans BYPASSRLS)
+#   PS_STORAGE_URI  stockage interne de PowerSync : base séparée du même serveur, rôle dédié
+#   PS_SSLMODE      disable en local ; verify-full en production
+#   PS_JWKS_URI     clés publiques de l'API (/.well-known/jwks.json) : aucun secret partagé
+#   PS_PORT         port d'écoute
+replication:
+  connections:
+    - type: postgresql
+      uri: !env PS_SOURCE_URI
+      sslmode: !env PS_SSLMODE
+
+storage:
+  type: postgresql
+  uri: !env PS_STORAGE_URI
+  sslmode: !env PS_SSLMODE
+
+port: !env PS_PORT::number
+
+sync_config:
+  path: sync-config.yaml
+
+# Jeton dédié émis par GET /sync/credentials : EdDSA, `kid` présent dans le JWKS, audience ziga-sync, 5 minutes.
+client_auth:
+  jwks_uri: !env PS_JWKS_URI
+  audience: ['ziga-sync']
+
+telemetry:
+  disable_telemetry_sharing: true
+
+system:
+  logging:
+    level: info
+    format: text

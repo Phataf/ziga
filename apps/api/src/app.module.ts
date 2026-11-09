@@ -10,6 +10,7 @@ import { DatabaseModule } from './db/database.module.js';
 import { HealthModule } from './health/health.module.js';
 import { JobsModule } from './jobs/jobs.module.js';
 import { AdminModule } from './modules/admin/admin.module.js';
+import { SyncModule } from './modules/sync/sync.module.js';
 import { AuditModule } from './modules/audit/audit.module.js';
 import { FeaturesModule } from './modules/features/features.module.js';
 import { IdentityModule } from './modules/identity/identity.module.js';
@@ -38,6 +39,7 @@ export class AppModule {
 				IdentityModule,
 				OrganizationsModule,
 				AdminModule,
+				SyncModule,
 				...extraModules,
 				HealthModule
 			],

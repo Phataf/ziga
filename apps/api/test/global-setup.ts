@@ -21,5 +21,8 @@ export default async function setup(): Promise<void> {
 	const redis = new Redis(env.REDIS_URL!);
 	await redis.flushdb();
 	redis.disconnect();
-	await runMigrations({ migrationUrl: env.DATABASE_MIGRATION_URL!, roleUrls: [env.DATABASE_URL!, env.DATABASE_ADMIN_URL!] });
+	await runMigrations({
+		migrationUrl: env.DATABASE_MIGRATION_URL!,
+		roleUrls: [env.DATABASE_URL!, env.DATABASE_ADMIN_URL!, env.DATABASE_SYNC_URL!]
+	});
 }
