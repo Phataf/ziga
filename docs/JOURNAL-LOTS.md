@@ -568,3 +568,10 @@ Prompt : `prompts/lot-04-interrupteurs-backoffice.md` ; spécification `docs/FEA
 ### Questions ouvertes pour le porteur
 1. **Lot 10 ter** : quand une organisation est suspendue, propriétaires et locataires gardent l'accès en lecture à leurs données dans leurs espaces personnels (votre réponse au plan) ; à appliquer quand ces espaces seront construits.
 2. **Prix des formules** : hypothèses à confirmer après les démonstrations aux agences pilotes ; ils se changent depuis le back-office, sans développement.
+
+## Correctifs après le lot 04 — 09/11/2026
+
+- **Vérification des migrations au démarrage** : après une mise à jour sans `pnpm db:migrate`, l'API répondait 500 à la première requête (« column "parent_id" of relation "refresh_tokens" does not exist », et avant cela « relation "users" does not exist »).
+  - L'API et le worker comparent les migrations appliquées au journal du dépôt (`src/db/migration-status.ts`, même règle que le migrateur de Drizzle). S'il en manque, ils s'arrêtent avec la liste et la commande à lancer ; si la base est en avance (branche plus ancienne), ils démarrent avec un avertissement.
+  - Migration `0005_migration_status` : `app_api` et `app_admin` lisent la table des migrations (lecture seule). Une base sans ce droit est donc au moins en retard de cette migration, et le message le dit.
+  - Tests : 7 cas purs (à jour, en retard, sans droit de lecture, jamais migrée, en avance, base injoignable, lecture du journal) et 4 sur de vraies bases (base de test, base jetable jamais migrée, arrêtée à 0004 sans le droit, en retard d'une migration).

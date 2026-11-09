@@ -8,6 +8,10 @@ import { initSentry } from './common/sentry.js';
 const config = loadConfigOrExit(process.env);
 initSentry(config, 'worker');
 
+// Base en retard (« pnpm db:migrate » oublié) : arrêt avec un message clair plutôt qu'une erreur SQL à la première requête.
+const { assertMigrationsOrExit } = await import('./db/migration-status.js');
+await assertMigrationsOrExit(config.DATABASE_URL);
+
 await import('reflect-metadata');
 const { NestFactory } = await import('@nestjs/core');
 const { Logger } = await import('nestjs-pino');
