@@ -3,7 +3,17 @@
  * Critère d'acceptation : un directeur invite un gestionnaire, qui accepte depuis un autre téléphone, en moins de 2 minutes.
  */
 import { expect, test, type Browser, type Page } from '@playwright/test';
-import { accounts, expectNoHorizontalOverflow, openOrganization, ORG_A, registerViaApi, signIn, signInWith } from './support';
+import {
+	accounts,
+	apiIdle,
+	expectNoHorizontalOverflow,
+	openOrganization,
+	ORG_A,
+	registerViaApi,
+	signIn,
+	signInWith,
+	synced
+} from './support';
 
 const phone = { viewport: { width: 360, height: 800 }, isMobile: true, hasTouch: true };
 const tablet = { viewport: { width: 820, height: 1180 }, isMobile: true, hasTouch: true };
@@ -248,7 +258,8 @@ for (const [name, device] of [
 			]) {
 				await page.goto(path);
 				await expect(page.locator('h1').first()).toBeVisible();
-				await page.waitForLoadState('networkidle');
+				if (path.startsWith('/app')) await synced(page);
+				await apiIdle(page);
 				await expectNoHorizontalOverflow(page, path);
 				for (const h of await page
 					.locator('main button:visible, main input:visible:not([type=file]), main select:visible')

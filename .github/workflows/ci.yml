@@ -85,6 +85,16 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @ziga/web exec playwright install --with-deps chromium
+      # PowerSync (lot 05) : PostgreSQL en réplication logique. Un conteneur de service ne prend pas d'options de
+      # démarrage : on règle wal_level, puis on le redémarre.
+      - name: PostgreSQL en réplication logique
+        run: |
+          docker exec ${{ job.services.postgres.id }} psql -U ziga -d ziga -c "ALTER SYSTEM SET wal_level = logical"
+          docker restart ${{ job.services.postgres.id }}
+          until docker exec ${{ job.services.postgres.id }} pg_isready -U ziga -d ziga; do sleep 1; done
+          docker exec ${{ job.services.postgres.id }} psql -U ziga -d ziga -tAc "SHOW wal_level"
+      # Image du service PowerSync, lancée par Playwright (apps/api/scripts/e2e-powersync.mjs).
+      - run: docker pull journeyapps/powersync-service:1.28.1
       - run: cp .env.example .env
       - run: pnpm --filter @ziga/shared build
       - run: pnpm --filter @ziga/web test:e2e

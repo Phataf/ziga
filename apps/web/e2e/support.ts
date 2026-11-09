@@ -115,3 +115,42 @@ export async function expectNoHorizontalOverflow(page: Page, label: string): Pro
 	const o = await horizontalOverflow(page);
 	expect(o.px, `${label} : ${o.culprits.join(' ; ')}`).toBeLessThanOrEqual(0);
 }
+
+/**
+ * La page a fini de charger ses données : plus aucune requête vers l'API depuis 500 ms. Remplace `networkidle`, qui
+ * n'arrive plus depuis le lot 05 : le flux de synchronisation de PowerSync reste ouvert tant que l'application l'est.
+ */
+export async function apiIdle(page: Page, quietMs = 500, timeoutMs = 15_000): Promise<void> {
+	await page.waitForLoadState('load');
+	const inFlight = new Set<object>();
+	let last = Date.now();
+	const isApi = (url: string) => url.startsWith(API_URL);
+	const start = (r: { url(): string }) => {
+		if (isApi(r.url())) {
+			inFlight.add(r);
+			last = Date.now();
+		}
+	};
+	const end = (r: { url(): string }) => {
+		if (inFlight.delete(r)) last = Date.now();
+	};
+	page.on('request', start);
+	page.on('requestfinished', end);
+	page.on('requestfailed', end);
+	try {
+		const deadline = Date.now() + timeoutMs;
+		while (inFlight.size > 0 || Date.now() - last < quietMs) {
+			if (Date.now() > deadline) throw new Error(`Requêtes vers l'API toujours en cours : ${inFlight.size}`);
+			await page.waitForTimeout(100);
+		}
+	} finally {
+		page.off('request', start);
+		page.off('requestfinished', end);
+		page.off('requestfailed', end);
+	}
+}
+
+/** Espace de gestion : la base locale est à jour (indicateur « À jour »), ses données sont affichées. */
+export async function synced(page: Page, timeout = 10_000): Promise<void> {
+	await expect(page.getByTestId('etat-synchro')).toHaveAttribute('data-etat', 'up_to_date', { timeout });
+}

@@ -60,7 +60,9 @@ const env = {
 	RATE_LIMIT_PER_IP_PER_MINUTE: '5000',
 	OTP_SEND_INTERVAL_SECONDS: '0',
 	OTP_SEND_PER_PHONE_PER_HOUR: '1000',
-	SENTRY_DSN: ''
+	SENTRY_DSN: '',
+	// Service PowerSync de test (scripts/e2e-powersync.mjs).
+	POWERSYNC_URL: `http://localhost:${base.E2E_POWERSYNC_PORT || '8180'}`
 };
 
 const server = new pg.Client({ connectionString: withPath(env.DATABASE_MIGRATION_URL, '/postgres') });

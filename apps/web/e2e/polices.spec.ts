@@ -4,7 +4,7 @@
  * déborder ni en recouvrir un autre, quelles que soient les polices installées.
  */
 import { test } from '@playwright/test';
-import { expectNoHorizontalOverflow, signIn } from './support';
+import { apiIdle, expectNoHorizontalOverflow, signIn, synced } from './support';
 test.use({ viewport: { width: 360, height: 800 }, isMobile: true, hasTouch: true });
 const wide = '*{font-family:"DejaVu Sans",sans-serif !important}';
 test('police large : aucun écran ne déborde à 360 px', async ({ page }) => {
@@ -17,7 +17,8 @@ test('police large : aucun écran ne déborde à 360 px', async ({ page }) => {
 	}, wide);
 	for (const path of ['/connexion', '/inscription', '/mot-de-passe-oublie', '/verification?numero=%2B22670123456', '/']) {
 		await page.goto(path);
-		await page.waitForLoadState('networkidle');
+		if (path.startsWith('/app')) await synced(page);
+		await apiIdle(page);
 		await expectNoHorizontalOverflow(page, path);
 	}
 	await signIn(page, 'director', '/app');
@@ -35,7 +36,8 @@ test('police large : aucun écran ne déborde à 360 px', async ({ page }) => {
 		'/espace/locataire/caution'
 	]) {
 		await page.goto(path);
-		await page.waitForLoadState('networkidle');
+		if (path.startsWith('/app')) await synced(page);
+		await apiIdle(page);
 		await expectNoHorizontalOverflow(page, path);
 	}
 });

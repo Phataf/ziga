@@ -31,9 +31,24 @@ export default defineConfig({
 			timeout: 180_000
 		},
 		{
+			// Vrai service PowerSync (lot 05), branché sur ziga_e2e ; démarre quand l'API est prête (scripts/e2e-powersync.mjs).
+			// Image Docker par défaut ; sans Docker : E2E_POWERSYNC_NODE et E2E_POWERSYNC_ENTRY.
+			command: 'node ../api/scripts/e2e-powersync.mjs',
+			url: 'http://localhost:8180/probes/liveness',
+			env: { E2E_SMS_FILE: process.env.E2E_SMS_FILE, E2E_API_PORT: '3100', E2E_POWERSYNC_PORT: '8180' },
+			reuseExistingServer: false,
+			timeout: 240_000
+		},
+		{
 			command: 'pnpm build && node build/index.js',
 			port: 4173,
-			env: { PORT: '4173', HOST: '127.0.0.1', PUBLIC_ORIGIN: 'http://localhost:4173', PUBLIC_API_URL: 'http://localhost:3100' },
+			env: {
+				PORT: '4173',
+				HOST: '127.0.0.1',
+				PUBLIC_ORIGIN: 'http://localhost:4173',
+				PUBLIC_API_URL: 'http://localhost:3100',
+				PUBLIC_E2E: '1'
+			},
 			reuseExistingServer: false,
 			timeout: 180_000
 		}
