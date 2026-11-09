@@ -57,6 +57,10 @@ export default ts.config(
 						{
 							group: ['**/admin/admin-database.service', '**/admin/admin-database.service.js', './admin-database.service.js'],
 							message: 'Connexion app_admin réservée au module admin.'
+						},
+						{
+							group: ['**/db/schema/sync', '**/db/schema/sync.js'],
+							message: 'Table sync_operations : réservée au module sync (lot 05).'
 						}
 					]
 				}
@@ -74,6 +78,27 @@ export default ts.config(
 						{
 							group: ['**/db/schema/features', '**/db/schema/features.js'],
 							message: 'Tables d’interrupteurs : passer par FeaturesService (module features).'
+						}
+					]
+				}
+			]
+		}
+	},
+	{
+		// Le module sync détient la table sync_operations ; les autres règles d'import restent.
+		files: ['apps/api/src/modules/sync/**/*.ts'],
+		rules: {
+			'no-restricted-imports': [
+				'error',
+				{
+					patterns: [
+						{
+							group: ['**/db/schema/features', '**/db/schema/features.js'],
+							message: 'Tables d’interrupteurs : passer par FeaturesService (module features).'
+						},
+						{
+							group: ['**/admin/admin-database.service', '**/admin/admin-database.service.js'],
+							message: 'Connexion app_admin réservée au module admin.'
 						}
 					]
 				}

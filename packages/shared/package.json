@@ -51,6 +51,10 @@
 		"./sync-schema": {
 			"types": "./dist/sync-schema.d.ts",
 			"default": "./dist/sync-schema.js"
+		},
+		"./sync": {
+			"types": "./dist/sync.d.ts",
+			"default": "./dist/sync.js"
 		}
 	},
 	"files": [

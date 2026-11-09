@@ -97,6 +97,8 @@ export const updateOrganizationSchema = z
 	})
 	.partial();
 export type UpdateOrganizationInput = z.input<typeof updateOrganizationSchema>;
+/** Paramètres validés et normalisés (sortie du schéma) : ce que le serveur enregistre. */
+export type UpdateOrganizationOutput = z.output<typeof updateOrganizationSchema>;
 
 export const inviteMemberSchema = z.object({ phone: phoneSchema, role: z.enum(ORGANIZATION_ROLES) });
 export const changeRoleSchema = z.object({ role: z.enum(ORGANIZATION_ROLES) });

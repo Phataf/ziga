@@ -39,6 +39,17 @@ describe('architecture', () => {
 		expect(offenders.map((f) => f.path)).toEqual([]);
 	});
 
+	it('seul le module sync lit et écrit sync_operations (lot 05)', () => {
+		const offenders = all.filter(
+			(f) =>
+				!f.path.startsWith('modules/sync/') &&
+				f.path !== 'db/schema/sync.ts' &&
+				(imports(f.code).some((i) => /schema\/sync(\.js)?$/.test(i)) || /\b(from|join|update|into)\s+sync_operations\b/i.test(f.code))
+		);
+		expect(offenders.map((f) => f.path)).toEqual([]);
+		expect(readFileSync(join(src, 'db/schema/index.ts'), 'utf8')).not.toContain('sync');
+	});
+
 	it('seul le module admin utilise la connexion app_admin', () => {
 		const offenders = all.filter((f) => !f.path.startsWith('modules/admin/') && imports(f.code).some((i) => i.includes('admin-database')));
 		expect(offenders.map((f) => f.path)).toEqual([]);
