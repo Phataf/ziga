@@ -32,6 +32,7 @@
 	import { LOCAL_QUERIES } from '#lib/sync/queries.ts';
 	import { sync } from '#lib/sync/sync.svelte.ts';
 	import { toOrganizationView } from '#lib/sync/views.ts';
+	import { saveOrganizationSettings } from '#lib/sync/writes.ts';
 
 	const t = fr.settings;
 	const editable = $derived(can(organizations.active?.role, 'organization.update'));
@@ -155,9 +156,10 @@
 		if (!parsed.success || 'error' in number) return;
 		busy = true;
 		try {
-			fill(await organizations.call<OrganizationView>('PATCH', '/organization', input));
+			// Lot 05 : écrit sur l'appareil, envoyé par la synchronisation (POST /sync/upload) ; hors ligne aussi.
+			await saveOrganizationSettings(await sync.start(), organizations.activeId!, parsed.data);
 			edited = false;
-			info = t.saved;
+			info = sync.online ? t.saved : t.savedOffline;
 		} catch (error) {
 			message = messageOf(error);
 		} finally {

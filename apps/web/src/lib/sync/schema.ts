@@ -10,7 +10,11 @@ const TYPES = { text: column.text, integer: column.integer, real: column.real } 
 
 function table(columns: Record<string, LocalColumnType>): Table {
 	const indexes: Record<string, string[]> = 'organization_id' in columns ? { by_organization: ['organization_id'] } : {};
-	return new Table(Object.fromEntries(Object.entries(columns).map(([name, type]) => [name, TYPES[type]])), { indexes });
+	// Une mise à jour qui ne change rien ne crée pas d'opération à envoyer (étape 3).
+	return new Table(Object.fromEntries(Object.entries(columns).map(([name, type]) => [name, TYPES[type]])), {
+		indexes,
+		ignoreEmptyUpdates: true
+	});
 }
 
 export const AppSchema = new Schema(Object.fromEntries(Object.entries(SYNCED_TABLES).map(([name, columns]) => [name, table(columns)])));

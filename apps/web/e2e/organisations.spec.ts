@@ -202,11 +202,13 @@ test.describe('Paramètres de l’organisation', () => {
 		await expect(preview.locator('img')).toHaveAttribute('src', /\/logos\/[0-9a-f-]+\/[0-9a-f-]+\/web\.webp$/, { timeout: 15_000 });
 		await expect(page.getByTestId('logo-message')).toHaveText('Logo en place.');
 
-		// Chaque modification est au journal, avec avant et après.
+		// Chaque modification est au journal, avec avant et après (une fois envoyée par la synchronisation, lot 05).
+		await synced(page);
 		await page.goto('/app/journal');
-		const update = page.getByTestId('evenement').filter({ hasText: 'Paramètres modifiés' }).first();
-		await expect(update).toContainText('RCCM');
-		await expect(update).toContainText('BF OUA 2021 B 777');
+		// Lot 05 : la fiche et le représentant légal partent en deux opérations, donc deux lignes, chacune exacte.
+		const updates = page.getByTestId('evenement').filter({ hasText: 'Paramètres modifiés' });
+		await expect(updates.filter({ hasText: 'RCCM' })).toContainText('BF OUA 2021 B 777');
+		await expect(updates.filter({ hasText: 'Représentant légal' })).toContainText('Clarisse Yaméogo, Gérante');
 		await expect(page.getByTestId('evenement').filter({ hasText: 'Nouveau logo en place' })).toHaveCount(1);
 	});
 

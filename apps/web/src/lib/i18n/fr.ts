@@ -227,6 +227,7 @@ export const fr = {
 		idIssuedBy: 'Par (autorité)',
 		save: 'Enregistrer',
 		saved: 'Paramètres enregistrés.',
+		savedOffline: 'Paramètres enregistrés sur l’appareil : ils partiront dès que la connexion revient.',
 		logo: 'Logo',
 		logoHint: 'PNG, JPEG ou WebP, 2 Mo au plus. Remplacer le logo ne change pas les documents déjà émis.',
 		chooseLogo: 'Choisir un logo',

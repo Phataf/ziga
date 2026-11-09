@@ -256,3 +256,57 @@ test.describe('Synchronisation : la base locale du navigateur', () => {
 		await expect.poll(async () => Object.values(await localCounts(page)).reduce((a, b) => a + b, 0), { timeout: 10_000 }).toBe(0);
 	});
 });
+
+test.describe('Synchronisation : écrire sur l’appareil (étape 3)', () => {
+	test('hors ligne, modifier ; revenir en ligne : la modification arrive en base, avec son audit d’origine sync', async ({
+		page,
+		context,
+		request
+	}) => {
+		const agency = await freshAgency(request, `Agence écriture ${newId().slice(-6)}`);
+		await signInWith(page, agency.director, '/app/organisation');
+		await synced(page);
+		await expect(page.getByLabel('Raison sociale')).toHaveValue(/Agence écriture/);
+
+		await context.setOffline(true);
+		await expect(page.getByTestId('etat-synchro')).toHaveAttribute('data-etat', 'offline');
+		const name = `Nom hors ligne ${newId().slice(-6)}`;
+		await page.getByLabel('Nom commercial').fill(name);
+		await page.getByRole('button', { name: 'Enregistrer' }).click();
+		await expect(page.getByText('Paramètres enregistrés sur l’appareil : ils partiront dès que la connexion revient.')).toBeVisible();
+		// Écrit sur l'appareil, en attente d'envoi ; le serveur n'a encore rien reçu.
+		await expect(page.getByTestId('apercu-entete')).toContainText(name);
+		expect((await localCounts(page)).ps_crud).toBe(1);
+		const server = async () =>
+			((await (await request.get(`${API_URL}/organization`, { headers: agency.headers })).json()) as { tradeName: string | null })
+				.tradeName;
+		expect(await server()).toBeNull();
+
+		await context.setOffline(false);
+		await synced(page);
+		await expect.poll(server, { timeout: 5_000 }).toBe(name);
+		expect((await localCounts(page)).ps_crud).toBe(0);
+		const audit = (await (await request.get(`${API_URL}/organization/audit`, { headers: agency.headers })).json()) as {
+			entries: { action: string; origin: string; after: Record<string, unknown> | null }[];
+		};
+		expect(audit.entries.find((e) => e.action === 'organization.update')).toMatchObject({ origin: 'sync', after: { tradeName: name } });
+	});
+
+	test('en ligne : l’indicateur montre la modification en attente, puis « À jour »', async ({ page, request }) => {
+		const agency = await freshAgency(request, `Agence attente ${newId().slice(-6)}`);
+		await signInWith(page, agency.director, '/app/organisation');
+		await synced(page);
+		// Envoi retenu un instant : l'attente est visible.
+		let release!: () => void;
+		const held = new Promise<void>((resolve) => (release = resolve));
+		await page.route(`${API_URL}/sync/upload`, async (route) => {
+			await held;
+			await route.continue();
+		});
+		await page.getByLabel('Nom commercial').fill('Nom en attente');
+		await page.getByRole('button', { name: 'Enregistrer' }).click();
+		await expect(page.getByTestId('etat-synchro')).toHaveText('1 modification en attente');
+		release();
+		await synced(page);
+	});
+});
