@@ -24,7 +24,8 @@ Durées indicatives pour un développement à temps partiel avec Claude Code, re
 | 10 ter | Espaces propriétaire et locataire avec compte, regroupant toutes les organisations | 1 | 10 bis | 1 à 2 semaines | `prompts/lot-10ter-espaces-personnels.md` |
 | 11 | Import Excel | 1 | 10 ter | 1 semaine | `prompts/lot-11-import-excel.md` |
 | 12 | Vitrine publique, annonces, prospects | 1 | 11 | 2 semaines | `prompts/lot-12-vitrine-annonces.md` |
-| 13 | Durcissement et mise en production pilote | 1 → 2 | 12 | 1 à 2 semaines | `prompts/lot-13-production.md` |
+| 12 bis | Demandes de recherche des visiteurs (sans compte) et alertes ; recherches des clients d'une organisation | 1 | 12 | 1 à 2 semaines | `prompts/lot-12bis-demandes-alertes.md` |
+| 13 | Durcissement et mise en production pilote | 1 → 2 | 12 bis | 1 à 2 semaines | `prompts/lot-13-production.md` |
 | — | **Phase 2 : pilote de 12 semaines, corrections hebdomadaires** | 2. Piloter | | | |
 | — | **Porte 1 : 70 % des loyers saisis, 2 pilotes payants** | | | | |
 | 14 | Paiement direct Mobile Money (agrégateurs) | 3. Lancer | Porte 1 | 2 à 3 semaines | `prompts/lot-14-paiement-direct.md` |
@@ -34,7 +35,7 @@ Durées indicatives pour un développement à temps partiel avec Claude Code, re
 Ces lots ne sont pas détaillés volontairement : leur contenu dépendra du pilote.
 
 - Abonnements et facturation automatisés.
-- Rapprochement automatique des demandes de locataires et des unités libres.
+- Statistiques anonymes de la demande pour les agences (par quartier, type et budget), à partir des demandes du lot 12 bis.
 - API WhatsApp Business (`notifications.whatsapp_api`).
 - Publication par les particuliers avec modération (`listings.private_sellers`).
 - Visites 360° (`media.virtual_tour_360`).

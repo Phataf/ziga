@@ -28,7 +28,7 @@ Lot 11 terminé.
 6. **Interrupteur global** `listings.public_showcase` : coupé, la vitrine affiche une page de maintenance.
 
 ## Hors périmètre
-Publication par les particuliers, mise en avant payante (`listings.featured`), publication Facebook automatique (`listings.facebook_publish`), alertes de recherche, favoris, visites 360°, rapprochement automatique des demandes.
+Publication par les particuliers, mise en avant payante (`listings.featured`), publication Facebook automatique (`listings.facebook_publish`), demandes de recherche, alertes et rapprochement des demandes (lot 12 bis), favoris, visites 360°.
 
 ## Tests attendus
 - Publication refusée pour chaque condition manquante, avec le bon motif.

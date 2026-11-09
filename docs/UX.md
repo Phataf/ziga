@@ -27,7 +27,7 @@ Ce document fait foi pour toute interface du projet (maquette et produit). `CLAU
 | Bailleur particulier | Organisation de type bailleur (D12) | Compte | Gérer lui-même quelques logements | Accueil « Mes logements » | Ses logements |
 | Propriétaire | Espace personnel (D13) | Compte personnel vérifié par SMS, dès le lancement ; le lien d'un relevé reste partageable | Suivre tous ses biens, quelle que soit l'organisation qui les gère, et ses revenus | « Mon patrimoine » | Ses biens dans chaque organisation liée, avec le gestionnaire de chacun ; relevés, reversements, cautions détenues ; pas les coordonnées des locataires |
 | Locataire | Espace personnel (D13) | Compte personnel vérifié par SMS, dès le lancement ; le lien d'un reçu reste partageable | Connaître son solde, retrouver ses reçus, suivre sa caution, signaler un problème, donner son préavis | « Mon logement » | Tout son historique, toutes agences confondues : baux, échéances, reçus, cautions, décomptes ; chaque élément indique l'agence concernée |
-| Visiteur ou acheteur | Vitrine publique | Aucun | Trouver un logement à louer ou un bien à acheter | Recherche | Annonces publiées |
+| Visiteur ou acheteur | Vitrine publique | Aucun | Trouver un logement à louer ou un bien à acheter ; laisser une demande et être prévenu (D31) | Recherche | Annonces publiées |
 | Administrateur plateforme | Back-office | Compte plateforme (rôles : administrateur général, assistance, commercial, finances) | Organisations, formules, abonnements, interrupteurs | Liste des organisations | Selon `docs/FEATURE-FLAGS.md` ; accès aux données d'une organisation motivé, limité dans le temps et journalisé |
 
 **Navigation par profil**
@@ -177,6 +177,9 @@ La maquette contient ces tests (`maquette/e2e/08-multiplateforme.spec.ts`), à r
 | Compte | Choix de l'espace ; liaison d'une fiche (code SMS, puis acceptation par l'organisation) | 10 ter |
 | Gestion | Bouton global « Créer » (bien, locataire, bail, dépense) sur tablette et ordinateur ; écran de démarrage qui guide vers l'import Excel | 07, 11 |
 | Back-office | Organisations, formules et abonnements, fonctionnalités, journal, accès d'assistance motivé | 04 |
+| Vitrine | « Je cherche un logement » (formulaire, code SMS, consentement) ; confirmation avec les annonces déjà en ligne ; page personnelle de la demande (annonces signalées, « Ça m'intéresse », « Pas pour moi », pause, « Je ne suis plus intéressé ») ; « Retrouver mes demandes » | 12 bis |
+| Gestion | Recherches clients (liste, formulaire, logements correspondants, « Prévenir par WhatsApp ») ; mention « N recherches de clients correspondent » sur une unité disponible | 12 bis |
+| Back-office | Réglages des demandes (ressemblance, plafonds, heures de silence, conservation, prix d'un SMS) ; suivi agrégé ; recherche d'une demande par numéro, avec motif | 12 bis |
 | Gestion | Contrats : liste (statut du bail et du contrat, alertes), génération depuis le bail, relecture avec aperçu, suivi de signature avec dépôt du scan, légalisation et enregistrement, fiche contrat (versions, avenants, documents), modèles de contrat | 08 bis |
 | Locataire, propriétaire | « Mes contrats » (en vigueur, à signer, terminés) ; contrats des biens du propriétaire ; documents autorisés | 10 ter |
 

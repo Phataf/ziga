@@ -67,6 +67,8 @@ Remarques :
 | `listings.featured` | Mise en avant d'annonces | Oui (Pro) | `disabled` |
 | `listings.public_showcase` | Vitrine publique accessible (arrêt d'urgence de toute la vitrine) | Non | `enabled` |
 | `leads.contact_form` | Formulaire de contact sur les annonces | Non | `enabled` |
+| `listings.search_alerts` | Demandes de recherche des visiteurs et alertes (D31, lot 12 bis). Coupée : plus de nouvelle demande ni d'envoi ; l'arrêt d'une demande reste possible | Non | `enabled` |
+| `leads.client_searches` | Recherches des clients d'une organisation, comparées à ses logements (D31, lot 12 bis) | Non | `enabled` |
 | `collections.reminders_whatsapp_link` | Relances par lien WhatsApp pré-rempli | Non | `enabled` |
 | `collections.owner_statements` | Relevés propriétaires | Oui (quota Découverte) | `enabled` |
 | `field_agents` | Rôle agent de terrain et validation des espèces | Oui (Essentiel, Pro) | `enabled` |
