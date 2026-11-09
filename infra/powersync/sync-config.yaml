@@ -11,6 +11,7 @@ config:
   edition: 3
 
 streams:
+  # Organisations de la personne et leur équipe, avec les réglages et les exceptions de fonctionnalités de chacune.
   organization_data:
     auto_subscribe: true
     with:
@@ -23,3 +24,30 @@ streams:
     queries:
       - SELECT id, type, legal_name, trade_name, phone, address, commune, po_box, rccm, ifu, verification_status, plan_id, accepted_payment_methods, logo_id, updated_at FROM organizations WHERE id IN my_organizations
       - SELECT id, organization_id, user_id, role, status, display_name, joined_at FROM organization_members WHERE organization_id IN my_organizations
+      - SELECT organization_id || ':' || feature_key AS id, organization_id, feature_key, disabled_by_organization FROM organization_feature_settings WHERE organization_id IN my_organizations
+      - SELECT id, feature_key, scope, organization_id, user_id, value, starts_at, ends_at FROM feature_overrides WHERE organization_id IN my_organizations AND revoked_at IS NULL
+
+  # Représentant légal (pièce d'identité) : réservé au directeur, comme l'écran des paramètres.
+  organization_representatives:
+    auto_subscribe: true
+    with:
+      directed_organizations: |
+        SELECT organization_members.organization_id FROM organization_members
+          JOIN organizations ON organizations.id = organization_members.organization_id
+        WHERE organization_members.user_id = auth.user_id()
+          AND organization_members.status = 'active'
+          AND organization_members.role = 'director'
+          AND organizations.verification_status != 'suspended'
+    query: SELECT id, rep_name, rep_title, rep_profession, rep_address, rep_nationality, rep_id_type, rep_id_type_other, rep_id_number, rep_id_issued_on, rep_id_issued_by FROM organizations AS organization_representatives WHERE id IN directed_organizations
+
+  # Exceptions de fonctionnalités posées pour la personne elle-même (D05).
+  my_feature_overrides:
+    auto_subscribe: true
+    query: SELECT id, feature_key, scope, organization_id, user_id, value, starts_at, ends_at FROM feature_overrides WHERE user_id = auth.user_id() AND revoked_at IS NULL
+
+  # Catalogue des fonctionnalités et contenu des formules : identiques pour tous, sans donnée d'organisation.
+  feature_catalog:
+    auto_subscribe: true
+    queries:
+      - SELECT key AS id, global_mode, plan_bound, requires FROM features
+      - SELECT plan_id || ':' || feature_key AS id, plan_id, feature_key FROM plan_features

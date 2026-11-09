@@ -8,3 +8,4 @@ export * from './organizations.js';
 export * from './features.js';
 export * from './subscriptions.js';
 export * from './admin.js';
+export * from './sync-schema.js';

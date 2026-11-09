@@ -10,12 +10,17 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import pg from 'pg';
+import { SYNCED_TABLES } from '@ziga/shared/sync-schema';
 import { describe, expect, it } from 'vitest';
 
 const CONFIG = resolve(import.meta.dirname, '../../../infra/powersync/sync-config.yaml');
 const SCRIPT = resolve(import.meta.dirname, '../scripts/check-sync-config.mjs');
 
-function check(file = CONFIG): { problems: { type: string; message: string }[]; sourceTables: string[] } {
+function check(file = CONFIG): {
+	problems: { type: string; message: string }[];
+	sourceTables: string[];
+	clientTables: Record<string, Record<string, string>>;
+} {
 	const out = execFileSync(process.execPath, ['--js-explicit-resource-management', SCRIPT, process.env.DATABASE_MIGRATION_URL!, file], {
 		encoding: 'utf8'
 	});
@@ -45,6 +50,19 @@ describe('Sync Streams (lot 05, D30)', () => {
 		} finally {
 			await c.end();
 		}
+	});
+
+	it('le schéma local du client (packages/shared/sync-schema) est exactement celui que PowerSync déduit des streams', () => {
+		expect(check().clientTables).toEqual(SYNCED_TABLES);
+	});
+
+	it('le représentant légal (pièce d’identité) ne descend que chez les directeurs', () => {
+		const yaml = readFileSync(CONFIG, 'utf8');
+		const stream = yaml.slice(yaml.indexOf('  organization_representatives:'), yaml.indexOf('  my_feature_overrides:'));
+		expect(stream).toContain("organization_members.role = 'director'");
+		expect(stream).toContain('rep_id_number');
+		const others = yaml.replace(stream, '');
+		expect(others).not.toMatch(/\brep_/);
 	});
 
 	it('jamais de SELECT * : chaque colonne synchronisée est choisie', () => {

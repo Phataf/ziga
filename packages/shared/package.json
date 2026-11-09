@@ -47,6 +47,10 @@
 		"./admin": {
 			"types": "./dist/admin.d.ts",
 			"default": "./dist/admin.js"
+		},
+		"./sync-schema": {
+			"types": "./dist/sync-schema.d.ts",
+			"default": "./dist/sync-schema.js"
 		}
 	},
 	"files": [

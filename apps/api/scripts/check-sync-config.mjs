@@ -1,7 +1,8 @@
 /**
  * Vérifie les Sync Streams (infra/powersync/sync-config.yaml) avec le moteur de PowerSync lui-même
  * (@powersync/service-sync-rules, même version que le service) contre le schéma réel de la base :
- * syntaxe, colonnes et tables existantes. Écrit en JSON : erreurs et avertissements, tables lues.
+ * syntaxe, colonnes et tables existantes. Écrit en JSON : erreurs et avertissements, tables lues, et tables du
+ * client telles que PowerSync les déduit des streams (nom, colonnes, type SQLite).
  *
  * Lancé par test/sync-streams.int.test.ts, avec `--js-explicit-resource-management` : le moteur utilise
  * `using`, que Node 22 n'accepte qu'avec ce drapeau.
@@ -9,7 +10,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { parseSyncConfig, StaticSchema, validateSyncConfig } from '@powersync/service-sync-rules';
+import { parseSyncConfig, SchemaGenerator, StaticSchema, validateSyncConfig } from '@powersync/service-sync-rules';
 import pg from 'pg';
 
 const [url, file = resolve(import.meta.dirname, '../../../infra/powersync/sync-config.yaml')] = process.argv.slice(2);
@@ -35,4 +36,20 @@ const options = { schema, defaultSchema: 'public' };
 const problems = validateSyncConfig(yaml, options).map((e) => ({ type: e.type, message: e.message }));
 const { config } = parseSyncConfig(yaml, options);
 const sourceTables = [...new Set(config.getSourceTables().map((t) => t.tablePattern))].sort();
-process.stdout.write(JSON.stringify({ problems, sourceTables }));
+
+/** Générateur de PowerSync, réduit à ce qui nous sert : les tables du client et le type de chaque colonne. */
+class ClientTables extends SchemaGenerator {
+	key = 'ziga';
+	label = 'ziga';
+	mediaType = 'application/json';
+	fileName = 'tables.json';
+	generate(source, sourceSchema) {
+		const tables = {};
+		for (const t of this.getAllTables(source, sourceSchema)) {
+			tables[t.name] = Object.fromEntries(t.columns.filter((c) => c.name !== 'id').map((c) => [c.name, this.columnType(c)]));
+		}
+		return JSON.stringify(tables);
+	}
+}
+const clientTables = JSON.parse(new ClientTables().generate(config, schema));
+process.stdout.write(JSON.stringify({ problems, sourceTables, clientTables }));
