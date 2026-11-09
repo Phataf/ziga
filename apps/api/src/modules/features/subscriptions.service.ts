@@ -3,9 +3,10 @@
  * abonnements saisis à la main et les durées réglables (SUBSCRIPTION_REMINDER_DAYS, SUBSCRIPTION_GRACE_DAYS).
  */
 import { Inject, Injectable } from '@nestjs/common';
-import { toIsoDate } from '@ziga/shared/dates';
+import { formatDate, toIsoDate } from '@ziga/shared/dates';
 import { subscriptionStage, type SubscriptionState } from '@ziga/shared/subscriptions';
 import { desc } from 'drizzle-orm';
+import { AppError } from '../../common/app-error.js';
 import { RequestContext } from '../../common/request-context.js';
 import { APP_CONFIG } from '../../config/config.module.js';
 import type { AppConfig } from '../../config/env.js';
@@ -46,5 +47,22 @@ export class SubscriptionsService {
 	async stateOf(organizationId: string, planId: string, tx?: Tx): Promise<{ state: SubscriptionState; periods: SubscriptionRecord[] }> {
 		const periods = await this.ofOrganization(organizationId, tx);
 		return { state: this.stage(planId, periods), periods };
+	}
+
+	/**
+	 * Création permise ? Sinon 403 SUBSCRIPTION_EXPIRED (abonnement échu au-delà du délai de grâce). Partagé par la
+	 * garde @Creation() et l'envoi des modifications (lot 05).
+	 */
+	async assertCreationAllowed(scope: { organizationId: string; planId: string }): Promise<void> {
+		const { state } = await this.stateOf(scope.organizationId, scope.planId);
+		if (state.stage === 'blocked') {
+			throw new AppError(
+				'SUBSCRIPTION_EXPIRED',
+				`Abonnement échu${state.paidUntil ? ` depuis le ${formatDate(state.paidUntil)}` : ''} : les nouvelles créations sont suspendues. ` +
+					'Les loyers, les reçus, les relevés, la sortie des locataires et l’export restent possibles. Contactez Ziga pour renouveler.',
+				403,
+				{ stage: state.stage, paidUntil: state.paidUntil, blockedFrom: state.blockedFrom }
+			);
+		}
 	}
 }

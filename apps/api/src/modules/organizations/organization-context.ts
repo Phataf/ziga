@@ -22,7 +22,7 @@ import { can, type Action, type OrganizationRole, type OrganizationType } from '
 import { and, eq } from 'drizzle-orm';
 import { from, lastValueFrom, type Observable } from 'rxjs';
 import { AppError } from '../../common/app-error.js';
-import { RequestContext, type OrganizationScope } from '../../common/request-context.js';
+import { RequestContext, type AuditOrigin, type OrganizationScope } from '../../common/request-context.js';
 import { DatabaseService } from '../../db/database.module.js';
 import { organizationMembers, organizations } from '../../db/schema/organizations.js';
 import type { AuthenticatedRequest } from '../identity/auth.guard.js';
@@ -82,6 +82,45 @@ export async function loadMembershipScope(
 	};
 }
 
+/** Membre actif de l'organisation, sinon 403 NOT_A_MEMBER. Partagé par les routes et l'envoi des modifications (lot 05). */
+export async function requireMembership(database: DatabaseService, userId: string, organizationId: string): Promise<OrganizationScope> {
+	const scope = await loadMembershipScope(database, userId, organizationId);
+	if (!scope) throw new AppError('NOT_A_MEMBER', 'Vous n’êtes pas membre de cette organisation.', 403);
+	return scope;
+}
+
+/** Organisation suspendue : consultation et export seulement, ni création ni modification (403 ORGANIZATION_SUSPENDED). */
+export function assertWritable(scope: OrganizationScope): void {
+	if (scope.verificationStatus === 'suspended') {
+		throw new AppError(
+			'ORGANIZATION_SUSPENDED',
+			'Organisation suspendue : la consultation et l’export restent possibles, pas les modifications.',
+			403
+		);
+	}
+}
+
+/**
+ * Transaction withOrganization() et contexte de requête (personne, organisation, origine de l'audit), puis les tâches
+ * prévues après validation. Partagé par l'intercepteur des routes et l'envoi des modifications (origine `sync`).
+ */
+export async function runInOrganization<T>(
+	database: DatabaseService,
+	scope: OrganizationScope,
+	userId: string,
+	fn: () => Promise<T>,
+	origin?: AuditOrigin
+): Promise<T> {
+	const parent = RequestContext.get();
+	const afterCommit: (() => Promise<void> | void)[] = [];
+	const result = await database.withOrganization(scope.organizationId, (tx) =>
+		RequestContext.run({ ...parent, origin: origin ?? parent?.origin ?? 'api', userId, organization: scope, tx, afterCommit }, fn)
+	);
+	// Après validation seulement : une tâche de fond ne voit jamais une écriture annulée.
+	for (const task of afterCommit) await task();
+	return result;
+}
+
 @Injectable()
 export class OrganizationGuard implements CanActivate {
 	constructor(
@@ -98,16 +137,8 @@ export class OrganizationGuard implements CanActivate {
 		if (!organizationId || !isUuid(organizationId)) {
 			throw new AppError('ORGANIZATION_REQUIRED', 'Choisissez d’abord une organisation.', 400);
 		}
-		const scope = await loadMembershipScope(this.database, userId, organizationId);
-		if (!scope) throw new AppError('NOT_A_MEMBER', 'Vous n’êtes pas membre de cette organisation.', 403);
-		// Organisation suspendue : consultation et export seulement, ni création ni modification.
-		if (scope.verificationStatus === 'suspended' && request.method !== 'GET') {
-			throw new AppError(
-				'ORGANIZATION_SUSPENDED',
-				'Organisation suspendue : la consultation et l’export restent possibles, pas les modifications.',
-				403
-			);
-		}
+		const scope = await requireMembership(this.database, userId, organizationId);
+		if (request.method !== 'GET') assertWritable(scope);
 		request.organization = scope;
 		const action = this.reflector.getAllAndOverride<Action | undefined>(CAN, [context.getHandler(), context.getClass()]);
 		if (action) assertCan(request.organization.role, action);
@@ -121,21 +152,11 @@ export class OrganizationTransactionInterceptor implements NestInterceptor {
 
 	intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
 		const request = context.switchToHttp().getRequest<OrganizationRequest>();
-		const scope = request.organization!;
-		const parent = RequestContext.get();
-		const afterCommit: (() => Promise<void> | void)[] = [];
-		const run = async () => {
-			const result = await this.database.withOrganization(scope.organizationId, (tx) =>
-				RequestContext.run(
-					{ origin: parent?.origin ?? 'api', ...parent, userId: request.auth!.sub, organization: scope, tx, afterCommit },
-					() => lastValueFrom(next.handle(), { defaultValue: undefined })
-				)
-			);
-			// Après validation seulement : une tâche de fond ne voit jamais une écriture annulée.
-			for (const fn of afterCommit) await fn();
-			return result;
-		};
-		return from(run());
+		return from(
+			runInOrganization(this.database, request.organization!, request.auth!.sub, () =>
+				lastValueFrom(next.handle(), { defaultValue: undefined })
+			)
+		);
 	}
 }
 

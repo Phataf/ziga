@@ -6,7 +6,6 @@
  */
 import { applyDecorators, CanActivate, ExecutionContext, Injectable, SetMetadata, UseGuards } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { formatDate } from '@ziga/shared/dates';
 import type { FeatureKey } from '@ziga/shared/features';
 import { AppError } from '../../common/app-error.js';
 import type { OrganizationRequest } from '../organizations/organization-context.js';
@@ -43,16 +42,7 @@ export class CreationGuard implements CanActivate {
 	async canActivate(context: ExecutionContext): Promise<boolean> {
 		const scope = context.switchToHttp().getRequest<OrganizationRequest>().organization;
 		if (!scope) throw new AppError('NO_ORGANIZATION_CONTEXT', 'Contexte d’organisation absent.', 500);
-		const { state } = await this.subscriptions.stateOf(scope.organizationId, scope.planId);
-		if (state.stage === 'blocked') {
-			throw new AppError(
-				'SUBSCRIPTION_EXPIRED',
-				`Abonnement échu${state.paidUntil ? ` depuis le ${formatDate(state.paidUntil)}` : ''} : les nouvelles créations sont suspendues. ` +
-					'Les loyers, les reçus, les relevés, la sortie des locataires et l’export restent possibles. Contactez Ziga pour renouveler.',
-				403,
-				{ stage: state.stage, paidUntil: state.paidUntil, blockedFrom: state.blockedFrom }
-			);
-		}
+		await this.subscriptions.assertCreationAllowed(scope);
 		return true;
 	}
 }
