@@ -200,16 +200,14 @@ export class OrganizationsService implements OnModuleInit {
 				})
 				.returning();
 			const memberId = newId();
-			await tx
-				.insert(organizationMembers)
-				.values({
-					id: memberId,
-					organizationId: org!.id,
-					userId,
-					role: 'director',
-					status: 'active',
-					displayName: await this.nameOf(tx, userId)
-				});
+			await tx.insert(organizationMembers).values({
+				id: memberId,
+				organizationId: org!.id,
+				userId,
+				role: 'director',
+				status: 'active',
+				displayName: await this.nameOf(tx, userId)
+			});
 			const actor = { type: 'user' as const, userId, role: 'director' };
 			await this.audit.record(tx, {
 				actor,
