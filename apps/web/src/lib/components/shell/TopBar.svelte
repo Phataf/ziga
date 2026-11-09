@@ -1,10 +1,11 @@
 <script lang="ts">
-	/** Ordinateur : barre du haut (date du jour, profil). La recherche globale arrive avec les écrans métier. */
+	/** Ordinateur : barre du haut (profil, état de la synchronisation, date du jour). La recherche globale arrive avec les écrans métier. */
 	import { formatDate } from '@ziga/shared/dates';
 	import { auth } from '#lib/auth/auth.svelte.ts';
 	import { organizations } from '#lib/org/organizations.svelte.ts';
 	import { fr } from '#lib/i18n/fr.ts';
 	import type { Profile } from '#lib/profiles.ts';
+	import SyncIndicator from './SyncIndicator.svelte';
 
 	let { profile }: { profile: Profile } = $props();
 </script>
@@ -16,7 +17,9 @@
 			</span>{/if}{profile.label}{#if profile.space === 'agency' && organizations.active}
 			<span data-testid="organisation-active"> · {organizations.active.name}</span>{/if}
 	</p>
-	{#if auth.status === 'offline'}<p class="rounded-full bg-warning-soft px-3 py-1 text-sm text-warning-foreground" role="status">
+	{#if profile.space === 'agency'}
+		<SyncIndicator />
+	{:else if auth.status === 'offline'}<p class="rounded-full bg-warning-soft px-3 py-1 text-sm text-warning-foreground" role="status">
 			{fr.auth.offline}
 		</p>{/if}
 	<p class="ml-auto text-muted-foreground">{fr.app.today(formatDate(new Date()))}</p>

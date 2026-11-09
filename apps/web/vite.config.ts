@@ -26,6 +26,10 @@ export default defineConfig({
 			}
 		})
 	],
+	// PowerSync (lot 05) : le SDK contient des workers et du WebAssembly, que Vite ne doit pas pré-assembler ;
+	// ses workers sont des modules ES.
+	optimizeDeps: { exclude: ['@powersync/web'] },
+	worker: { format: 'es' },
 	// Port réglable par WEB_PORT (lu ici plutôt que dans un script : la syntaxe ${…:-…} n'existe pas sous Windows).
 	server: { port: Number(process.env.WEB_PORT || 5173), strictPort: true },
 	test: {

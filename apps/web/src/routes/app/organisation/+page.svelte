@@ -4,6 +4,7 @@
 	 * légal (D24) et logo, avec l'aperçu de l'en-tête des reçus. Chaque enregistrement écrit sa ligne d'audit
 	 * (valeur avant et après) ; un document déjà émis ne change jamais (D29).
 	 */
+	import { PUBLIC_API_URL } from '$app/env/public';
 	import { onDestroy, onMount } from 'svelte';
 	import { ImageUp, Save } from '@lucide/svelte';
 	import {
@@ -28,6 +29,9 @@
 	import { fieldErrors, messageOf, phoneOf } from '#lib/auth/forms.ts';
 	import { fr } from '#lib/i18n/fr.ts';
 	import { organizations } from '#lib/org/organizations.svelte.ts';
+	import { LOCAL_QUERIES } from '#lib/sync/queries.ts';
+	import { sync } from '#lib/sync/sync.svelte.ts';
+	import { toOrganizationView } from '#lib/sync/views.ts';
 
 	const t = fr.settings;
 	const editable = $derived(can(organizations.active?.role, 'organization.update'));
@@ -104,13 +108,27 @@
 		}, 1000);
 	}
 
-	onMount(async () => {
-		try {
-			fill(await organizations.call<OrganizationView>('GET', '/organization'));
-		} catch (error) {
-			message = messageOf(error);
-		}
-	});
+	// Lot 05 : la fiche vient de la base locale, sans appel réseau, et suit chaque synchronisation. Pendant une saisie,
+	// le formulaire n'est pas réécrit : seul l'aperçu suit.
+	let edited = $state(false);
+	let synced = $state(false);
+	onMount(() =>
+		sync.watch<Record<string, unknown>>(
+			LOCAL_QUERIES.organization,
+			[organizations.activeId],
+			(rows) => {
+				synced = true;
+				if (!rows[0]) return;
+				const next = toOrganizationView(rows[0], PUBLIC_API_URL);
+				// Logo en cours de traitement : on garde l'état renvoyé par l'envoi jusqu'à ce qu'il soit prêt.
+				const logo = view?.logo?.status === 'processing' && next.logo?.id !== view.logo.id ? view.logo : next.logo;
+				if (view?.logo?.status === 'processing' && logo?.status === 'ready') logoMessage = t.logoReady;
+				if (!view || !edited) fill({ ...next, logo });
+				else view = { ...next, logo };
+			},
+			(error) => (message = messageOf(error))
+		)
+	);
 	onDestroy(() => clearTimeout(timer));
 
 	async function save(event: SubmitEvent) {
@@ -138,6 +156,7 @@
 		busy = true;
 		try {
 			fill(await organizations.call<OrganizationView>('PATCH', '/organization', input));
+			edited = false;
 			info = t.saved;
 		} catch (error) {
 			message = messageOf(error);
@@ -192,7 +211,7 @@
 	{#if view}
 		{#if !editable}<FormAlert message={t.readOnly} tone="info" />{/if}
 		<div class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_26rem] xl:items-start">
-			<form class="space-y-4" onsubmit={save} novalidate>
+			<form class="space-y-4" onsubmit={save} oninput={() => (edited = true)} novalidate>
 				<fieldset class={section} disabled={!editable}>
 					<legend class="sr-only">{t.identity}</legend>
 					<h2 class="text-lg font-semibold">{t.identity}</h2>
@@ -349,5 +368,7 @@
 			</div>
 			<FeaturesSection {editable} />
 		</div>
+	{:else if synced || sync.state === 'offline'}
+		<FormAlert message={fr.sync.notYet} tone="info" />
 	{/if}
 </main>

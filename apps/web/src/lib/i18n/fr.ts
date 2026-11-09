@@ -436,6 +436,13 @@ export const fr = {
 		grace: 'Échu, délai de grâce',
 		blocked: 'Échu, créations bloquées'
 	} as Record<string, string>,
+	sync: {
+		upToDate: 'À jour',
+		offline: 'Hors ligne',
+		syncing: 'Synchronisation…',
+		pending: (n: number) => `${n} modification${n > 1 ? 's' : ''} en attente`,
+		notYet: 'Les données de cette organisation ne sont pas encore copiées sur cet appareil. Elles arrivent dès que la connexion revient.'
+	},
 	admin: {
 		noAccess: 'Votre rôle ne donne pas accès à cet écran.',
 		unavailable: 'Back-office indisponible.',

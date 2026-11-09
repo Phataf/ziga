@@ -16,6 +16,7 @@
 	import TabBar from './TabBar.svelte';
 	import TopBar from './TopBar.svelte';
 	import SubscriptionBanner from '../org/SubscriptionBanner.svelte';
+	import SyncIndicator from './SyncIndicator.svelte';
 
 	let { profile, children }: { profile: Profile; children: Snippet } = $props();
 	// Espace de gestion : le nom de l'organisation active (une seule à la fois).
@@ -30,14 +31,16 @@
 
 {#if device.isPhone}
 	<div class="min-h-dvh pb-28" data-coque="telephone">
-		{#if profile.space === 'agency'}<SubscriptionBanner />{/if}
+		{#if profile.space === 'agency'}<SubscriptionBanner />
+			<div class="flex justify-end px-4 pt-2"><SyncIndicator /></div>{/if}
 		{@render children()}
 	</div>
 	<TabBar {profile} />
 {:else if device.isTablet}
 	<NavRail {profile} />
 	<div class="min-h-dvh pb-10 pl-28" data-coque="tablette">
-		{#if profile.space === 'agency'}<SubscriptionBanner />{/if}
+		{#if profile.space === 'agency'}<SubscriptionBanner />
+			<div class="flex justify-end px-6 pt-3"><SyncIndicator /></div>{/if}
 		{@render children()}
 	</div>
 {:else}

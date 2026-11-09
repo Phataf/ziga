@@ -8,36 +8,32 @@
 	import FormAlert from '#lib/components/auth/FormAlert.svelte';
 	import { Button } from '#lib/components/ui/button/index.ts';
 	import { messageOf } from '#lib/auth/forms.ts';
-	import { features as store } from '#lib/features/features.svelte.ts';
+	import { features as store, type OrganizationFeatureRow } from '#lib/features/features.svelte.ts';
 	import { fr } from '#lib/i18n/fr.ts';
 	import { organizations } from '#lib/org/organizations.svelte.ts';
 
-	interface Row {
-		key: string;
-		label: string;
-		enabled: boolean;
-		reason: string;
-		openByPlatform: boolean;
-		disabledByOrganization: boolean;
-	}
+	type Row = OrganizationFeatureRow;
 
 	let { editable }: { editable: boolean } = $props();
 	const t = fr.orgSettings;
-	let rows = $state<Row[]>([]);
+	let fetched = $state<Row[]>([]);
+	// Lot 05 : calculées sur l'appareil depuis la base locale ; l'API ne sert qu'avant la première synchronisation.
+	const rows = $derived(store.organizationRows ?? fetched);
 	let message = $state<string | null>(null);
 
 	onMount(async () => {
+		if (store.organizationRows) return;
 		try {
-			rows = await organizations.call<Row[]>('GET', '/organization/features');
+			fetched = await organizations.call<Row[]>('GET', '/organization/features');
 		} catch (error) {
-			message = messageOf(error);
+			if (!store.organizationRows) message = messageOf(error);
 		}
 	});
 
 	async function set(key: string, disabled: boolean) {
 		message = null;
 		try {
-			rows = await organizations.call<Row[]>('PUT', `/organization/features/${key}`, { disabled });
+			fetched = await organizations.call<Row[]>('PUT', `/organization/features/${key}`, { disabled });
 			await store.load(organizations.activeId);
 		} catch (error) {
 			message = messageOf(error);

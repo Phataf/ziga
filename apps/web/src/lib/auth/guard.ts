@@ -6,6 +6,7 @@ import { error, redirect } from '@sveltejs/kit';
 import { fr } from '../i18n/fr';
 import { features } from '../features/features.svelte';
 import { organizations } from '../org/organizations.svelte';
+import { sync } from '../sync/sync.svelte';
 import { auth } from './auth.svelte';
 
 /** Renvoie vers /connexion seulement si le serveur a refusé la session (401) ou s'il n'y a personne à afficher. */
@@ -29,6 +30,11 @@ export async function requireOrganization(url: URL): Promise<void> {
 	await requireSession(url);
 	await organizations.load();
 	if (!organizations.active) redirect(307, '/espace');
-	// Fonctionnalités ouvertes dans cette organisation : un échec n'empêche pas d'ouvrir l'application (le serveur décide).
-	await features.load(organizations.activeId).catch(() => undefined);
+	// Lot 05 : base locale ouverte et synchronisée en arrière-plan ; les écrans lisent dedans, sans attendre le réseau.
+	void sync.start().catch(() => undefined);
+	const organizationId = organizations.active.organizationId;
+	if (features.organizationId !== organizationId || !features.organizationRows) features.followLocal(organizationId);
+	// Fonctionnalités : calculées sur l'appareil ; l'API ne sert qu'avant la première synchronisation, sans bloquer
+	// l'ouverture de l'écran (le serveur décide de toute façon).
+	if (!features.organizationRows) void features.load(organizationId).catch(() => undefined);
 }

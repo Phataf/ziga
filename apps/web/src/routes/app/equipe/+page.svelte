@@ -3,11 +3,13 @@
 	 * Équipe (lot 03) : membres actifs et invitations en attente. Le directeur invite (lien à envoyer par WhatsApp),
 	 * change un rôle, retire un membre ou annule une invitation ; le gestionnaire voit la liste en lecture.
 	 * Téléphone : cartes ; ordinateur : tableau avec menu d'actions (docs/UX.md §4).
+	 * Lot 05 : les membres viennent de la base locale, sans appel réseau (ni leurs numéros, qui ne sont pas
+	 * synchronisés) ; les invitations en attente, réservées au directeur, se lisent en ligne.
 	 */
 	import { onMount } from 'svelte';
 	import { Copy, MessageCircle, UserPlus, UserMinus, UserCog } from '@lucide/svelte';
 	import { formatDate } from '@ziga/shared/dates';
-	import { inviteMemberSchema, ROLE_LABELS, type InvitationView, type MemberView } from '@ziga/shared/organizations';
+	import { inviteMemberSchema, ROLE_LABELS, type InvitationView } from '@ziga/shared/organizations';
 	import { can, ORGANIZATION_ROLES, type OrganizationRole } from '@ziga/shared/permissions';
 	import { formatPhone, waNumber } from '@ziga/shared/phone';
 	import FormAlert from '#lib/components/auth/FormAlert.svelte';
@@ -19,7 +21,11 @@
 	import { messageOf, phoneOf } from '#lib/auth/forms.ts';
 	import { device } from '#lib/device.svelte.ts';
 	import { fr } from '#lib/i18n/fr.ts';
+	import { auth } from '#lib/auth/auth.svelte.ts';
 	import { organizations } from '#lib/org/organizations.svelte.ts';
+	import { LOCAL_QUERIES } from '#lib/sync/queries.ts';
+	import { sync } from '#lib/sync/sync.svelte.ts';
+	import { toMember, type LocalMember } from '#lib/sync/views.ts';
 
 	const t = fr.team;
 	const role = $derived(organizations.active?.role);
@@ -27,7 +33,7 @@
 	const manage = $derived(can(role, 'member.invite'));
 	const landlord = $derived(organizations.active?.type === 'landlord');
 
-	let members = $state<MemberView[]>([]);
+	let members = $state<LocalMember[]>([]);
 	let invitations = $state<InvitationView[]>([]);
 	let message = $state<string | null>(null);
 	let info = $state<string | null>(null);
@@ -44,23 +50,29 @@
 	let busy = $state(false);
 
 	// Changement de rôle et retrait
-	let roleTarget = $state<MemberView | null>(null);
+	let roleTarget = $state<LocalMember | null>(null);
 	let newRole = $state<OrganizationRole>('manager');
 	let roleOpen = $state(false);
-	let removeTarget = $state<MemberView | null>(null);
+	let removeTarget = $state<LocalMember | null>(null);
 	let removeOpen = $state(false);
 
 	async function load() {
 		message = null;
 		try {
-			members = await organizations.call<MemberView[]>('GET', '/organization/members');
 			invitations = manage ? await organizations.call<InvitationView[]>('GET', '/organization/invitations') : [];
 		} catch (error) {
 			message = messageOf(error);
 		}
 	}
 	onMount(() => {
-		if (allowed) void load();
+		if (!allowed) return;
+		if (manage) void load();
+		return sync.watch<Record<string, unknown>>(
+			LOCAL_QUERIES.members,
+			[organizations.activeId],
+			(rows) => (members = rows.map((r) => toMember(r, auth.user?.id))),
+			(error) => (message = messageOf(error))
+		);
 	});
 
 	function openInvite() {
@@ -111,7 +123,7 @@
 		}
 	}
 
-	function askRole(m: MemberView) {
+	function askRole(m: LocalMember) {
 		roleTarget = m;
 		newRole = m.role;
 		roleOpen = true;
@@ -121,7 +133,8 @@
 		event.preventDefault();
 		if (!roleTarget) return;
 		try {
-			members = await organizations.call<MemberView[]>('PATCH', `/organization/members/${roleTarget.id}`, { role: newRole });
+			// La liste suit la base locale : la synchronisation apporte le nouveau rôle en quelques secondes.
+			await organizations.call('PATCH', `/organization/members/${roleTarget.id}`, { role: newRole });
 			roleOpen = false;
 		} catch (error) {
 			message = messageOf(error);
@@ -129,7 +142,7 @@
 		}
 	}
 
-	function askRemove(m: MemberView) {
+	function askRemove(m: LocalMember) {
 		removeTarget = m;
 		removeOpen = true;
 	}
@@ -156,7 +169,7 @@
 		}
 	}
 
-	const actionsOf = (m: MemberView) => [
+	const actionsOf = (m: LocalMember) => [
 		{ label: t.changeRole, icon: UserCog, onclick: () => askRole(m) },
 		{ label: t.remove, icon: UserMinus, tone: 'danger' as const, onclick: () => askRemove(m) }
 	];
@@ -188,7 +201,6 @@
 								<p class="font-semibold break-words">
 									{m.name}{#if m.current}<span class="text-muted-foreground"> · {t.you}</span>{/if}
 								</p>
-								<p class="text-base text-muted-foreground">{formatPhone(m.phone)}</p>
 							</div>
 							<span class="rounded-full bg-secondary px-3 py-1 text-sm font-medium text-secondary-foreground">{ROLE_LABELS[m.role]}</span>
 						</div>
@@ -210,7 +222,6 @@
 					<thead class="border-b text-muted-foreground">
 						<tr>
 							<th scope="col" class="px-4 py-3 font-medium">{t.member}</th>
-							<th scope="col" class="px-4 py-3 font-medium">{t.phone}</th>
 							<th scope="col" class="px-4 py-3 font-medium">{t.role}</th>
 							<th scope="col" class="px-4 py-3 font-medium">{fr.fields.status}</th>
 							{#if manage && !landlord}<th scope="col" class="px-4 py-3"><span class="sr-only">{fr.app.actions}</span></th>{/if}
@@ -222,7 +233,6 @@
 								<td class="px-4 py-3 font-semibold"
 									>{m.name}{#if m.current}<span class="font-normal text-muted-foreground"> · {t.you}</span>{/if}</td
 								>
-								<td class="px-4 py-3 tabular-nums">{formatPhone(m.phone)}</td>
 								<td class="px-4 py-3">{ROLE_LABELS[m.role]}</td>
 								<td class="px-4 py-3 text-muted-foreground">{t.since(formatDate(m.joinedAt))}</td>
 								{#if manage && !landlord}<td class="px-2 py-1 text-right"
