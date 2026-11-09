@@ -7,6 +7,7 @@
  */
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { newId } from '@ziga/shared/ids';
+import { formatPhone } from '@ziga/shared/phone';
 import { accounts, API_URL, registerViaApi, signInWith, synced, type Account } from './support';
 
 test.use({ viewport: { width: 1440, height: 900 }, isMobile: false, hasTouch: false });
@@ -206,12 +207,19 @@ test.describe('Synchronisation : la base locale du navigateur', () => {
 		await synced(page);
 		await expect(page.getByTestId('membre')).toHaveCount(1);
 
-		// En ligne : la fiche et l'équipe s'affichent sans lire l'API (lecture locale).
+		// En ligne : la fiche et l'équipe s'affichent sans attendre l'API (lecture locale). Seuls les numéros des membres
+		// se lisent en ligne : la réponse est retenue, et l'équipe s'affiche quand même.
 		const reads: string[] = [];
 		page.on('request', (req) => {
 			const path = req.url().startsWith(API_URL) ? new URL(req.url()).pathname : null;
 			if (path && ['/organization', '/organization/members', '/organization/features'].includes(path))
 				reads.push(`${req.method()} ${path}`);
+		});
+		let release!: () => void;
+		const held = new Promise<void>((resolve) => (release = resolve));
+		await page.route(`${API_URL}/organization/members`, async (route) => {
+			await held;
+			await route.continue();
 		});
 		await page
 			.getByRole('navigation', { name: 'Navigation principale' })
@@ -220,7 +228,12 @@ test.describe('Synchronisation : la base locale du navigateur', () => {
 		await expect(page.getByLabel('Raison sociale')).toHaveValue(/Agence hors ligne/);
 		await page.getByRole('navigation', { name: 'Navigation principale' }).getByRole('link', { name: 'Équipe' }).click();
 		await expect(page.getByTestId('membre')).toHaveCount(1);
-		expect(reads).toEqual([]);
+		await expect(page.getByTestId('membre')).toContainText(`Directrice Agence hors ligne`);
+		expect(reads).toEqual(['GET /organization/members']);
+		// La réponse arrive : le numéro s'ajoute, pour le directeur.
+		release();
+		await expect(page.getByTestId('telephone-membre')).toHaveText(formatPhone(agency.director.phone));
+		await page.unroute(`${API_URL}/organization/members`);
 
 		// Hors ligne, page rechargée : l'équipe et la fiche viennent de l'appareil.
 		await context.setOffline(true);
@@ -228,7 +241,8 @@ test.describe('Synchronisation : la base locale du navigateur', () => {
 		await expect(page.getByTestId('etat-synchro')).toHaveAttribute('data-etat', 'offline');
 		await expect(page.getByTestId('etat-synchro')).toHaveText('Hors ligne');
 		await expect(page.getByTestId('membre')).toHaveCount(1);
-		// Les invitations en attente (lues en ligne) le disent, sans message d'erreur.
+		// Numéros et invitations en attente (lus en ligne) le disent, sans message d'erreur.
+		await expect(page.getByTestId('telephone-membre')).toHaveText('Numéro disponible en ligne');
 		await expect(page.getByText('Les invitations en attente s’affichent quand la connexion revient.')).toBeVisible();
 		await expect(page.getByTestId('erreur-formulaire')).toHaveCount(0);
 		await context.setOffline(false);

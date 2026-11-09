@@ -3,13 +3,13 @@
 	 * Équipe (lot 03) : membres actifs et invitations en attente. Le directeur invite (lien à envoyer par WhatsApp),
 	 * change un rôle, retire un membre ou annule une invitation ; le gestionnaire voit la liste en lecture.
 	 * Téléphone : cartes ; ordinateur : tableau avec menu d'actions (docs/UX.md §4).
-	 * Lot 05 : les membres viennent de la base locale, sans appel réseau (ni leurs numéros, qui ne sont pas
-	 * synchronisés) ; les invitations en attente, réservées au directeur, se lisent en ligne.
+	 * Lot 05 : les membres viennent de la base locale, sans attendre le réseau. Leurs numéros (directeur et gestionnaire)
+	 * et les invitations en attente (directeur) ne sont pas synchronisés : ils se lisent en ligne.
 	 */
 	import { onMount } from 'svelte';
 	import { Copy, MessageCircle, UserPlus, UserMinus, UserCog } from '@lucide/svelte';
 	import { formatDate } from '@ziga/shared/dates';
-	import { inviteMemberSchema, ROLE_LABELS, type InvitationView } from '@ziga/shared/organizations';
+	import { inviteMemberSchema, ROLE_LABELS, type InvitationView, type MemberView } from '@ziga/shared/organizations';
 	import { can, ORGANIZATION_ROLES, type OrganizationRole } from '@ziga/shared/permissions';
 	import { formatPhone, waNumber } from '@ziga/shared/phone';
 	import FormAlert from '#lib/components/auth/FormAlert.svelte';
@@ -57,26 +57,32 @@
 	let removeTarget = $state<LocalMember | null>(null);
 	let removeOpen = $state(false);
 
-	// Invitations en attente : lues en ligne (elles portent des numéros, non synchronisés). Hors ligne, la section le dit
-	// sans alarmer : l'équipe, elle, vient de l'appareil.
-	let invitationsOffline = $state(false);
+	// Numéros des membres et invitations en attente : lus en ligne, jamais synchronisés (lot 05). Directeur et
+	// gestionnaire seulement (member.read, vérifié par l'API). Hors ligne, chaque endroit le dit sans alarmer :
+	// l'équipe, elle, vient de l'appareil.
+	let phones = $state<Record<string, string> | null>(null);
+	let onlineOnly = $state(false);
 	async function load() {
 		message = null;
 		try {
-			invitations = manage ? await organizations.call<InvitationView[]>('GET', '/organization/invitations') : [];
-			invitationsOffline = false;
+			const [list, pending] = await Promise.all([
+				organizations.call<MemberView[]>('GET', '/organization/members'),
+				manage ? organizations.call<InvitationView[]>('GET', '/organization/invitations') : Promise.resolve([])
+			]);
+			phones = Object.fromEntries(list.map((m) => [m.userId, m.phone]));
+			invitations = pending;
+			onlineOnly = false;
 		} catch (error) {
-			if (error instanceof NetworkError) invitationsOffline = true;
+			if (error instanceof NetworkError) onlineOnly = true;
 			else message = messageOf(error);
 		}
 	}
+	const phoneOfMember = (m: LocalMember) => (phones?.[m.userId] ? formatPhone(phones[m.userId]!) : onlineOnly ? t.phoneOnline : '');
 	onMount(() => {
 		if (!allowed) return;
 		const reload = () => void load();
-		if (manage) {
-			reload();
-			window.addEventListener('online', reload);
-		}
+		reload();
+		window.addEventListener('online', reload);
 		const stop = sync.watch<Record<string, unknown>>(
 			LOCAL_QUERIES.members,
 			[organizations.activeId],
@@ -215,6 +221,7 @@
 								<p class="font-semibold break-words">
 									{m.name}{#if m.current}<span class="text-muted-foreground"> · {t.you}</span>{/if}
 								</p>
+								<p class="text-base text-muted-foreground tabular-nums" data-testid="telephone-membre">{phoneOfMember(m)}</p>
 							</div>
 							<span class="rounded-full bg-secondary px-3 py-1 text-sm font-medium text-secondary-foreground">{ROLE_LABELS[m.role]}</span>
 						</div>
@@ -236,6 +243,7 @@
 					<thead class="border-b text-muted-foreground">
 						<tr>
 							<th scope="col" class="px-4 py-3 font-medium">{t.member}</th>
+							<th scope="col" class="px-4 py-3 font-medium">{t.phone}</th>
 							<th scope="col" class="px-4 py-3 font-medium">{t.role}</th>
 							<th scope="col" class="px-4 py-3 font-medium">{fr.fields.status}</th>
 							{#if manage && !landlord}<th scope="col" class="px-4 py-3"><span class="sr-only">{fr.app.actions}</span></th>{/if}
@@ -247,6 +255,7 @@
 								<td class="px-4 py-3 font-semibold"
 									>{m.name}{#if m.current}<span class="font-normal text-muted-foreground"> · {t.you}</span>{/if}</td
 								>
+								<td class="px-4 py-3 tabular-nums" data-testid="telephone-membre">{phoneOfMember(m)}</td>
 								<td class="px-4 py-3">{ROLE_LABELS[m.role]}</td>
 								<td class="px-4 py-3 text-muted-foreground">{t.since(formatDate(m.joinedAt))}</td>
 								{#if manage && !landlord}<td class="px-2 py-1 text-right"
@@ -272,7 +281,7 @@
 							<Button variant="outline" onclick={() => revoke(i)}>{t.revoke}</Button>
 						</li>
 					{:else}
-						<li class="text-base text-muted-foreground">{invitationsOffline ? t.pendingOffline : t.noPending}</li>
+						<li class="text-base text-muted-foreground">{onlineOnly ? t.pendingOffline : t.noPending}</li>
 					{/each}
 				</ul>
 			</section>

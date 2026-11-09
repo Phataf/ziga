@@ -257,6 +257,7 @@ export const fr = {
 		pending: 'Invitations en attente',
 		noPending: 'Aucune invitation en attente.',
 		pendingOffline: 'Les invitations en attente s’affichent quand la connexion revient.',
+		phoneOnline: 'Numéro disponible en ligne',
 		expires: (date: string) => `Valable jusqu’au ${date}`,
 		revoke: 'Annuler l’invitation',
 		changeRole: 'Changer le rôle',
