@@ -70,6 +70,77 @@ export const SYNCED_TABLES = {
 	plan_features: {
 		plan_id: 'text',
 		feature_key: 'text'
+	},
+	/** Lot 06 : propriétaires (sans le compte lié). */
+	owners: {
+		organization_id: 'text',
+		type: 'text',
+		name: 'text',
+		phone: 'text',
+		email: 'text',
+		address: 'text',
+		country: 'text',
+		representative_name: 'text',
+		representative_phone: 'text',
+		notes: 'text',
+		status: 'text',
+		archived_at: 'text',
+		created_at: 'text',
+		updated_at: 'text'
+	},
+	/** Lot 06 : mandats ; montants et taux entiers (règle 2), autorisations en 0 ou 1. */
+	mandates: {
+		organization_id: 'text',
+		owner_id: 'text',
+		type: 'text',
+		starts_on: 'text',
+		ends_on: 'text',
+		commission_basis: 'text',
+		commission_rate_bp: 'integer',
+		commission_amount: 'integer',
+		can_publish: 'integer',
+		can_take_photos: 'integer',
+		can_collect_funds: 'integer',
+		can_sign_leases: 'integer',
+		exclusive: 'integer',
+		status: 'text',
+		revoked_at: 'text',
+		revocation_reason: 'text',
+		expired_at: 'text',
+		version: 'integer',
+		created_at: 'text',
+		updated_at: 'text'
+	},
+	/** Lot 06 : copie de chaque version d'un mandat, écrite par la base seule. */
+	mandate_versions: {
+		organization_id: 'text',
+		mandate_id: 'text',
+		version: 'integer',
+		starts_on: 'text',
+		ends_on: 'text',
+		commission_basis: 'text',
+		commission_rate_bp: 'integer',
+		commission_amount: 'integer',
+		can_publish: 'integer',
+		can_take_photos: 'integer',
+		can_collect_funds: 'integer',
+		can_sign_leases: 'integer',
+		exclusive: 'integer',
+		status: 'text',
+		revoked_at: 'text',
+		revocation_reason: 'text',
+		expired_at: 'text',
+		changed_by: 'text',
+		recorded_at: 'text'
+	},
+	/** Lot 06 (remplie au lot 07) : biens et unités couverts par un mandat. */
+	mandate_scopes: {
+		organization_id: 'text',
+		mandate_id: 'text',
+		property_id: 'text',
+		unit_id: 'text',
+		via_property: 'integer',
+		management_active: 'integer'
 	}
 } as const satisfies Record<string, Record<string, LocalColumnType>>;
 
@@ -78,5 +149,9 @@ export type SyncedTable = keyof typeof SYNCED_TABLES;
 /** Tables à colonne `organization_id` : toute lecture locale y filtre par l'organisation active. */
 export const ORGANIZATION_SCOPED_TABLES = [
 	'organization_members',
-	'organization_feature_settings'
+	'organization_feature_settings',
+	'owners',
+	'mandates',
+	'mandate_versions',
+	'mandate_scopes'
 ] as const satisfies readonly SyncedTable[];

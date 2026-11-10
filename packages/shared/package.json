@@ -55,6 +55,10 @@
 		"./sync": {
 			"types": "./dist/sync.d.ts",
 			"default": "./dist/sync.js"
+		},
+		"./owners": {
+			"types": "./dist/owners.d.ts",
+			"default": "./dist/owners.js"
 		}
 	},
 	"files": [

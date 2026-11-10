@@ -18,6 +18,13 @@ const expected: Record<OrganizationRole, Action[]> = {
 	manager: [
 		'organization.read',
 		'member.read',
+		'owner.read',
+		'owner.create',
+		'owner.update',
+		'mandate.read',
+		'mandate.create',
+		'mandate.update',
+		'mandate.revoke',
 		'property.manage',
 		'lease.manage',
 		'payment.record',
@@ -29,8 +36,9 @@ const expected: Record<OrganizationRole, Action[]> = {
 		'visit.manage',
 		'photo.upload'
 	],
-	field_agent: ['organization.read', 'payment.record_cash', 'lead.manage', 'visit.manage', 'photo.upload'],
-	viewer: ['organization.read', 'export.csv']
+	// Lot 06 : propriétaires et mandats en lecture seule.
+	field_agent: ['organization.read', 'owner.read', 'mandate.read', 'payment.record_cash', 'lead.manage', 'visit.manage', 'photo.upload'],
+	viewer: ['organization.read', 'owner.read', 'mandate.read', 'export.csv']
 };
 
 describe('matrice de permissions', () => {

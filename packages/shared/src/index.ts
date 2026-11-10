@@ -10,3 +10,4 @@ export * from './subscriptions.js';
 export * from './admin.js';
 export * from './sync-schema.js';
 export * from './sync.js';
+export * from './owners.js';

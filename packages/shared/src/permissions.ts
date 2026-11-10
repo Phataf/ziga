@@ -31,6 +31,14 @@ export const PERMISSIONS = {
 	'member.remove': [D],
 	'invitation.revoke': [D],
 	'audit.read': [D],
+	// Lot 06 : propriétaires et mandats. L'agent de terrain et le profil lecture consultent seulement.
+	'owner.read': [D, M, F, V],
+	'owner.create': [D, M],
+	'owner.update': [D, M],
+	'mandate.read': [D, M, F, V],
+	'mandate.create': [D, M],
+	'mandate.update': [D, M],
+	'mandate.revoke': [D, M],
 	// Déclarées dès le lot 03 pour fixer le partage des rôles ; leurs endpoints viennent avec leur lot.
 	'property.manage': [D, M],
 	'lease.manage': [D, M],
