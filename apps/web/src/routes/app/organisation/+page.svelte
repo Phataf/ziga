@@ -131,6 +131,10 @@
 		)
 	);
 	onDestroy(() => clearTimeout(timer));
+	// Un refus du serveur (étape 4) : « ils partiront… » n'est plus vrai ; la notification de la coque prend le relais.
+	$effect(() => {
+		if (sync.notice && info === t.savedOffline) info = null;
+	});
 
 	async function save(event: SubmitEvent) {
 		event.preventDefault();

@@ -446,6 +446,49 @@ export const fr = {
 		pending: (n: number) => `${n} modification${n > 1 ? 's' : ''} en attente`,
 		notYet: 'Les données de cette organisation ne sont pas encore copiées sur cet appareil. Elles arrivent dès que la connexion revient.'
 	},
+	/** Modifications refusées par le serveur (lot 05, étape 4). */
+	rejections: {
+		title: 'Modifications non acceptées',
+		subtitle:
+			'Le serveur a refusé ces modifications faites sur l’appareil. Rien n’a changé sur le serveur, et l’appareil affiche de nouveau la valeur enregistrée. La liste reste sur cet appareil jusqu’à la déconnexion.',
+		notice: (n: number, reason: string) =>
+			`${n > 1 ? `${n} modifications n’ont pas été acceptées` : 'Une modification n’a pas été acceptée'} : ${reason || 'refusée par le serveur.'}`,
+		noticeHint: 'La valeur enregistrée sur le serveur est revenue sur l’appareil.',
+		open: 'Voir les modifications non acceptées',
+		link: (n: number) => `${n} modification${n > 1 ? 's' : ''} non acceptée${n > 1 ? 's' : ''}`,
+		close: 'Fermer',
+		empty: 'Aucune modification refusée sur cet appareil.',
+		reason: 'Motif',
+		entered: 'Saisi',
+		emptyValue: '(vide)',
+		at: (date: string, time: string) => `Refusée le ${date} à ${time}`,
+		what: 'Donnée',
+		when: 'Date',
+		tables: {
+			organizations: 'Paramètres de l’organisation',
+			organization_representatives: 'Représentant légal'
+		} as Record<string, string>,
+		columns: {
+			legal_name: 'Raison sociale',
+			trade_name: 'Nom commercial',
+			phone: 'Téléphone de contact',
+			address: 'Adresse',
+			commune: 'Commune',
+			po_box: 'Boîte postale',
+			rccm: 'RCCM',
+			ifu: 'IFU',
+			rep_name: 'Nom et prénoms',
+			rep_title: 'Qualité',
+			rep_profession: 'Profession',
+			rep_address: 'Adresse du représentant',
+			rep_nationality: 'Nationalité',
+			rep_id_type: 'Pièce d’identité',
+			rep_id_type_other: 'Précision sur la pièce',
+			rep_id_number: 'Numéro de la pièce',
+			rep_id_issued_on: 'Délivrée le',
+			rep_id_issued_by: 'Délivrée par'
+		} as Record<string, string>
+	},
 	admin: {
 		noAccess: 'Votre rôle ne donne pas accès à cet écran.',
 		unavailable: 'Back-office indisponible.',

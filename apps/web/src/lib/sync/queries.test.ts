@@ -10,6 +10,11 @@ describe('lectures locales : jamais deux organisations à la fois (lot 05)', () 
 		}
 	});
 
+	it('les modifications non acceptées (table locale) se lisent aussi par organisation', () => {
+		expect(LOCAL_QUERIES.rejections).toMatch(/FROM sync_rejections WHERE organization_id = \?/);
+		expect(LOCAL_QUERIES.rejectionCount).toMatch(/FROM sync_rejections WHERE organization_id = \?/);
+	});
+
 	it('la fiche de l’organisation est lue par son identifiant', () => {
 		expect(LOCAL_QUERIES.organization).toMatch(/WHERE o\.id = \?/);
 	});

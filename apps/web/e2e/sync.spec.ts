@@ -4,11 +4,12 @@
  * - Membre retiré, organisation suspendue : plus rien à la synchronisation suivante, et la base locale se vide.
  * - Délai de synchronisation inférieur à 5 secondes ; écrans ouverts sans appel réseau, même hors ligne.
  * - Déconnexion : base locale vide.
+ * Étapes 3 et 4 : écriture hors ligne, puis refus (« Modifications non acceptées », valeur du serveur revenue).
  */
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { newId } from '@ziga/shared/ids';
 import { formatPhone } from '@ziga/shared/phone';
-import { accounts, API_URL, registerViaApi, signInWith, synced, type Account } from './support';
+import { accounts, API_URL, expectNoHorizontalOverflow, registerViaApi, signInWith, synced, type Account } from './support';
 
 test.use({ viewport: { width: 1440, height: 900 }, isMobile: false, hasTouch: false });
 
@@ -308,5 +309,109 @@ test.describe('Synchronisation : écrire sur l’appareil (étape 3)', () => {
 		await expect(page.getByTestId('etat-synchro')).toHaveText('1 modification en attente');
 		release();
 		await synced(page);
+	});
+});
+
+test.describe('Synchronisation : refus et « Modifications non acceptées » (étape 4)', () => {
+	test('devenue gestionnaire pendant qu’elle était hors ligne : le nom est refusé, la valeur du serveur revient, le refus est gardé', async ({
+		page,
+		context,
+		request
+	}) => {
+		const agency = await freshAgency(request, `Agence refus ${newId().slice(-6)}`);
+		// Un second directeur (formule Pro : deux membres) changera le rôle de la première pendant qu'elle est hors ligne.
+		const admin = await loginAs(request, 'admin');
+		const plan = await request.put(`${API_URL}/admin/organizations/${agency.id}/plan`, {
+			headers: { Authorization: `Bearer ${admin}` },
+			data: { planId: 'pro', reason: 'Test de bout en bout : deux directeurs' }
+		});
+		expect(plan.status()).toBe(204);
+		const second = await registerViaApi(request, 'Second directeur');
+		const invitation = await request.post(`${API_URL}/organization/invitations`, {
+			headers: agency.headers,
+			data: { phone: second.phone, role: 'director' }
+		});
+		expect(invitation.status()).toBe(201);
+		const secondToken = await login(request, second.phone, second.password);
+		const { token } = (await invitation.json()) as { token: string };
+		expect(
+			(await request.post(`${API_URL}/invitations/${token}/accept`, { headers: { Authorization: `Bearer ${secondToken}` } })).status()
+		).toBe(200);
+		const secondHeaders = { Authorization: `Bearer ${secondToken}`, 'X-Organization-Id': agency.id };
+
+		await signInWith(page, agency.director, '/app/organisation');
+		await synced(page);
+		const preview = page.getByTestId('apercu-entete');
+		await expect(preview).toContainText('Agence refus');
+
+		await context.setOffline(true);
+		await expect(page.getByTestId('etat-synchro')).toHaveAttribute('data-etat', 'offline');
+		const name = `Nom refusé ${newId().slice(-6)}`;
+		await page.getByLabel('Nom commercial').fill(name);
+		await page.getByRole('button', { name: 'Enregistrer' }).click();
+		await expect(page.getByText('Paramètres enregistrés sur l’appareil : ils partiront dès que la connexion revient.')).toBeVisible();
+		await expect(preview).toContainText(name);
+
+		// Pendant ce temps, l'autre directeur la fait gestionnaire : elle n'a plus le droit de changer le nom.
+		const me = (await (await request.get(`${API_URL}/me`, { headers: agency.headers })).json()) as { id: string };
+		const members = (await (await request.get(`${API_URL}/organization/members`, { headers: secondHeaders })).json()) as {
+			id: string;
+			userId: string;
+		}[];
+		const membership = members.find((m) => m.userId === me.id)!;
+		expect(
+			(
+				await request.patch(`${API_URL}/organization/members/${membership.id}`, { headers: secondHeaders, data: { role: 'manager' } })
+			).status()
+		).toBe(200);
+
+		// Reconnexion : refus notifié avec son motif, file vidée, valeur du serveur revenue sur l'appareil.
+		await context.setOffline(false);
+		const notice = page.getByTestId('refus-notification');
+		await expect(notice).toContainText('Une modification n’a pas été acceptée : Votre rôle ne permet pas cette action.', {
+			timeout: 15_000
+		});
+		await synced(page);
+		expect((await localCounts(page)).ps_crud).toBe(0);
+		await expect(preview).not.toContainText(name);
+		await expect(page.getByLabel('Nom commercial')).toHaveValue('');
+		await expect(page.getByText('Paramètres enregistrés sur l’appareil : ils partiront dès que la connexion revient.')).toHaveCount(0);
+		const server = (await (await request.get(`${API_URL}/organization`, { headers: secondHeaders })).json()) as {
+			tradeName: string | null;
+		};
+		expect(server.tradeName).toBeNull();
+
+		// Rien n'est perdu en silence : la modification est dans la liste, avec ce qui avait été saisi et le motif.
+		await notice.getByRole('link', { name: 'Voir les modifications non acceptées' }).click();
+		await expect(page).toHaveURL('/app/modifications-non-acceptees');
+		await expect(page.getByTestId('refus-notification')).toHaveCount(0);
+		const entry = page.getByTestId('refus');
+		await expect(entry).toHaveCount(1);
+		await expect(entry).toHaveAttribute('data-code', 'FORBIDDEN_ACTION');
+		await expect(entry).toContainText('Paramètres de l’organisation');
+		await expect(entry).toContainText(`Nom commercial : ${name}`);
+		await expect(entry).toContainText('Votre rôle ne permet pas cette action.');
+		for (const [label, shell, viewport] of [
+			['téléphone', 'telephone', { width: 360, height: 800 }],
+			['tablette', 'tablette', { width: 820, height: 1180 }],
+			['ordinateur', 'ordinateur', { width: 1440, height: 900 }]
+		] as const) {
+			await page.setViewportSize(viewport);
+			// La coque de l'appareil est rendue avant de mesurer (une seule à la fois, docs/UX.md §3).
+			await expect(page.locator(`[data-coque="${shell}"]`)).toBeVisible();
+			await expect(page.getByTestId('refus')).toHaveCount(1);
+			await expect(page.getByTestId('refus')).toContainText(`Nom commercial : ${name}`);
+			await expectNoHorizontalOverflow(page, `Modifications non acceptées, ${label}`);
+		}
+
+		// Gardée sur l'appareil (table locale) d'un écran à l'autre, et signalée dans l'en-tête tant qu'elle y est.
+		await page.goto('/app/organisation');
+		await expect(page.getByTestId('refus-lien')).toHaveText('1 modification non acceptée');
+		expect((await localCounts(page)).sync_rejections).toBe(1);
+		// Vidée avec le reste de la base à la déconnexion.
+		await page.goto('/app/equipe');
+		await page.getByRole('button', { name: 'Se déconnecter' }).click();
+		await expect(page).toHaveURL(/\/connexion/);
+		await expect.poll(async () => (await localCounts(page)).sync_rejections, { timeout: 10_000 }).toBe(0);
 	});
 });

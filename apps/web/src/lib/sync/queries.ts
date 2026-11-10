@@ -16,5 +16,8 @@ export const LOCAL_QUERIES = {
 	featureOverrides: `SELECT * FROM feature_overrides WHERE (scope = 'organization' AND organization_id = ?) OR (scope = 'user' AND user_id = ?)`,
 	/** Catalogue et contenu des formules : identiques pour tous, sans organisation. */
 	features: `SELECT * FROM features`,
-	planFeatures: `SELECT * FROM plan_features`
+	planFeatures: `SELECT * FROM plan_features`,
+	/** Modifications refusées par le serveur (table locale de l'appareil), de l'organisation, les plus récentes d'abord. */
+	rejections: `SELECT * FROM sync_rejections WHERE organization_id = ? ORDER BY rejected_at DESC, id DESC`,
+	rejectionCount: `SELECT count(*) AS n FROM sync_rejections WHERE organization_id = ?`
 } as const;

@@ -4,9 +4,11 @@
  * - Une seule personne par base : si une autre personne se connecte sur ce navigateur, la base est vidée d'abord.
  * - Vidée à la déconnexion, ou quand l'API refuse la session (401) : rien ne reste sur l'appareil.
  * - Les écrans lisent par `watch` : la requête est relancée à chaque changement des tables qu'elle lit.
+ * - Une modification refusée par le serveur est gardée dans « Modifications non acceptées » et notifiée (étape 4).
  */
 import type { PowerSyncDatabase, SyncStatus } from '@powersync/web';
 import { auth } from '../auth/auth.svelte';
+import { noticeOf, recordRejections, rejectionRows, type RejectionNotice } from './rejections';
 import { syncState, type SyncState } from './status';
 
 const OWNER_KEY = 'ziga:base-locale';
@@ -37,6 +39,8 @@ class Sync {
 			pending: this.pending
 		})
 	);
+	/** Dernier envoi dont des modifications ont été refusées : notification jusqu'à ce que la personne la ferme. */
+	notice = $state<RejectionNotice | null>(null);
 	#opening: Promise<PowerSyncDatabase> | null = null;
 	#stopListening: (() => void)[] = [];
 
@@ -82,7 +86,12 @@ class Sync {
 		}
 		this.#follow(db);
 		this.db = db;
-		void db.connect(new ZigaConnector());
+		void db.connect(
+			new ZigaConnector(async (database, rejected) => {
+				await recordRejections(database, rejectionRows(rejected));
+				this.notice = noticeOf(rejected);
+			})
+		);
 		return db;
 	}
 
@@ -120,6 +129,11 @@ class Sync {
 		return () => controller.abort();
 	}
 
+	/** Ferme la notification des modifications refusées (elles restent dans la liste). */
+	dismissNotice(): void {
+		this.notice = null;
+	}
+
 	/** Déconnexion : synchronisation arrêtée et base locale vidée (lot 05, point 9). */
 	async clear(): Promise<void> {
 		const opening = this.#opening;
@@ -137,6 +151,7 @@ class Sync {
 		this.hasSynced = false;
 		this.downloading = false;
 		this.pending = 0;
+		this.notice = null;
 		try {
 			storage()?.removeItem(OWNER_KEY);
 		} catch {

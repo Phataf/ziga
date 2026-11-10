@@ -17,6 +17,7 @@
 	import TopBar from './TopBar.svelte';
 	import SubscriptionBanner from '../org/SubscriptionBanner.svelte';
 	import SyncIndicator from './SyncIndicator.svelte';
+	import RejectionNotice from './RejectionNotice.svelte';
 
 	let { profile, children }: { profile: Profile; children: Snippet } = $props();
 	// Espace de gestion : le nom de l'organisation active (une seule à la fois).
@@ -32,7 +33,8 @@
 {#if device.isPhone}
 	<div class="min-h-dvh pb-28" data-coque="telephone">
 		{#if profile.space === 'agency'}<SubscriptionBanner />
-			<div class="flex justify-end px-4 pt-2"><SyncIndicator /></div>{/if}
+			<div class="flex justify-end px-4 pt-2"><SyncIndicator /></div>
+			<div class="px-4 pt-2 empty:hidden"><RejectionNotice /></div>{/if}
 		{@render children()}
 	</div>
 	<TabBar {profile} />
@@ -40,14 +42,16 @@
 	<NavRail {profile} />
 	<div class="min-h-dvh pb-10 pl-28" data-coque="tablette">
 		{#if profile.space === 'agency'}<SubscriptionBanner />
-			<div class="flex justify-end px-6 pt-3"><SyncIndicator /></div>{/if}
+			<div class="flex justify-end px-6 pt-3"><SyncIndicator /></div>
+			<div class="px-6 pt-2 empty:hidden"><RejectionNotice /></div>{/if}
 		{@render children()}
 	</div>
 {:else}
 	<Sidebar {profile} {spaceLabel} />
 	<div class="min-h-dvh pb-10 pl-64" data-coque="ordinateur">
 		<TopBar {profile} />
-		{#if profile.space === 'agency'}<SubscriptionBanner />{/if}
+		{#if profile.space === 'agency'}<SubscriptionBanner />
+			<div class="px-8 pt-3 empty:hidden"><RejectionNotice /></div>{/if}
 		{@render children()}
 	</div>
 {/if}

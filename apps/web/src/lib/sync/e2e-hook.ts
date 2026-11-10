@@ -8,6 +8,7 @@
  */
 import type { PowerSyncDatabase } from '@powersync/web';
 import { SYNCED_TABLES } from '@ziga/shared/sync-schema';
+import { REJECTIONS_TABLE } from './rejections';
 
 export const E2E_HOOK_NAME = '__zigaLocalCounts';
 
@@ -20,7 +21,7 @@ export function installE2EHook(current: () => PowerSyncDatabase | null, dbFilena
 			db = new PowerSyncDatabase({ schema: AppSchema, database: { dbFilename } });
 		}
 		const counts: Record<string, number> = {};
-		for (const table of [...Object.keys(SYNCED_TABLES), 'ps_crud']) {
+		for (const table of [...Object.keys(SYNCED_TABLES), REJECTIONS_TABLE, 'ps_crud']) {
 			counts[table] = Number((await db.get<{ n: number }>(`SELECT count(*) AS n FROM ${table}`)).n);
 		}
 		if (opened) await db.close();

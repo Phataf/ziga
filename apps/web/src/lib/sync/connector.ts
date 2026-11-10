@@ -5,15 +5,23 @@
  *   c'est le module d'authentification qui en décide (lot 02), jamais un refus de PowerSync.
  * - uploadData : les modifications faites sur l'appareil, envoyées par lots (POST /sync/upload), chacune avec sa clé
  *   d'idempotence (base locale et numéro de l'opération). L'API répond 200 avec un résultat par opération : le lot
- *   quitte la file, et la synchronisation suivante remet la valeur du serveur là où une opération a été refusée. Une
+ *   quitte la file, et la synchronisation suivante remet la valeur du serveur là où une opération a été refusée ; le refus
+ *   est gardé dans « Modifications non acceptées » (rejections.ts). Une
  *   erreur passagère (réseau, 5xx) laisse le lot dans la file : PowerSync le renverra, sans doublon.
  */
 import type { AbstractPowerSyncDatabase, PowerSyncBackendConnector, PowerSyncCredentials } from '@powersync/web';
 import { SYNC_BATCH_MAX, type SyncOperation, type SyncOperationResult, type SyncUploadResponse } from '@ziga/shared/sync';
 import { auth } from '../auth/auth.svelte';
 
-/** Opérations refusées par le serveur, avec ce qui avait été envoyé (liste « Modifications non acceptées », étape 4). */
-export type RejectionListener = (rejected: { operation: SyncOperation; result: SyncOperationResult }[]) => Promise<void> | void;
+/**
+ * Opérations refusées par le serveur, avec ce qui avait été envoyé (liste « Modifications non acceptées », étape 4).
+ * Appelé avant que le lot quitte la file : si l'écriture locale échoue, le lot est renvoyé, et le serveur rend le
+ * même refus (rejeu), sans doublon dans la liste.
+ */
+export type RejectionListener = (
+	database: AbstractPowerSyncDatabase,
+	rejected: { operation: SyncOperation; result: SyncOperationResult }[]
+) => Promise<void> | void;
 
 export class ZigaConnector implements PowerSyncBackendConnector {
 	constructor(private readonly onRejected?: RejectionListener) {}
@@ -38,7 +46,7 @@ export class ZigaConnector implements PowerSyncBackendConnector {
 		const rejected = results
 			.map((result, i) => ({ operation: operations[i]!, result }))
 			.filter(({ result }) => result.status === 'rejected');
-		if (rejected.length) await this.onRejected?.(rejected);
+		if (rejected.length) await this.onRejected?.(database, rejected);
 		await batch.complete();
 	}
 }
