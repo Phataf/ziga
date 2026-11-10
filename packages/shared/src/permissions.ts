@@ -39,11 +39,21 @@ export const PERMISSIONS = {
 	'mandate.create': [D, M],
 	'mandate.update': [D, M],
 	'mandate.revoke': [D, M],
-	// Déclarées dès le lot 03 pour fixer le partage des rôles ; leurs endpoints viennent avec leur lot.
+	// Lot 07 : biens, unités, photos et documents. L'agent de terrain ne lit que ses unités affectées (Sync Streams et
+	// API) et n'y change que l'état technique et les photos ; le profil lecture ne voit aucun document privé.
+	'property.read': [D, M, F, V],
 	'property.manage': [D, M],
+	'unit.assign': [D, M],
+	'unit.status': [D, M, F],
+	'document.read': [D, M],
+	'document.upload': [D, M],
+	'document.withdraw': [D, M],
+	// Restreindre un document à la direction (jamais élargir la matrice, docs/UX.md §10).
+	'document.restrict': [D],
+	// Déclarées dès le lot 03 pour fixer le partage des rôles ; leurs endpoints viennent avec leur lot.
 	'lease.manage': [D, M],
 	'payment.record': [D, M],
-	// Agent de terrain : espèces « à valider », sur ses biens affectés (restriction ajoutée au lot 07).
+	// Agent de terrain : espèces « à valider », sur ses unités affectées.
 	'payment.record_cash': [D, M, F],
 	'payment.validate': [D, M],
 	'receipt.cancel': [D],

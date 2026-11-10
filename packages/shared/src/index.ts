@@ -12,3 +12,5 @@ export * from './sync-schema.js';
 export * from './sync.js';
 export * from './owners.js';
 export * from './geography.js';
+export * from './properties.js';
+export * from './documents.js';

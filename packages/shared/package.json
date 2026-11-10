@@ -63,6 +63,14 @@
 		"./geography": {
 			"types": "./dist/geography.d.ts",
 			"default": "./dist/geography.js"
+		},
+		"./properties": {
+			"types": "./dist/properties.d.ts",
+			"default": "./dist/properties.js"
+		},
+		"./documents": {
+			"types": "./dist/documents.d.ts",
+			"default": "./dist/documents.js"
 		}
 	},
 	"files": [

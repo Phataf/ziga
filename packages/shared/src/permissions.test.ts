@@ -25,7 +25,13 @@ const expected: Record<OrganizationRole, Action[]> = {
 		'mandate.create',
 		'mandate.update',
 		'mandate.revoke',
+		'property.read',
 		'property.manage',
+		'unit.assign',
+		'unit.status',
+		'document.read',
+		'document.upload',
+		'document.withdraw',
 		'lease.manage',
 		'payment.record',
 		'payment.record_cash',
@@ -36,9 +42,20 @@ const expected: Record<OrganizationRole, Action[]> = {
 		'visit.manage',
 		'photo.upload'
 	],
-	// Lot 06 : propriétaires et mandats en lecture seule.
-	field_agent: ['organization.read', 'owner.read', 'mandate.read', 'payment.record_cash', 'lead.manage', 'visit.manage', 'photo.upload'],
-	viewer: ['organization.read', 'owner.read', 'mandate.read', 'export.csv']
+	// Lot 06 : propriétaires et mandats en lecture seule. Lot 07 : ses unités affectées (état technique, photos), aucun document.
+	field_agent: [
+		'organization.read',
+		'owner.read',
+		'mandate.read',
+		'property.read',
+		'unit.status',
+		'payment.record_cash',
+		'lead.manage',
+		'visit.manage',
+		'photo.upload'
+	],
+	// Lot 07 : biens et unités en lecture, aucun document privé.
+	viewer: ['organization.read', 'owner.read', 'mandate.read', 'property.read', 'export.csv']
 };
 
 describe('matrice de permissions', () => {
