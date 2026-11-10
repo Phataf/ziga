@@ -41,6 +41,19 @@ Dans l'ordre, dans le lot qui crée la table :
    - test d'accès croisé de la table (`CLAUDE.md` §5, règle 1) ;
    - `apps/web/e2e/sync.spec.ts` : une personne de A ne reçoit aucune ligne de B, flux lu auprès du vrai service.
 
+### Tables synchronisées
+
+| Table | Lot | Ce qui descend | Modifiable depuis l'appareil |
+| --- | --- | --- | --- |
+| `organizations` | 05 | fiche, formule, moyens de paiement, logo | paramètres (directeur) |
+| `organization_representatives` | 05 | représentant légal, directeur seulement | oui (directeur) |
+| `organization_members` | 05 | équipe, sans téléphone | non |
+| `features`, `plan_features`, `organization_feature_settings`, `feature_overrides` | 05 | fonctionnalités | non |
+| `owners` | 06 | fiche propriétaire, **sans** le compte lié (`user_id`) | création et modification (directeur, gestionnaire) |
+| `mandates` | 06 | mandat complet, avec sa version | création, modification (nouvelle version), révocation |
+| `mandate_versions` | 06 | copie de chaque version, écrite par la base seule | jamais |
+| `mandate_scopes` | 06 (remplie au lot 07) | biens et unités couverts, `management_active` calculé | non |
+
 ## 4. Lire dans la base locale (écrans)
 
 - **Ouverture** : la garde de l'espace de gestion ouvre la base (`sync.start()`, `apps/web/src/lib/sync/sync.svelte.ts`) et lance la synchronisation en arrière-plan. Le SDK n'est chargé que dans le navigateur.

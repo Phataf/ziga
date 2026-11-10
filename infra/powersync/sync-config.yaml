@@ -26,6 +26,12 @@ streams:
       - SELECT id, organization_id, user_id, role, status, display_name, joined_at FROM organization_members WHERE organization_id IN my_organizations
       - SELECT organization_id || ':' || feature_key AS id, organization_id, feature_key, disabled_by_organization FROM organization_feature_settings WHERE organization_id IN my_organizations
       - SELECT id, feature_key, scope, organization_id, user_id, value, starts_at, ends_at FROM feature_overrides WHERE organization_id IN my_organizations AND revoked_at IS NULL
+      # Lot 06 : propriétaires (sans le compte lié, user_id, qui ne quitte pas le serveur), mandats, leurs versions et
+      # leurs portées. Tous les membres les lisent ; seuls le directeur et le gestionnaire les modifient (API).
+      - SELECT id, organization_id, type, name, phone, email, address, country, representative_name, representative_phone, notes, status, archived_at, created_at, updated_at FROM owners WHERE organization_id IN my_organizations
+      - SELECT id, organization_id, owner_id, type, starts_on, ends_on, commission_basis, commission_rate_bp, commission_amount, can_publish, can_take_photos, can_collect_funds, can_sign_leases, exclusive, status, revoked_at, revocation_reason, expired_at, version, created_at, updated_at FROM mandates WHERE organization_id IN my_organizations
+      - SELECT id, organization_id, mandate_id, version, starts_on, ends_on, commission_basis, commission_rate_bp, commission_amount, can_publish, can_take_photos, can_collect_funds, can_sign_leases, exclusive, status, revoked_at, revocation_reason, expired_at, changed_by, recorded_at FROM mandate_versions WHERE organization_id IN my_organizations
+      - SELECT id, organization_id, mandate_id, property_id, unit_id, via_property, management_active FROM mandate_scopes WHERE organization_id IN my_organizations
 
   # Représentant légal (pièce d'identité) : réservé au directeur, comme l'écran des paramètres.
   organization_representatives:

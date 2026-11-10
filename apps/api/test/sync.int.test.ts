@@ -10,13 +10,17 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client, signedUp, startApp, type TestApp } from './http.js';
 import { createOrg, sqlError, type Org } from './orgs.js';
 
-/** Tables synchronisées au lot 05 : toute nouvelle table passe par docs/SYNC.md et par cette liste. */
+/** Tables synchronisées (lots 05 et 06) : toute nouvelle table passe par docs/SYNC.md et par cette liste. */
 const PUBLISHED = [
 	'feature_overrides',
 	'features',
+	'mandate_scopes',
+	'mandate_versions',
+	'mandates',
 	'organization_feature_settings',
 	'organization_members',
 	'organizations',
+	'owners',
 	'plan_features'
 ];
 
