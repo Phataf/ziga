@@ -9,3 +9,6 @@ pnpm-lock.yaml
 **/migrations/meta/
 **/test-results/
 **/playwright-report/
+# Réponses brutes d'Overpass déposées par le porteur (lot 07) : gardées telles qu'exportées, jamais reformatées.
+reponse-overpass.json
+reponse-overpass-v2.json
