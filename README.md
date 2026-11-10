@@ -85,6 +85,13 @@ La commande s'applique après `pnpm db:migrate`.
 
 Les communes (Ouagadougou et Saaba) et leurs quartiers sont créés par la migration `0009_geography`, à partir de la liste du porteur du projet. Les points centraux viennent d'OpenStreetMap : **© les contributeurs d'OpenStreetMap**, données sous licence ODbL ([openstreetmap.org/copyright](https://www.openstreetmap.org/copyright)). Ils sont approximatifs (`verified = false`) tant qu'ils n'ont pas été vérifiés sur place depuis le back-office. La vitrine (lot 12) affichera la même mention. L'extraction se refait avec `apps/api/scripts/osm-neighborhoods.mjs` ; l'application n'appelle jamais OpenStreetMap.
 
+## Photos et documents (lot 07)
+
+- **Envoi direct** : l'appareil demande une URL d'envoi à l'API (`POST /media/:id/upload-url`, `POST /documents`). Le serveur décide la clé et signe le type et la taille annoncés (10 Mo au plus), pour 10 minutes : le stockage refuse un autre corps. Cloudflare R2 n'acceptant pas le POST signé, c'est un PUT signé pour tous les stockages. Le compartiment doit autoriser, en CORS, le `PUT` depuis les origines du web (`CORS_ORIGINS`), avec les en-têtes `Content-Type` et `Content-Length`.
+- **Photos** : la tâche `property-media` du worker vérifie la taille et le type réels, produit les variantes WebP 320, 800 et 1600 sans aucune métadonnée (ni EXIF ni position GPS), et efface l'original. Les variantes sont servies par `GET /media/v/<clé>/<taille>.webp`, sous une clé aléatoire de 128 bits, en cache permanent.
+- **Documents privés** : jamais publics ni derrière le CDN. Empreinte SHA-256 à la réception, une version n'est jamais écrasée. Lecture par URL signée de 5 minutes (`POST /documents/:id/download`), journalisée.
+- **Développement et tests** : le stockage local (`STORAGE_DRIVER=local`) imite les URL signées (`/storage/local/<jeton>`). Les URL présignées de S3 sont vérifiées contre SeaweedFS, en local comme en CI.
+
 ## Organisation
 
 | Chemin                     | Rôle                                                                                                              |

@@ -75,6 +75,18 @@ describe('architecture', () => {
 		expect(readFileSync(join(src, 'db/schema/index.ts'), 'utf8')).not.toContain('properties');
 	});
 
+	it('seul le module documents lit et écrit le registre des documents privés (lot 07)', () => {
+		const tables = /\b(from|join|update|into)\s+documents\b/i;
+		const offenders = all.filter(
+			(f) =>
+				!f.path.startsWith('modules/documents/') &&
+				f.path !== 'db/schema/documents.ts' &&
+				(imports(f.code).some((i) => /schema\/documents(\.js)?$/.test(i)) || tables.test(f.code))
+		);
+		expect(offenders.map((f) => f.path)).toEqual([]);
+		expect(readFileSync(join(src, 'db/schema/index.ts'), 'utf8')).not.toContain('documents');
+	});
+
 	it('seul le module admin utilise la connexion app_admin', () => {
 		const offenders = all.filter((f) => !f.path.startsWith('modules/admin/') && imports(f.code).some((i) => i.includes('admin-database')));
 		expect(offenders.map((f) => f.path)).toEqual([]);

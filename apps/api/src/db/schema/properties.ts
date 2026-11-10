@@ -77,3 +77,27 @@ export const units = pgTable('units', {
 	createdAt: tstz('created_at').notNull().defaultNow(),
 	updatedAt: tstz('updated_at').notNull().defaultNow()
 });
+
+export const media = pgTable('media', {
+	id: uuid('id').primaryKey(),
+	organizationId: uuid('organization_id').notNull(),
+	propertyId: uuid('property_id').notNull(),
+	unitId: uuid('unit_id'),
+	kind: text('kind', { enum: ['photo'] }).notNull(),
+	mimeType: text('mime_type', { enum: ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'] }).notNull(),
+	byteSize: integer('byte_size').notNull(),
+	position: integer('position').notNull(),
+	caption: text('caption'),
+	storageKey: text('storage_key'),
+	variantsKey: text('variants_key'),
+	width: integer('width'),
+	height: integer('height'),
+	status: text('status', { enum: ['pending', 'processing', 'ready', 'rejected', 'removed'] }).notNull(),
+	error: text('error'),
+	uploadedBy: uuid('uploaded_by'),
+	createdAt: tstz('created_at').notNull().defaultNow(),
+	uploadedAt: tstz('uploaded_at'),
+	processedAt: tstz('processed_at'),
+	removedAt: tstz('removed_at'),
+	updatedAt: tstz('updated_at').notNull().defaultNow()
+});

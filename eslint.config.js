@@ -26,6 +26,10 @@ const RESTRICTED_IMPORTS = {
 	properties: {
 		group: ['**/db/schema/properties', '**/db/schema/properties.js'],
 		message: 'Biens et unités : passer par PropertiesService (module properties, lot 07).'
+	},
+	documents: {
+		group: ['**/db/schema/documents', '**/db/schema/documents.js'],
+		message: 'Documents privés : passer par DocumentsService (module documents, lot 07).'
 	}
 };
 
@@ -74,27 +78,32 @@ export default ts.config(
 		// sont lues et écrites que par lui. Vérifié aussi par src/architecture.test.ts.
 		files: ['apps/api/src/**/*.ts'],
 		ignores: ['apps/api/src/modules/features/**'],
-		rules: restrictImports('features', 'admin', 'sync', 'owners', 'properties')
+		rules: restrictImports('features', 'admin', 'sync', 'owners', 'properties', 'documents')
 	},
 	{
 		// Le module admin, lui, détient sa connexion ; il passe toujours par le module features pour les interrupteurs.
 		files: ['apps/api/src/modules/admin/**/*.ts'],
-		rules: restrictImports('features', 'sync', 'owners', 'properties')
+		rules: restrictImports('features', 'sync', 'owners', 'properties', 'documents')
 	},
 	{
 		// Le module sync détient la table sync_operations ; les autres règles d'import restent.
 		files: ['apps/api/src/modules/sync/**/*.ts'],
-		rules: restrictImports('features', 'admin', 'owners', 'properties')
+		rules: restrictImports('features', 'admin', 'owners', 'properties', 'documents')
 	},
 	{
 		// Le module owners détient les propriétaires et les mandats (lot 06) ; les autres règles d'import restent.
 		files: ['apps/api/src/modules/owners/**/*.ts'],
-		rules: restrictImports('features', 'admin', 'sync', 'properties')
+		rules: restrictImports('features', 'admin', 'sync', 'properties', 'documents')
 	},
 	{
 		// Le module properties détient les biens et les unités (lot 07) ; les autres règles d'import restent.
 		files: ['apps/api/src/modules/properties/**/*.ts'],
-		rules: restrictImports('features', 'admin', 'sync', 'owners')
+		rules: restrictImports('features', 'admin', 'sync', 'owners', 'documents')
+	},
+	{
+		// Le module documents détient le registre des documents privés (lot 07, D22).
+		files: ['apps/api/src/modules/documents/**/*.ts'],
+		rules: restrictImports('features', 'admin', 'sync', 'owners', 'properties')
 	},
 	{
 		files: ['scripts/**', '**/scripts/**', '**/*.config.{js,ts}', '**/test/**', '**/e2e/**'],

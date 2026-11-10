@@ -38,3 +38,11 @@ export interface MandatesExpiryJobResult {
 	organizations: number;
 	mandates: number;
 }
+
+/** Photos des biens et des unités (lot 07) : contrôle du fichier reçu, variantes WebP 320, 800 et 1600 sans EXIF. */
+export const MEDIA_QUEUE = 'property-media';
+
+export interface MediaJobData {
+	organizationId: string;
+	mediaId: string;
+}

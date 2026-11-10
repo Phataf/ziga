@@ -1,12 +1,13 @@
 import { Global, Module } from '@nestjs/common';
 import { APP_CONFIG } from '../config/config.module.js';
 import type { AppConfig } from '../config/env.js';
+import { LocalStorageController } from './local-storage.controller.js';
 import { LocalStorage } from './local-storage.js';
 import { S3Storage } from './s3-storage.js';
 import { STORAGE, type StorageAdapter } from './storage.js';
 
 export function createStorage(config: AppConfig): StorageAdapter {
-	if (config.STORAGE_DRIVER === 'local') return new LocalStorage(config.STORAGE_LOCAL_DIR!);
+	if (config.STORAGE_DRIVER === 'local') return new LocalStorage(config.STORAGE_LOCAL_DIR!, config.API_PUBLIC_URL.replace(/\/$/, ''));
 	return new S3Storage({
 		endpoint: config.S3_ENDPOINT!,
 		region: config.S3_REGION!,
@@ -19,5 +20,9 @@ export function createStorage(config: AppConfig): StorageAdapter {
 }
 
 @Global()
-@Module({ providers: [{ provide: STORAGE, inject: [APP_CONFIG], useFactory: createStorage }], exports: [STORAGE] })
+@Module({
+	controllers: [LocalStorageController],
+	providers: [{ provide: STORAGE, inject: [APP_CONFIG], useFactory: createStorage }],
+	exports: [STORAGE]
+})
 export class StorageModule {}

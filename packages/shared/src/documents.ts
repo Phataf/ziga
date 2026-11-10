@@ -4,7 +4,10 @@
  * organisation n'y a jamais accès ; le profil lecture ne voit aucun document privé. Le lot 08 bis ajoute les types du
  * bail (contrat, avenant, pièce d'identité du locataire…), le lot 10 bis l'état des lieux.
  */
+import { z } from 'zod';
+import { idSchema } from './ids.js';
 import type { OrganizationRole } from './permissions.js';
+import { MAX_UPLOAD_BYTES } from './properties.js';
 
 export const DOCUMENT_TYPES = [
 	'title_deed', // titre foncier
@@ -87,4 +90,79 @@ export function canReadDocument(
 	if (!allowed) return false;
 	if (doc.restriction === 'director_only') return role === 'director';
 	return true;
+}
+
+// ---------------------------------------------------------------- schémas et vues (lot 07, étape 3)
+
+/**
+ * Dépôt d'un document (en ligne seulement) : le serveur décide la clé, signe le type et la taille ; la nouvelle
+ * version d'un document en remplace une autre (même type, mêmes objets).
+ */
+export const createDocumentSchema = z
+	.object({
+		id: idSchema,
+		type: z.enum(DOCUMENT_TYPES),
+		ownerId: idSchema.nullish().transform((v) => v ?? null),
+		mandateId: idSchema.nullish().transform((v) => v ?? null),
+		propertyId: idSchema.nullish().transform((v) => v ?? null),
+		unitId: idSchema.nullish().transform((v) => v ?? null),
+		replacesId: idSchema.nullish().transform((v) => v ?? null),
+		fileName: z
+			.string()
+			.trim()
+			.min(1, { error: 'Nom du fichier manquant.' })
+			.max(200, { error: 'Nom du fichier trop long.' })
+			.refine((v) => !v.includes('/') && !v.includes('\\') && ![...v].some((c) => c.charCodeAt(0) < 32), {
+				error: 'Nom du fichier invalide.'
+			}),
+		mimeType: z.enum(DOCUMENT_MIME_TYPES, { error: 'Format refusé : PDF, JPEG, PNG, WebP ou HEIC.' }),
+		byteSize: z.number().int().min(1, { error: 'Fichier vide.' }).max(MAX_UPLOAD_BYTES, { error: 'Document trop lourd : 10 Mo au plus.' }),
+		restriction: z
+			.enum(DOCUMENT_RESTRICTIONS)
+			.nullish()
+			.transform((v) => v ?? null)
+	})
+	.superRefine((d, ctx) => {
+		if (!d.ownerId && !d.mandateId && !d.propertyId && !d.unitId) {
+			ctx.addIssue({ code: 'custom', path: ['propertyId'], message: 'Rattachez le document à un propriétaire, un mandat ou un bien.' });
+		}
+		if (d.unitId && !d.propertyId) ctx.addIssue({ code: 'custom', path: ['propertyId'], message: 'Indiquez le bien de l’unité.' });
+	});
+export type CreateDocumentInput = z.input<typeof createDocumentSchema>;
+export type CreateDocumentData = z.output<typeof createDocumentSchema>;
+
+export const withdrawDocumentSchema = z.object({
+	reason: z.string().trim().min(5, { error: 'Indiquez le motif du retrait (5 caractères au moins).' }).max(500)
+});
+
+export const restrictDocumentSchema = z.object({ restriction: z.enum(DOCUMENT_RESTRICTIONS).nullable() });
+
+export interface DocumentView {
+	id: string;
+	type: DocumentType;
+	ownerId: string | null;
+	mandateId: string | null;
+	propertyId: string | null;
+	unitId: string | null;
+	version: number;
+	replacesId: string | null;
+	fileName: string;
+	mimeType: DocumentMimeType;
+	byteSize: number;
+	sha256: string | null;
+	status: DocumentStatus;
+	restriction: DocumentRestriction | null;
+	error: string | null;
+	uploadedBy: string;
+	createdAt: string;
+	activatedAt: string | null;
+	replacedAt: string | null;
+	withdrawnAt: string | null;
+	withdrawalReason: string | null;
+}
+
+/** Lecture d'un document : une URL signée de 5 minutes, jamais derrière le CDN public. */
+export interface DocumentDownload {
+	url: string;
+	expiresAt: string;
 }

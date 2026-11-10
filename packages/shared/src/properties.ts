@@ -330,3 +330,57 @@ export interface UnitView {
 export interface PropertyDetailView extends PropertyView {
 	units: UnitView[];
 }
+
+// ---------------------------------------------------------------- photos (lot 07, étape 3)
+
+/** Variantes WebP produites par la tâche : miniature, moyenne, grande (largeur ou hauteur maximale, en pixels). */
+export const MEDIA_VARIANT_SIZES = [320, 800, 1600] as const;
+export type MediaVariantSize = (typeof MEDIA_VARIANT_SIZES)[number];
+
+/** Durée d'une URL d'envoi présignée (photo ou document). */
+export const UPLOAD_URL_TTL_SECONDS = 10 * 60;
+
+export const MEDIA_STATUSES = ['pending', 'processing', 'ready', 'rejected', 'removed'] as const;
+export type MediaStatus = (typeof MEDIA_STATUSES)[number];
+
+/** Adresse publique d'une variante (sous l'API) : la clé aléatoire seule, jamais l'identifiant ni l'original. */
+export function mediaVariantPath(variantsKey: string, size: MediaVariantSize): string {
+	return `/media/v/${variantsKey}/${size}.webp`;
+}
+
+/** Photo annoncée par l'appareil (créée hors ligne au besoin) : type et taille avant envoi, 10 Mo au plus. */
+export const createMediaSchema = z.object({
+	id: idSchema,
+	propertyId: idSchema,
+	unitId: idSchema.nullish().transform((v) => v ?? null),
+	mimeType: z.enum(PHOTO_MIME_TYPES, { error: 'Format refusé : JPEG, PNG, WebP ou HEIC.' }),
+	byteSize: z.number().int().min(1, { error: 'Fichier vide.' }).max(MAX_UPLOAD_BYTES, { error: 'Photo trop lourde : 10 Mo au plus.' }),
+	caption: optionalText(200),
+	position: z.number().int().min(0).max(999).default(0)
+});
+export type CreateMediaInput = z.input<typeof createMediaSchema>;
+export type CreateMediaData = z.output<typeof createMediaSchema>;
+
+export const updateMediaSchema = z
+	.object({ caption: optionalText(200).optional(), position: z.number().int().min(0).max(999).optional() })
+	.strict()
+	.refine((u) => Object.keys(u).length > 0, { error: 'Rien à modifier.' });
+export type UpdateMediaInput = z.input<typeof updateMediaSchema>;
+
+export interface MediaView {
+	id: string;
+	propertyId: string;
+	unitId: string | null;
+	mimeType: PhotoMimeType;
+	byteSize: number;
+	position: number;
+	caption: string | null;
+	status: MediaStatus;
+	error: string | null;
+	width: number | null;
+	height: number | null;
+	/** Adresses des variantes (chemins sous l'API), une fois la photo prête. */
+	variants: Record<MediaVariantSize, string> | null;
+	createdAt: string;
+	processedAt: string | null;
+}

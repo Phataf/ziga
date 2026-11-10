@@ -11,7 +11,7 @@ import { Logger } from 'nestjs-pino';
 import type { DestinationStream } from 'pino';
 import { AppModule } from './app.module.js';
 import type { AppConfig } from './config/env.js';
-import { EXAMPLE_QUEUE, LOGO_QUEUE } from './jobs/queues.js';
+import { EXAMPLE_QUEUE, LOGO_QUEUE, MANDATES_QUEUE, MEDIA_QUEUE } from './jobs/queues.js';
 import { RequestContext } from './common/request-context.js';
 
 export const JOBS_DASHBOARD_PATH = '/admin/queues';
@@ -57,7 +57,9 @@ export async function createApp(
 		const serverAdapter = new ExpressAdapter();
 		serverAdapter.setBasePath(JOBS_DASHBOARD_PATH);
 		createBullBoard({
-			queues: [EXAMPLE_QUEUE, LOGO_QUEUE].map((name) => new BullMQAdapter(app.get<Queue>(getQueueToken(name)))),
+			queues: [EXAMPLE_QUEUE, LOGO_QUEUE, MANDATES_QUEUE, MEDIA_QUEUE].map(
+				(name) => new BullMQAdapter(app.get<Queue>(getQueueToken(name)))
+			),
 			serverAdapter
 		});
 		app.use(JOBS_DASHBOARD_PATH, serverAdapter.getRouter());

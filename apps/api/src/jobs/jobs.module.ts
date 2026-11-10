@@ -6,7 +6,8 @@ import { bullConnection } from '../redis/redis.module.js';
 import { ExampleProcessor } from './example.processor.js';
 import { LogoProcessor } from './logo.processor.js';
 import { MandatesExpiryProcessor } from './mandates-expiry.processor.js';
-import { EXAMPLE_QUEUE, LOGO_QUEUE, MANDATES_QUEUE } from './queues.js';
+import { MediaProcessor } from './media.processor.js';
+import { EXAMPLE_QUEUE, LOGO_QUEUE, MANDATES_QUEUE, MEDIA_QUEUE } from './queues.js';
 
 /**
  * Files de tâches. Le processus HTTP ne fait qu'ajouter des tâches (`producer`) ;
@@ -28,9 +29,9 @@ export class JobsModule {
 						defaultJobOptions: { attempts: 3, backoff: { type: 'exponential', delay: 1_000 }, removeOnComplete: 1_000, removeOnFail: 5_000 }
 					})
 				}),
-				BullModule.registerQueue({ name: EXAMPLE_QUEUE }, { name: LOGO_QUEUE }, { name: MANDATES_QUEUE })
+				BullModule.registerQueue({ name: EXAMPLE_QUEUE }, { name: LOGO_QUEUE }, { name: MANDATES_QUEUE }, { name: MEDIA_QUEUE })
 			],
-			providers: role === 'worker' ? [ExampleProcessor, LogoProcessor, MandatesExpiryProcessor] : [],
+			providers: role === 'worker' ? [ExampleProcessor, LogoProcessor, MandatesExpiryProcessor, MediaProcessor] : [],
 			exports: [BullModule]
 		};
 	}

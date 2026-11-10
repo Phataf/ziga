@@ -17,6 +17,7 @@ import { IdentityModule } from './modules/identity/identity.module.js';
 import { OrganizationsModule } from './modules/organizations/organizations.module.js';
 import { OwnersModule } from './modules/owners/owners.module.js';
 import { PropertiesModule } from './modules/properties/properties.module.js';
+import { DocumentsModule } from './modules/documents/documents.module.js';
 import { NotificationsModule } from './modules/notifications/notifications.module.js';
 import { RedisModule } from './redis/redis.module.js';
 import { StorageModule } from './storage/storage.module.js';
@@ -42,6 +43,7 @@ export class AppModule {
 				OrganizationsModule,
 				OwnersModule,
 				PropertiesModule,
+				DocumentsModule,
 				AdminModule,
 				SyncModule,
 				...extraModules,

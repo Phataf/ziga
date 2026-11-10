@@ -460,7 +460,12 @@ describe('garde global', () => {
 			'POST /auth/password/reset',
 			// Lot 03 : aperçu d'une invitation (le secret du lien suffit) et logos publics (versions traitées).
 			'GET /invitations/:token',
-			'GET /logos/:organizationId/:logoId/:variant'
+			'GET /logos/:organizationId/:logoId/:variant',
+			// Lot 07 : variantes publiques des photos (clé aléatoire de 128 bits) ; URL signées du stockage local (le jeton
+			// signé suffit, comme une URL présignée de S3).
+			'GET /media/v/:key/:file',
+			'PUT /storage/local/:token',
+			'GET /storage/local/:token'
 		]);
 		const listed = new Set(routes.map((r) => `${r.method} ${r.path}`));
 		for (const p of publicRoutes) expect(listed.has(p), p).toBe(true);
