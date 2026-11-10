@@ -16,6 +16,7 @@ import {
 	suspendSchema,
 	updatePlanSchema
 } from '@ziga/shared/admin';
+import { createNeighborhoodSchema, updateNeighborhoodSchema } from '@ziga/shared/geography';
 import { FEATURES_BY_KEY, GLOBAL_MODES, isFeatureKey, type GlobalMode } from '@ziga/shared/features';
 import { idSchema, isUuid } from '@ziga/shared/ids';
 import { z } from 'zod';
@@ -23,6 +24,7 @@ import { AppError } from '../../common/app-error.js';
 import { FeatureAdminService } from '../features/feature-admin.service.js';
 import { FeaturesService } from '../features/features.service.js';
 import { OrganizationsService } from '../organizations/organizations.service.js';
+import { GeographyService } from '../properties/geography.service.js';
 import { AdminDatabase } from './admin-database.service.js';
 import { actorOf, AdminService } from './admin.service.js';
 import { Platform, PlatformCan, type PlatformActor } from './platform.guard.js';
@@ -37,7 +39,8 @@ export class AdminController {
 		private readonly admin: AdminDatabase,
 		private readonly organizations: OrganizationsService,
 		private readonly features: FeaturesService,
-		private readonly featureAdmin: FeatureAdminService
+		private readonly featureAdmin: FeatureAdminService,
+		private readonly geography: GeographyService
 	) {}
 
 	/** Rôle de la personne connectée et ses permissions (écrans du back-office). */
@@ -304,6 +307,31 @@ export class AdminController {
 	@PlatformCan('support.access')
 	readJournal(@Platform() p: PlatformActor, @Param('id') id: string, @Query('avant') before?: string) {
 		return this.service.readJournal(p, idSchema.parse(id), before || undefined);
+	}
+
+	// ------------------------------------------------------------ référentiel géographique (lot 07)
+
+	/** Communes et quartiers, avec la référence OSM et la vérification sur place. */
+	@Get('geography')
+	@PlatformCan('platform.read')
+	geographyList() {
+		return this.admin.transaction(
+			async (tx) => ({ communes: await this.geography.communes(tx), neighborhoods: await this.geography.neighborhoods(tx) }),
+			{ readOnly: true }
+		);
+	}
+
+	@Post('neighborhoods')
+	@PlatformCan('geography.manage')
+	@HttpCode(201)
+	createNeighborhood(@Platform() p: PlatformActor, @Body() body: unknown) {
+		return this.admin.transaction((tx) => this.geography.create(tx, actorOf(p), createNeighborhoodSchema.parse(body)));
+	}
+
+	@Patch('neighborhoods/:id')
+	@PlatformCan('geography.manage')
+	updateNeighborhood(@Platform() p: PlatformActor, @Param('id') id: string, @Body() body: unknown) {
+		return this.admin.transaction((tx) => this.geography.update(tx, actorOf(p), idSchema.parse(id), updateNeighborhoodSchema.parse(body)));
 	}
 
 	// ------------------------------------------------------------ journal de la plateforme

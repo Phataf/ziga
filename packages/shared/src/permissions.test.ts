@@ -93,6 +93,10 @@ describe('matrice de permissions', () => {
 });
 
 describe('matrice des rôles plateforme (lot 04)', () => {
+	it('référentiel géographique (lot 07) : super administrateur et assistance seulement', () => {
+		expect(PLATFORM_ROLE_KEYS.filter((r) => platformCan(r, 'geography.manage'))).toEqual(['super_admin', 'support']);
+	});
+
 	it('seul le super administrateur modifie les interrupteurs', () => {
 		expect(PLATFORM_ROLE_KEYS.filter((r) => platformCan(r, 'feature.manage'))).toEqual(['super_admin']);
 	});

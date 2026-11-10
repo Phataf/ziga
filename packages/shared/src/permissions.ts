@@ -110,7 +110,9 @@ export const PLATFORM_PERMISSIONS = {
 	'subscription.manage': [SA, SL],
 	'subscription.record_payment': [SA, FI],
 	/** Modes globaux, exceptions, formules incluses, exceptions de quota. */
-	'feature.manage': [SA]
+	'feature.manage': [SA],
+	/** Référentiel géographique (lot 07) : ajouter un quartier, corriger un point, le marquer vérifié. */
+	'geography.manage': [SA, SU]
 } as const satisfies Record<string, readonly PlatformRoleKey[]>;
 
 export type PlatformAction = keyof typeof PLATFORM_PERMISSIONS;

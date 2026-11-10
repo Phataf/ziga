@@ -11,12 +11,14 @@ import { Injectable, type OnModuleInit } from '@nestjs/common';
 import {
 	commissionFromColumns,
 	createMandateSchema,
+	createMandateScopeSchema,
 	createOwnerSchema,
 	revokeMandateSchema,
 	updateMandateSchema,
 	updateOwnerSchema,
 	type CommissionColumns
 } from '@ziga/shared/owners';
+import { idSchema } from '@ziga/shared/ids';
 import type { SyncOperation } from '@ziga/shared/sync';
 import { AppError } from '../../common/app-error.js';
 import { RequestContext } from '../../common/request-context.js';
@@ -171,6 +173,23 @@ export class OwnersSyncHandlers implements OnModuleInit {
 				}
 				const current = COMMISSION_COLUMNS.some((c) => has(data, c)) ? await this.owners.commissionColumnsOf(op.id) : undefined;
 				await this.owners.updateMandate(op.id, updateMandateSchema.parse(termFields(data, current)));
+			}
+		});
+
+		// Lot 07 : portée posée depuis l'appareil (assistant d'ajout de bien). Création seulement ; les colonnes calculées
+		// (via_property, management_active) sont décidées par la base.
+		this.registry.register({
+			table: 'mandate_scopes',
+			operations: ['PUT'],
+			permission: 'mandate.update',
+			creation: true,
+			organizationOf: organizationOfRow,
+			apply: async (op) => {
+				const data = columns(op, ['organization_id', 'mandate_id', 'property_id', 'unit_id']);
+				await this.owners.addScope(
+					idSchema.parse(data.mandate_id),
+					createMandateScopeSchema.parse({ id: op.id, propertyId: data.property_id, unitId: text(data.unit_id) })
+				);
 			}
 		});
 	}

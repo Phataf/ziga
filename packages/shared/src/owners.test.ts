@@ -18,6 +18,7 @@ import {
 	ownerSchema,
 	revokeMandateSchema,
 	updateMandateSchema,
+	updateOwnerSchema,
 	type MandateDates
 } from './owners.js';
 
@@ -231,5 +232,12 @@ describe('mandats : statut effectif, autorisations et alerte', () => {
 		expect(mandateAlert(m(), '2027-01-01')).toBeNull();
 		expect(mandateAlert(m({ endsOn: null }), '2026-12-31')).toBeNull();
 		expect(mandateAlert(m({ status: 'revoked' }), '2026-12-15')).toBeNull();
+	});
+});
+
+describe('modification partielle (correctif du lot 07)', () => {
+	it('un champ absent ne reprend pas sa valeur par défaut : renommer ne remet pas le pays à BF', () => {
+		expect(updateOwnerSchema.parse({ name: 'Nouveau nom' })).toEqual({ name: 'Nouveau nom' });
+		expect(updateOwnerSchema.parse({ country: 'fr' })).toEqual({ country: 'FR' });
 	});
 });

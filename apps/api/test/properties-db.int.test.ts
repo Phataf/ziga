@@ -6,7 +6,18 @@
  * - Statut d'unité (D14) : l'occupation n'est pas une colonne ; motif obligatoire hors « prête » ; agent affecté.
  * - Photos : 15 au plus par unité, la 16e refusée ; documents : versions figées, chaîne de remplacement.
  */
+import { DOCUMENT_MIME_TYPES, DOCUMENT_TYPES } from '@ziga/shared/documents';
 import { newId } from '@ziga/shared/ids';
+import {
+	AMENITIES,
+	DECLARED_LAND_DOCUMENTS,
+	PHOTO_MIME_TYPES,
+	PROPERTY_OPERATIONS,
+	PROPERTY_TYPES,
+	TECHNICAL_STATUSES,
+	UNIT_TYPES,
+	UNIT_USAGES
+} from '@ziga/shared/properties';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type TestApp } from './http.js';
@@ -655,5 +666,40 @@ describe('documents privés : versions figées (D22)', () => {
 				[doc]
 			);
 		});
+	});
+});
+
+describe('listes fermées : la base et packages/shared disent la même chose', () => {
+	/** Valeurs entre apostrophes de la contrainte CHECK qui porte sur la colonne. */
+	async function checkValues(table: string, column: string): Promise<string[]> {
+		const r = await owner.query(
+			`select pg_get_constraintdef(c.oid) as def from pg_constraint c
+			 join pg_attribute a on a.attrelid = c.conrelid and a.attnum = any(c.conkey)
+			 where c.conrelid = $1::regclass and c.contype = 'c' and a.attname = $2 and cardinality(c.conkey) = 1`,
+			[table, column]
+		);
+		const values = r.rows.flatMap((row) => [...String(row.def).matchAll(/'([^']+)'/g)].map((m) => m[1]!));
+		return [...new Set(values)].sort();
+	}
+
+	it('types, opérations, usages, équipements, états techniques, formats, documents', async () => {
+		const cases: [string, string, readonly string[]][] = [
+			['properties', 'type', PROPERTY_TYPES],
+			['properties', 'operation', PROPERTY_OPERATIONS],
+			['units', 'type', UNIT_TYPES],
+			['units', 'usage', UNIT_USAGES],
+			['units', 'amenities', AMENITIES],
+			['units', 'technical_status', TECHNICAL_STATUSES],
+			['media', 'mime_type', PHOTO_MIME_TYPES],
+			['documents', 'type', DOCUMENT_TYPES],
+			['documents', 'mime_type', DOCUMENT_MIME_TYPES]
+		];
+		for (const [table, column, list] of cases) expect(await checkValues(table, column), `${table}.${column}`).toEqual([...list].sort());
+		// Documents fonciers déclarés : la contrainte nommée cite les cinq valeurs, « none » compris.
+		const land = await owner.query(
+			`select pg_get_constraintdef(oid) as def from pg_constraint where conname = 'properties_land_documents'`
+		);
+		const values = [...new Set([...String(land.rows[0].def).matchAll(/'([^']+)'/g)].map((m) => m[1]!))].sort();
+		expect(values).toEqual([...DECLARED_LAND_DOCUMENTS].sort());
 	});
 });

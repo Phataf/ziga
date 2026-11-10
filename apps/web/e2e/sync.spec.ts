@@ -183,6 +183,86 @@ test.describe('Synchronisation : ce que reçoit chaque personne (service PowerSy
 	});
 });
 
+test.describe('Synchronisation des biens (lot 07) : l’agent de terrain ne reçoit que ses unités', () => {
+	test('une unité non affectée n’arrive jamais chez l’agent ; désaffectée, elle quitte son appareil', async ({ request }) => {
+		const directorToken = await loginAs(request, 'director');
+		const director = await received(request, directorToken);
+		const orgA = director.find((r) => r.table === 'organizations')!.data.id as string;
+		const headers = { Authorization: `Bearer ${directorToken}`, 'X-Organization-Id': orgA };
+		// Le référentiel géographique descend chez tout le monde.
+		const tampouy = director.find((r) => r.table === 'neighborhoods' && r.data.name === 'Tampouy')!.data.id as string;
+		const agentToken = await loginAs(request, 'fieldAgent');
+		const agentId = (
+			(await (await request.get(`${API_URL}/me`, { headers: { Authorization: `Bearer ${agentToken}` } })).json()) as { id: string }
+		).id;
+
+		const ownerId = newId();
+		const propertyId = newId();
+		const assigned = newId();
+		const unassigned = newId();
+		const elsewhere = newId();
+		const otherUnit = newId();
+		const post = async (path: string, data: Record<string, unknown>) =>
+			expect((await request.post(`${API_URL}${path}`, { headers, data })).status(), path).toBeLessThan(300);
+		await post('/owners', { id: ownerId, type: 'person', name: 'Propriétaire des unités affectées', phone: '+22670900002' });
+		const property = (id: string, name: string) => ({
+			id,
+			ownerId,
+			type: 'apartment_building',
+			name,
+			communeId: 'ouagadougou',
+			neighborhoodId: tampouy
+		});
+		await post('/properties', property(propertyId, 'Immeuble avec unité affectée'));
+		await post('/properties', property(elsewhere, 'Immeuble sans unité affectée'));
+		await post('/units', { id: assigned, propertyId, type: 'apartment', label: 'A1' });
+		await post('/units', { id: unassigned, propertyId, type: 'apartment', label: 'A2' });
+		await post('/units', { id: otherUnit, propertyId: elsewhere, type: 'studio', label: 'S1' });
+		await post(`/units/${assigned}/assign`, { agentId });
+
+		const lot07 = ['properties', 'units', 'media', 'mandate_scopes', 'documents'];
+		const ofLot07 = (rows: Row[]) => rows.filter((r) => lot07.includes(r.table));
+		// La réplication prend un instant : on attend que l'unité affectée arrive chez l'agent.
+		await expect
+			.poll(
+				async () =>
+					ofLot07(await received(request, agentToken))
+						.filter((r) => r.table === 'units')
+						.map((r) => r.data.id),
+				{ timeout: 10_000 }
+			)
+			.toEqual([assigned]);
+		const agent = ofLot07(await received(request, agentToken));
+		expect(agent.filter((r) => r.table === 'properties').map((r) => r.data.id)).toEqual([propertyId]);
+		// Aucune trace des unités non affectées, dans aucune table ; aucun document.
+		const text = JSON.stringify(agent);
+		for (const id of [unassigned, otherUnit, elsewhere]) expect(text).not.toContain(id);
+		expect(agent.filter((r) => r.table === 'documents')).toEqual([]);
+
+		// La direction et le profil lecture reçoivent tout.
+		for (const account of ['director', 'viewer'] as const) {
+			await expect
+				.poll(
+					async () => {
+						const units = (await received(request, await loginAs(request, account)))
+							.filter((r) => r.table === 'units')
+							.map((r) => r.data.id);
+						return [assigned, unassigned, otherUnit].every((id) => units.includes(id));
+					},
+					{ timeout: 10_000 }
+				)
+				.toBe(true);
+		}
+
+		// Désaffectée : l'unité et son bien quittent l'appareil de l'agent à la synchronisation suivante.
+		await post(`/units/${assigned}/assign`, { agentId: null });
+		await expect
+			.poll(async () => JSON.stringify(ofLot07(await received(request, agentToken))).includes(assigned), { timeout: 10_000 })
+			.toBe(false);
+		expect(JSON.stringify(ofLot07(await received(request, agentToken)))).not.toContain(propertyId);
+	});
+});
+
 test.describe('Synchronisation : la base locale du navigateur', () => {
 	test('membre retiré : ses données locales de l’organisation disparaissent à la synchronisation suivante', async ({ page, request }) => {
 		const agency = await freshAgency(request, `Agence retrait ${newId().slice(-6)}`);

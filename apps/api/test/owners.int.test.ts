@@ -111,6 +111,19 @@ afterAll(async () => {
 	await t.close();
 });
 
+describe('modification partielle (correctif du lot 07)', () => {
+	it('renommer un propriétaire de la diaspora ne remet pas son pays à BF, en ligne comme hors ligne', async () => {
+		const abroad = await createOwner(a.director, { ...person('Moussa Traoré'), country: 'FR' });
+		const renamed = await a.director.call<OwnerView>('PATCH', `/owners/${abroad.id}`, { name: 'Moussa Traoré Junior' });
+		expect(renamed.body).toMatchObject({ name: 'Moussa Traoré Junior', country: 'FR' });
+		const [r] = await upload(a.director, [
+			{ key: key(), op: 'PATCH', table: 'owners', id: abroad.id, organizationId: a.id, data: { name: 'Moussa Traoré' } }
+		]);
+		expect(r).toMatchObject({ status: 'applied' });
+		expect((await a.director.call<OwnerView>('GET', `/owners/${abroad.id}`)).body).toMatchObject({ name: 'Moussa Traoré', country: 'FR' });
+	});
+});
+
 describe('propriétaires : création sans invitation, permissions', () => {
 	it('le gestionnaire crée une fiche : aucun SMS, aucune invitation, une ligne d’audit', async () => {
 		const sent = t.sms.messages.length;

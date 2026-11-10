@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { IdentityModule } from '../identity/identity.module.js';
 import { OrganizationsModule } from '../organizations/organizations.module.js';
+import { PropertiesModule } from '../properties/properties.module.js';
 import { AdminDatabase } from './admin-database.service.js';
 import { AdminController } from './admin.controller.js';
 import { AdminService } from './admin.service.js';
@@ -11,7 +12,7 @@ import { PlatformGuard } from './platform.guard.js';
  * non exportée). Toutes ses routes sont sous /admin et passent par @PlatformCan.
  */
 @Module({
-	imports: [IdentityModule, OrganizationsModule],
+	imports: [IdentityModule, OrganizationsModule, PropertiesModule],
 	controllers: [AdminController],
 	providers: [AdminDatabase, AdminService, PlatformGuard]
 })

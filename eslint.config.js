@@ -22,6 +22,10 @@ const RESTRICTED_IMPORTS = {
 	owners: {
 		group: ['**/db/schema/owners', '**/db/schema/owners.js'],
 		message: 'Propriétaires et mandats : passer par OwnersService (module owners, lot 06).'
+	},
+	properties: {
+		group: ['**/db/schema/properties', '**/db/schema/properties.js'],
+		message: 'Biens et unités : passer par PropertiesService (module properties, lot 07).'
 	}
 };
 
@@ -70,22 +74,27 @@ export default ts.config(
 		// sont lues et écrites que par lui. Vérifié aussi par src/architecture.test.ts.
 		files: ['apps/api/src/**/*.ts'],
 		ignores: ['apps/api/src/modules/features/**'],
-		rules: restrictImports('features', 'admin', 'sync', 'owners')
+		rules: restrictImports('features', 'admin', 'sync', 'owners', 'properties')
 	},
 	{
 		// Le module admin, lui, détient sa connexion ; il passe toujours par le module features pour les interrupteurs.
 		files: ['apps/api/src/modules/admin/**/*.ts'],
-		rules: restrictImports('features', 'sync', 'owners')
+		rules: restrictImports('features', 'sync', 'owners', 'properties')
 	},
 	{
 		// Le module sync détient la table sync_operations ; les autres règles d'import restent.
 		files: ['apps/api/src/modules/sync/**/*.ts'],
-		rules: restrictImports('features', 'admin', 'owners')
+		rules: restrictImports('features', 'admin', 'owners', 'properties')
 	},
 	{
 		// Le module owners détient les propriétaires et les mandats (lot 06) ; les autres règles d'import restent.
 		files: ['apps/api/src/modules/owners/**/*.ts'],
-		rules: restrictImports('features', 'admin', 'sync')
+		rules: restrictImports('features', 'admin', 'sync', 'properties')
+	},
+	{
+		// Le module properties détient les biens et les unités (lot 07) ; les autres règles d'import restent.
+		files: ['apps/api/src/modules/properties/**/*.ts'],
+		rules: restrictImports('features', 'admin', 'sync', 'owners')
 	},
 	{
 		files: ['scripts/**', '**/scripts/**', '**/*.config.{js,ts}', '**/test/**', '**/e2e/**'],

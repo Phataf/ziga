@@ -5,7 +5,14 @@
  */
 import { Body, Controller, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
 import { idSchema } from '@ziga/shared/ids';
-import { createMandateSchema, createOwnerSchema, revokeMandateSchema, updateMandateSchema, updateOwnerSchema } from '@ziga/shared/owners';
+import {
+	createMandateSchema,
+	createMandateScopeSchema,
+	createOwnerSchema,
+	revokeMandateSchema,
+	updateMandateSchema,
+	updateOwnerSchema
+} from '@ziga/shared/owners';
 import { Creation } from '../features/feature.guards.js';
 import { Can, OrganizationScoped } from '../organizations/organization-context.js';
 import { OwnersService } from './owners.service.js';
@@ -75,6 +82,20 @@ export class MandatesController {
 	@HttpCode(200)
 	revoke(@Param('id') id: string, @Body() body: unknown) {
 		return this.owners.revokeMandate(idSchema.parse(id), revokeMandateSchema.parse(body).reason);
+	}
+
+	/** Le mandat couvre un bien entier ou une unité (règle 12 tenue par la base). */
+	@Post(':id/scopes')
+	@Can('mandate.update')
+	@HttpCode(201)
+	addScope(@Param('id') id: string, @Body() body: unknown) {
+		return this.owners.addScope(idSchema.parse(id), createMandateScopeSchema.parse(body));
+	}
+
+	@Get(':id/scopes')
+	@Can('mandate.read')
+	scopes(@Param('id') id: string) {
+		return this.owners.scopes(idSchema.parse(id));
 	}
 
 	@Get(':id/versions')

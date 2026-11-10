@@ -40,6 +40,7 @@ afterAll(async () => {
 	await Promise.all([owner?.end(), api?.end(), admin?.end()]);
 });
 
+// Les données initiales sont les lignes sans auteur (created_by vide) : celles que le back-office ajoute ont le sien.
 describe('référentiel géographique : données initiales', () => {
 	it('communes du lancement (D08) avec leur centre, non vérifié', async () => {
 		const r = await api.query('select id, name, lat, lng, osm_ref, verified from communes order by id');
@@ -52,7 +53,7 @@ describe('référentiel géographique : données initiales', () => {
 	it('Ouagadougou : 39 quartiers, 21 avec point ; Saaba : 27 villages, tous avec point ; rien de vérifié', async () => {
 		const r = await api.query(
 			`select commune_id, count(*)::int as total, count(lat)::int as with_point, count(*) filter (where verified)::int as verified
-			from neighborhoods group by commune_id order by commune_id`
+			from neighborhoods where created_by is null group by commune_id order by commune_id`
 		);
 		expect(r.rows).toEqual([
 			{ commune_id: 'ouagadougou', total: 39, with_point: 21, verified: 0 },
@@ -111,7 +112,8 @@ describe('référentiel géographique : droits', () => {
 	it('app_sync lit le référentiel, sans rien écrire', async () => {
 		const sync = await connect(process.env.DATABASE_SYNC_URL!);
 		try {
-			const r = await sync.query('select count(*)::int as n from neighborhoods');
+			// Données de la migration (sans auteur) ; d'autres fichiers de tests en ajoutent par le back-office.
+			const r = await sync.query('select count(*)::int as n from neighborhoods where created_by is null');
 			expect(r.rows[0].n).toBe(66);
 			await rolledBack(sync, async () => {
 				expect((await sqlError(sync, `update neighborhoods set verified = true`)).code).toBe('42501');

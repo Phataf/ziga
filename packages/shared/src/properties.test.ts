@@ -52,3 +52,60 @@ describe('statut d’unité en quatre dimensions (D14, règle 13)', () => {
 		expect(new Set(AMENITIES).size).toBe(AMENITIES.length);
 	});
 });
+
+describe('schémas des biens et des unités (lot 07)', () => {
+	const id = '01a1c6fa-54ad-7465-9101-b3d8373bb2a9';
+
+	it('bien : brouillon minimal ; le quartier exige sa commune ; « aucun » document exclut les autres', async () => {
+		const { createPropertySchema } = await import('./properties.js');
+		const ok = createPropertySchema.parse({ id, ownerId: id, type: 'house', name: ' Villa Tampouy ' });
+		expect(ok).toMatchObject({ name: 'Villa Tampouy', operation: 'rent', communeId: null, gps: null, declaredLandDocuments: [] });
+		expect(createPropertySchema.safeParse({ id, ownerId: id, type: 'house', name: 'Villa', neighborhoodId: id }).success).toBe(false);
+		expect(
+			createPropertySchema.safeParse({ id, ownerId: id, type: 'house', name: 'Villa', declaredLandDocuments: ['none', 'puh'] }).success
+		).toBe(false);
+		expect(createPropertySchema.safeParse({ id, ownerId: id, type: 'castle', name: 'Villa' }).success).toBe(false);
+	});
+
+	it('unité : montants en FCFA entiers, pièces entières, équipements de la liste fermée ; aucune occupation', async () => {
+		const { createUnitSchema } = await import('./properties.js');
+		const u = createUnitSchema.parse({ id, propertyId: id, type: 'apartment', label: 'A2', rent: 75000, amenities: ['fence', 'garage'] });
+		expect(u).toMatchObject({ rent: 75000, rooms: { bedrooms: 0 }, usage: 'residential', furnished: false });
+		expect(u).not.toHaveProperty('occupancy');
+		expect(createUnitSchema.safeParse({ id, propertyId: id, type: 'apartment', label: 'A2', rent: 75000.5 }).success).toBe(false);
+		expect(createUnitSchema.safeParse({ id, propertyId: id, type: 'apartment', label: 'A2', rent: -1 }).success).toBe(false);
+		expect(createUnitSchema.safeParse({ id, propertyId: id, type: 'apartment', label: 'A2', amenities: ['piscine'] }).success).toBe(false);
+		expect(createUnitSchema.safeParse({ id, propertyId: id, type: 'apartment', label: 'A2', rooms: { bedrooms: 1.5 } }).success).toBe(
+			false
+		);
+	});
+
+	it('état technique : motif obligatoire hors « prête », rien en « prête »', async () => {
+		const { technicalStatusSchema } = await import('./properties.js');
+		expect(technicalStatusSchema.safeParse({ technicalStatus: 'under_works' }).success).toBe(false);
+		expect(technicalStatusSchema.parse({ technicalStatus: 'under_works', reason: 'Toiture', expectedOn: '2026-12-01' })).toEqual({
+			technicalStatus: 'under_works',
+			reason: 'Toiture',
+			expectedOn: '2026-12-01'
+		});
+		expect(technicalStatusSchema.safeParse({ technicalStatus: 'ready', reason: 'Toiture' }).success).toBe(false);
+		expect(technicalStatusSchema.parse({ technicalStatus: 'ready' })).toEqual({ technicalStatus: 'ready', reason: null, expectedOn: null });
+	});
+
+	it('statut de fiche : brouillon → active ; archivée → active ; jamais retour au brouillon', async () => {
+		const { canChangeRecordStatus } = await import('./properties.js');
+		expect(canChangeRecordStatus('draft', 'active')).toBe(true);
+		expect(canChangeRecordStatus('archived', 'active')).toBe(true);
+		expect(canChangeRecordStatus('active', 'draft')).toBe(false);
+		expect(canChangeRecordStatus('archived', 'draft')).toBe(false);
+	});
+});
+
+describe('modifications partielles des biens et des unités', () => {
+	it('un champ absent ne reprend pas sa valeur par défaut (équipements, meublé, pièces, opération, documents)', async () => {
+		const { updatePropertySchema, updateUnitSchema } = await import('./properties.js');
+		expect(updatePropertySchema.parse({ name: 'Villa' })).toEqual({ name: 'Villa' });
+		expect(updateUnitSchema.parse({ rent: 80000 })).toEqual({ rent: 80000 });
+		expect(updateUnitSchema.parse({ rooms: { bedrooms: 3 } })).toEqual({ rooms: { bedrooms: 3 } });
+	});
+});

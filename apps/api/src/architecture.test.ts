@@ -63,6 +63,18 @@ describe('architecture', () => {
 		expect(readFileSync(join(src, 'db/schema/index.ts'), 'utf8')).not.toContain('owners');
 	});
 
+	it('seul le module properties lit et écrit les biens, les unités et les photos (lot 07)', () => {
+		const tables = /\b(from|join|update|into)\s+(properties|units|media)\b/i;
+		const offenders = all.filter(
+			(f) =>
+				!f.path.startsWith('modules/properties/') &&
+				f.path !== 'db/schema/properties.ts' &&
+				(imports(f.code).some((i) => /schema\/properties(\.js)?$/.test(i)) || tables.test(f.code))
+		);
+		expect(offenders.map((f) => f.path)).toEqual([]);
+		expect(readFileSync(join(src, 'db/schema/index.ts'), 'utf8')).not.toContain('properties');
+	});
+
 	it('seul le module admin utilise la connexion app_admin', () => {
 		const offenders = all.filter((f) => !f.path.startsWith('modules/admin/') && imports(f.code).some((i) => i.includes('admin-database')));
 		expect(offenders.map((f) => f.path)).toEqual([]);

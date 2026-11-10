@@ -52,9 +52,9 @@ Dans l'ordre, dans le lot qui crée la table :
 | `owners` | 06 | fiche propriétaire, **sans** le compte lié (`user_id`) | création et modification (directeur, gestionnaire) |
 | `mandates` | 06 | mandat complet, avec sa version | création, modification (nouvelle version), révocation |
 | `mandate_versions` | 06 | copie de chaque version, écrite par la base seule | jamais |
-| `mandate_scopes` | 06 (remplie au lot 07) | biens et unités couverts, `management_active` calculé ; suit les streams des biens (agent de terrain : ses unités seulement) | non |
-| `properties` | 07 | fiche du bien, point GPS pris sur place compris (jamais publié) ; agent de terrain : les biens de ses unités affectées | création et modification, direction et gestion (étape 2) |
-| `units` | 07 | unité et ses deux dimensions saisies (fiche, état technique) ; jamais d'occupation ; agent de terrain : ses unités affectées seulement | création et modification, direction et gestion ; état technique, aussi l'agent sur ses unités (étape 2) |
+| `mandate_scopes` | 06 (remplie au lot 07) | biens et unités couverts, `management_active` calculé ; suit les streams des biens (agent de terrain : ses unités seulement) | création d'une portée (direction, gestion) ; colonnes calculées par la base |
+| `properties` | 07 | fiche du bien, point GPS pris sur place compris (jamais publié) ; agent de terrain : les biens de ses unités affectées | création et modification, direction et gestion |
+| `units` | 07 | unité et ses deux dimensions saisies (fiche, état technique) ; jamais d'occupation ; agent de terrain : ses unités affectées seulement | création et modification, direction et gestion ; état technique, aussi l'agent sur ses unités ; affectation (`unit.assign`) ; jamais l'occupation |
 | `media` | 07 | photos, sans l'original (`storage_key`) ; les photos retirées ne descendent plus | ajout hors ligne, légende, ordre, retrait (étape 3) |
 | `documents` | 07 | métadonnées seulement (ni fichier, ni clé de stockage) ; direction et gestion ; un document restreint, directeur seul | jamais (en ligne) |
 | `communes`, `neighborhoods` | 07 | référentiel de la plateforme, identique pour tous (nom, commune, point central) ; ni la référence OSM ni la vérification | non (back-office seul) |

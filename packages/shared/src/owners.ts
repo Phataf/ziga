@@ -13,6 +13,7 @@ import { addDays, daysBetween, isIsoDate } from './dates.js';
 import { idSchema } from './ids.js';
 import { fcfaSchema, NBSP } from './money.js';
 import { phoneSchema } from './phone.js';
+import { patchShape } from './schema-helpers.js';
 
 // ---------------------------------------------------------------- propriétaires
 
@@ -79,8 +80,11 @@ export type OwnerData = z.output<typeof ownerSchema>;
 export const createOwnerSchema = z.object({ id: idSchema, ...ownerFields }).superRefine(checkRepresentative);
 export type CreateOwnerInput = z.input<typeof createOwnerSchema>;
 
-/** Modification : champs envoyés seulement ; le serveur revalide la fiche complète avec `ownerSchema`. */
-export const updateOwnerSchema = z.object(ownerFields).partial();
+/**
+ * Modification : champs envoyés seulement, sans valeur par défaut (un champ absent ne change pas) ; le serveur
+ * revalide la fiche complète avec `ownerSchema`.
+ */
+export const updateOwnerSchema = z.object(patchShape(ownerFields));
 export type UpdateOwnerInput = z.input<typeof updateOwnerSchema>;
 
 // ---------------------------------------------------------------- mandats
@@ -373,4 +377,27 @@ export interface MandateVersionView extends MandateTerms {
 
 export interface OwnerDetailView extends OwnerView {
 	mandates: MandateView[];
+}
+
+// ---------------------------------------------------------------- portées (lot 07, règle 12)
+
+/**
+ * Un mandat couvre un bien entier (unitId vide : ses unités, présentes et futures, suivent) ou une unité précise.
+ * `viaProperty` et `managementActive` sont calculés par la base, jamais envoyés.
+ */
+export const createMandateScopeSchema = z.object({
+	id: idSchema,
+	propertyId: idSchema,
+	unitId: idSchema.nullish().transform((v) => v ?? null)
+});
+export type CreateMandateScopeInput = z.input<typeof createMandateScopeSchema>;
+export type CreateMandateScopeData = z.output<typeof createMandateScopeSchema>;
+
+export interface MandateScopeView {
+	id: string;
+	mandateId: string;
+	propertyId: string;
+	unitId: string | null;
+	viaProperty: boolean;
+	managementActive: boolean;
 }

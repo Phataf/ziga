@@ -19,6 +19,8 @@ import {
 	ownerSchema,
 	type CommissionColumns,
 	type CreateMandateData,
+	type CreateMandateScopeData,
+	type MandateScopeView,
 	type MandateTerms,
 	type MandateVersionView,
 	type MandateView,
@@ -33,7 +35,7 @@ import { and, asc, eq } from 'drizzle-orm';
 import { AppError } from '../../common/app-error.js';
 import { RequestContext } from '../../common/request-context.js';
 import type { Tx } from '../../db/database.js';
-import { mandates, mandateVersions, owners } from '../../db/schema/owners.js';
+import { mandates, mandateScopes, mandateVersions, owners } from '../../db/schema/owners.js';
 import { AuditService, diff, type AuditActor } from '../audit/audit.service.js';
 import type { OrganizationCreated } from '../organizations/organization-hooks.js';
 import { expireDueMandates } from './mandate-expiry.js';
@@ -453,6 +455,103 @@ export class OwnersService {
 			changedBy: v.changedBy,
 			recordedAt: v.recordedAt.toISOString()
 		}));
+	}
+
+	// ---------------------------------------------------------------- portées (lot 07, règle 12)
+
+	/**
+	 * Le mandat couvre un bien entier ou une unité. La base pose les lignes des unités du bien, vérifie que le bien est
+	 * celui du propriétaire du mandat, et refuse un second mandat de gestion actif sur une unité (UNIT_ALREADY_MANAGED).
+	 * Un mandat échu est expiré d'abord ; un mandat fermé ne couvre plus rien.
+	 */
+	async addScope(mandateId: string, input: CreateMandateScopeData): Promise<MandateScopeView[]> {
+		const { tx, organizationId, actor } = this.context();
+		const mandate = await this.mandateRow(tx, organizationId, mandateId, true);
+		if (mandate.status === 'active' && mandate.endsOn && mandate.endsOn < toIsoDate()) {
+			await expireDueMandates(tx, this.audit, organizationId, toIsoDate());
+			throw new AppError('MANDATE_CLOSED', 'Ce mandat est expiré : il ne couvre plus rien.', 409, { status: 'expired' });
+		}
+		if (mandate.status !== 'active') {
+			throw new AppError('MANDATE_CLOSED', 'Ce mandat est révoqué ou expiré : il ne couvre plus rien.', 409, { status: mandate.status });
+		}
+		if (isManagementMandate(mandate.type)) await expireDueMandates(tx, this.audit, organizationId, toIsoDate());
+		const exists = await tx.select({ id: mandateScopes.id }).from(mandateScopes).where(eq(mandateScopes.id, input.id)).limit(1);
+		if (exists.length) throw new AppError('CONFLICT', 'Cette portée existe déjà.', 409);
+		await tx.insert(mandateScopes).values({
+			id: input.id,
+			organizationId,
+			mandateId,
+			propertyId: input.propertyId,
+			unitId: input.unitId,
+			viaProperty: false,
+			managementActive: false
+		});
+		await this.audit.record(tx, {
+			actor,
+			organizationId,
+			action: 'mandate.scope_add',
+			objectType: 'mandate',
+			objectId: mandateId,
+			after: { scopeId: input.id, propertyId: input.propertyId, unitId: input.unitId }
+		});
+		return this.scopes(mandateId);
+	}
+
+	/** Portées d'un mandat : la ligne posée, et celles des unités qui suivent le bien. */
+	async scopes(mandateId: string): Promise<MandateScopeView[]> {
+		const { tx, organizationId } = this.context();
+		const rows = await tx
+			.select()
+			.from(mandateScopes)
+			.where(and(eq(mandateScopes.organizationId, organizationId), eq(mandateScopes.mandateId, mandateId)))
+			.orderBy(asc(mandateScopes.id));
+		return rows.map((r) => ({
+			id: r.id,
+			mandateId: r.mandateId,
+			propertyId: r.propertyId,
+			unitId: r.unitId,
+			viaProperty: r.viaProperty,
+			managementActive: r.managementActive
+		}));
+	}
+
+	/**
+	 * Bailleur particulier : ses biens sont couverts par son mandat self_managed dès leur création, dans la même
+	 * transaction (appelé par le module properties). Sans effet pour une agence.
+	 */
+	async coverWithSelfManaged(propertyId: string): Promise<void> {
+		const { tx, organizationId, landlord, actor } = this.context();
+		if (!landlord) return;
+		const [mandate] = await tx
+			.select({ id: mandates.id })
+			.from(mandates)
+			.where(and(eq(mandates.organizationId, organizationId), eq(mandates.type, 'self_managed')))
+			.limit(1);
+		if (!mandate) throw new AppError('LANDLORD_SELF_MANAGED_MISSING', 'Mandat du bailleur introuvable.', 500);
+		const id = newId();
+		await tx
+			.insert(mandateScopes)
+			.values({ id, organizationId, mandateId: mandate.id, propertyId, viaProperty: false, managementActive: false });
+		await this.audit.record(tx, {
+			actor,
+			organizationId,
+			action: 'mandate.scope_add',
+			objectType: 'mandate',
+			objectId: mandate.id,
+			after: { scopeId: id, propertyId, unitId: null }
+		});
+	}
+
+	/** Fiche du bailleur particulier (la seule de son organisation), pour ses biens. */
+	async landlordOwnerId(): Promise<string> {
+		const { tx, organizationId } = this.context();
+		const [row] = await tx
+			.select({ id: mandates.ownerId })
+			.from(mandates)
+			.where(and(eq(mandates.organizationId, organizationId), eq(mandates.type, 'self_managed')))
+			.limit(1);
+		if (!row) throw new AppError('LANDLORD_SELF_MANAGED_MISSING', 'Fiche du bailleur introuvable.', 500);
+		return row.id;
 	}
 
 	// ---------------------------------------------------------------- bailleur particulier

@@ -14,6 +14,7 @@ import type { SyncOperation, SyncOperationResult } from '@ziga/shared/sync';
 import { and, eq } from 'drizzle-orm';
 import { ZodError } from 'zod';
 import { AppError } from '../../common/app-error.js';
+import { fromDatabaseError } from '../../common/db-errors.js';
 import { RequestContext, type OrganizationScope } from '../../common/request-context.js';
 import { DatabaseService } from '../../db/database.module.js';
 import { syncOperations } from '../../db/schema/sync.js';
@@ -26,6 +27,10 @@ type Refusal = { code: string; message: string };
 
 function refusalOf(error: unknown): Refusal | null {
 	if (error instanceof AppError && error.status < 500) return { code: error.code, message: error.message };
+	// Règle tenue par la base (trigger, contrainte nommée) : un refus, comme sur la route HTTP, jamais une erreur passagère
+	// que l'appareil renverrait sans fin. La transaction de l'opération est déjà annulée.
+	const fromDb = fromDatabaseError(error);
+	if (fromDb && fromDb.status < 500) return { code: fromDb.code, message: fromDb.message };
 	if (error instanceof ZodError) {
 		const first = error.issues[0];
 		return { code: 'VALIDATION_ERROR', message: first ? `Données invalides : ${first.message}` : 'Données invalides.' };
