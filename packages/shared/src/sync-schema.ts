@@ -153,6 +153,97 @@ export const SYNCED_TABLES = {
 		unit_id: 'text',
 		via_property: 'integer',
 		management_active: 'integer'
+	},
+	/** Lot 07 : biens (point GPS pris sur place : jamais publié). */
+	properties: {
+		organization_id: 'text',
+		owner_id: 'text',
+		type: 'text',
+		operation: 'text',
+		name: 'text',
+		commune_id: 'text',
+		neighborhood_id: 'text',
+		address_hint: 'text',
+		gps_lat: 'real',
+		gps_lng: 'real',
+		gps_accuracy_m: 'integer',
+		declared_land_documents: 'text',
+		notes: 'text',
+		record_status: 'text',
+		archived_at: 'text',
+		created_at: 'text',
+		updated_at: 'text'
+	},
+	/** Lot 07 : unités ; l'occupation n'est pas une colonne, elle se calcule (occupancyOf). */
+	units: {
+		organization_id: 'text',
+		property_id: 'text',
+		type: 'text',
+		label: 'text',
+		bedrooms: 'integer',
+		living_rooms: 'integer',
+		kitchens: 'integer',
+		bathrooms: 'integer',
+		terraces: 'integer',
+		laundries: 'integer',
+		surface_m2: 'integer',
+		land_area_m2: 'integer',
+		usage: 'text',
+		furnished: 'integer',
+		amenities: 'text',
+		rent: 'integer',
+		charges: 'integer',
+		deposit_amount: 'integer',
+		advance_months: 'integer',
+		assigned_agent_id: 'text',
+		record_status: 'text',
+		archived_at: 'text',
+		technical_status: 'text',
+		technical_reason: 'text',
+		technical_expected_on: 'text',
+		created_at: 'text',
+		updated_at: 'text'
+	},
+	/** Lot 07 : photos, sans l'original (storage_key) ; variantes sous variants_key. */
+	media: {
+		organization_id: 'text',
+		property_id: 'text',
+		unit_id: 'text',
+		kind: 'text',
+		mime_type: 'text',
+		byte_size: 'integer',
+		position: 'integer',
+		caption: 'text',
+		variants_key: 'text',
+		width: 'integer',
+		height: 'integer',
+		status: 'text',
+		error: 'text',
+		created_at: 'text',
+		processed_at: 'text'
+	},
+	/** Lot 07 : métadonnées des documents privés (direction et gestion ; jamais la clé de stockage). */
+	documents: {
+		organization_id: 'text',
+		type: 'text',
+		owner_id: 'text',
+		mandate_id: 'text',
+		property_id: 'text',
+		unit_id: 'text',
+		version: 'integer',
+		replaces_id: 'text',
+		file_name: 'text',
+		mime_type: 'text',
+		byte_size: 'integer',
+		sha256: 'text',
+		status: 'text',
+		restriction: 'text',
+		uploaded_by: 'text',
+		created_at: 'text',
+		activated_at: 'text',
+		replaced_at: 'text',
+		withdrawn_at: 'text',
+		withdrawal_reason: 'text'
 	}
 } as const satisfies Record<string, Record<string, LocalColumnType>>;
 
@@ -165,5 +256,9 @@ export const ORGANIZATION_SCOPED_TABLES = [
 	'owners',
 	'mandates',
 	'mandate_versions',
-	'mandate_scopes'
+	'mandate_scopes',
+	'properties',
+	'units',
+	'media',
+	'documents'
 ] as const satisfies readonly SyncedTable[];

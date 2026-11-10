@@ -80,4 +80,51 @@ describe('Sync Streams (lot 05, D30)', () => {
 		expect(yaml).toContain("organization_members.status = 'active'");
 		expect(yaml).toContain("organizations.verification_status != 'suspended'");
 	});
+
+	/** Texte d'un stream (de son nom au stream suivant), sans les commentaires. */
+	function stream(name: string): string {
+		const yaml = readFileSync(CONFIG, 'utf8');
+		const start = yaml.indexOf(`  ${name}:\n`);
+		expect(start, name).toBeGreaterThan(-1);
+		const rest = yaml.slice(start + name.length + 4);
+		const next = rest.search(/\n {2}[a-z_]+:\n/);
+		return (next === -1 ? rest : rest.slice(0, next))
+			.split('\n')
+			.filter((line) => !line.trimStart().startsWith('#'))
+			.join('\n');
+	}
+
+	it('lot 07 : l’agent de terrain ne reçoit que les unités qui lui sont affectées, leur bien et leurs photos', () => {
+		const agent = stream('assigned_units');
+		expect(agent).toContain('units.assigned_agent_id = auth.user_id()');
+		expect(agent).toContain("organization_members.role = 'field_agent'");
+		expect(agent).toContain('organization_members.user_id = auth.user_id()');
+		expect(agent).toMatch(/FROM units WHERE id IN my_units/);
+		expect(agent).toMatch(/FROM properties WHERE id IN my_unit_properties/);
+		expect(agent).toMatch(/FROM media WHERE unit_id IN my_units/);
+		expect(agent).not.toMatch(/organization_id IN/);
+		expect(agent).not.toMatch(/\bdocuments\b/);
+		// Le stream de la gestion exclut l'agent de terrain ; aucun autre stream ne lit biens, unités ou photos.
+		const managed = stream('managed_properties');
+		expect(managed).toContain("organization_members.role != 'field_agent'");
+		const yaml = readFileSync(CONFIG, 'utf8');
+		const others = yaml.replace(stream('assigned_units'), '').replace(managed, '');
+		expect(others).not.toMatch(/FROM (properties|units|media|mandate_scopes)\b/);
+	});
+
+	it('lot 07 : documents en métadonnées, direction et gestion seulement ; restreint à la direction : directeur seul', () => {
+		const docs = stream('organization_documents');
+		expect(docs).toContain("organization_members.role = 'director'");
+		expect(docs).toContain("organization_members.role = 'manager'");
+		expect(docs).not.toMatch(/field_agent|viewer|role !=/);
+		expect(docs).toMatch(/FROM documents WHERE organization_id IN managed_organizations AND restriction IS NULL/);
+		const yaml = readFileSync(CONFIG, 'utf8');
+		expect(yaml.replace(docs, '')).not.toMatch(/FROM documents\b/);
+		// Jamais la clé de stockage d'un document ni l'original d'une photo (hors commentaires).
+		const queries = yaml
+			.split('\n')
+			.filter((line) => !line.trimStart().startsWith('#'))
+			.join('\n');
+		expect(queries).not.toMatch(/storage_key/);
+	});
 });

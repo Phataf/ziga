@@ -173,12 +173,13 @@ test.describe('Synchronisation : ce que reçoit chaque personne (service PowerSy
 			data: { reason: 'Test de bout en bout : suspension' }
 		});
 		expect(r.status()).toBe(204);
-		// Plus aucune donnée de l'organisation ; seul reste le catalogue des fonctionnalités, commun à tous.
+		// Plus aucune donnée de l'organisation ; seuls restent le catalogue des fonctionnalités et le référentiel
+		// géographique (lot 07), communs à tous.
 		const ofOrganization = (rows: Row[]) =>
 			rows.filter((r) => r.data.id === agency.id || r.data.organization_id === agency.id).map((r) => r.table);
 		await expect.poll(async () => ofOrganization(await received(request, agency.token)), { timeout: 10_000 }).toEqual([]);
 		const after = await received(request, agency.token);
-		expect([...new Set(after.map((r) => r.table))].sort()).toEqual(['features', 'plan_features']);
+		expect([...new Set(after.map((r) => r.table))].sort()).toEqual(['communes', 'features', 'neighborhoods', 'plan_features']);
 	});
 });
 

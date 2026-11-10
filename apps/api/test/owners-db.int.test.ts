@@ -12,6 +12,7 @@ import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type TestApp } from './http.js';
 import { apiSql, createOrg, inContext, sqlError, type Org } from './orgs.js';
+import { propertyWithUnit } from './properties.js';
 
 let t: TestApp;
 let a: Org;
@@ -126,7 +127,10 @@ describe('accès croisé A/B en SQL (règle 1)', () => {
 	beforeAll(async () => {
 		ownerB = await seed(b.id, (c) => insertOwner(c, b.id, 'Propriétaire de B'));
 		mandateB = await seed(b.id, (c) => insertMandate(c, b.id, ownerB));
-		await seed(b.id, (c) => insertScope(c, b.id, mandateB, newId(), newId()));
+		await seed(b.id, async (c) => {
+			const { property, unit } = await propertyWithUnit(c, b.id, ownerB);
+			await insertScope(c, b.id, mandateB, property, unit);
+		});
 	});
 
 	it('A ne lit aucune ligne de B, dans aucune des quatre tables', async () => {
@@ -352,15 +356,14 @@ describe('mandats : commission, cycle de vie, versions', () => {
 	});
 });
 
-describe('règle 12 : un seul mandat de gestion actif par unité (préparée ici, branchée au lot 07)', () => {
+describe('règle 12 : un seul mandat de gestion actif par unité', () => {
 	let ownerA: string;
 	beforeAll(async () => {
 		ownerA = await seed(a.id, (c) => insertOwner(c, a.id, 'Propriétaire règle 12'));
 	});
 
 	it('deux mandats de gestion actifs sur la même unité : refusé ; une mise en location à côté : permise', async () => {
-		const property = newId();
-		const unit = newId();
+		const { property, unit } = await seed(a.id, (c) => propertyWithUnit(c, a.id, ownerA));
 		const first = await seed(a.id, (c) => insertMandate(c, a.id, ownerA));
 		const second = await seed(a.id, (c) => insertMandate(c, a.id, ownerA));
 		const letting = await seed(a.id, (c) => insertMandate(c, a.id, ownerA, { type: 'letting' }));
@@ -385,10 +388,11 @@ describe('règle 12 : un seul mandat de gestion actif par unité (préparée ici
 
 	it('le champ calculé ne se force pas : une portée d’un mandat de mise en location reste hors de la règle', async () => {
 		const letting = await seed(a.id, (c) => insertMandate(c, a.id, ownerA, { type: 'letting' }));
+		const { property, unit } = await seed(a.id, (c) => propertyWithUnit(c, a.id, ownerA));
 		await seed(a.id, (c) =>
 			c.query(
 				`insert into mandate_scopes (id, organization_id, mandate_id, property_id, unit_id, management_active) values ($1, $2, $3, $4, $5, true)`,
-				[newId(), a.id, letting, newId(), newId()]
+				[newId(), a.id, letting, property, unit]
 			)
 		);
 		const r = await owner.query(`select management_active from mandate_scopes where mandate_id = $1`, [letting]);
@@ -396,8 +400,7 @@ describe('règle 12 : un seul mandat de gestion actif par unité (préparée ici
 	});
 
 	it('un mandat révoqué libère l’unité, dans la même transaction', async () => {
-		const property = newId();
-		const unit = newId();
+		const { property, unit } = await seed(a.id, (c) => propertyWithUnit(c, a.id, ownerA));
 		const first = await seed(a.id, (c) => insertMandate(c, a.id, ownerA));
 		const second = await seed(a.id, (c) => insertMandate(c, a.id, ownerA));
 		await seed(a.id, (c) => insertScope(c, a.id, first, property, unit));
@@ -419,14 +422,16 @@ describe('règle 12 : un seul mandat de gestion actif par unité (préparée ici
 	});
 
 	it('mandat sur un bien entier : il couvre chaque unité ; un mandat sur l’une d’elles est refusé, un second sur le bien aussi', async () => {
-		const property = newId();
-		const unit = newId();
+		const { property, unit } = await seed(a.id, (c) => propertyWithUnit(c, a.id, ownerA));
 		const whole = await seed(a.id, (c) => insertMandate(c, a.id, ownerA));
 		const other = await seed(a.id, (c) => insertMandate(c, a.id, ownerA));
-		await seed(a.id, async (c) => {
-			await insertScope(c, a.id, whole, property, null);
-			await insertScope(c, a.id, whole, property, unit, true);
-		});
+		// La ligne de l'unité (via_property) est posée par la base avec celle du bien (lot 07).
+		await seed(a.id, (c) => insertScope(c, a.id, whole, property, null));
+		const covered = await owner.query(`select via_property, management_active from mandate_scopes where mandate_id = $1 and unit_id = $2`, [
+			whole,
+			unit
+		]);
+		expect(covered.rows).toEqual([{ via_property: true, management_active: true }]);
 		await inContext(api, { organizationId: a.id }, async () => {
 			const onUnit = await sqlError(
 				api,
@@ -443,16 +448,27 @@ describe('règle 12 : un seul mandat de gestion actif par unité (préparée ici
 		});
 	});
 
-	it('deux organisations ne se gênent pas (le même identifiant d’unité, chacune chez elle)', async () => {
-		const property = newId();
-		const unit = newId();
+	it('deux organisations ne se gênent pas : chacune son unité sous mandat de gestion actif', async () => {
 		const ownerB = await seed(b.id, (c) => insertOwner(c, b.id));
+		const inA = await seed(a.id, (c) => propertyWithUnit(c, a.id, ownerA));
+		const inB = await seed(b.id, (c) => propertyWithUnit(c, b.id, ownerB));
 		const mandateA = await seed(a.id, (c) => insertMandate(c, a.id, ownerA));
 		const mandateB = await seed(b.id, (c) => insertMandate(c, b.id, ownerB));
-		await seed(a.id, (c) => insertScope(c, a.id, mandateA, property, unit));
-		await seed(b.id, (c) => insertScope(c, b.id, mandateB, property, unit));
-		const r = await owner.query(`select count(*)::int as n from mandate_scopes where unit_id = $1 and management_active`, [unit]);
+		await seed(a.id, (c) => insertScope(c, a.id, mandateA, inA.property, inA.unit));
+		await seed(b.id, (c) => insertScope(c, b.id, mandateB, inB.property, inB.unit));
+		const r = await owner.query(`select count(*)::int as n from mandate_scopes where unit_id = any($1::uuid[]) and management_active`, [
+			[inA.unit, inB.unit]
+		]);
 		expect(r.rows[0].n).toBe(2);
+		// Une portée de A ne peut pas viser l'unité de B (clé composite).
+		await inContext(api, { organizationId: a.id }, async () => {
+			const fk = await sqlError(
+				api,
+				`insert into mandate_scopes (id, organization_id, mandate_id, property_id, unit_id) values ($1, $2, $3, $4, $5)`,
+				[newId(), a.id, mandateA, inB.property, inB.unit]
+			);
+			expect(fk.code).toBe('23503');
+		});
 	});
 });
 

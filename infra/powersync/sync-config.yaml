@@ -26,12 +26,86 @@ streams:
       - SELECT id, organization_id, user_id, role, status, display_name, joined_at FROM organization_members WHERE organization_id IN my_organizations
       - SELECT organization_id || ':' || feature_key AS id, organization_id, feature_key, disabled_by_organization FROM organization_feature_settings WHERE organization_id IN my_organizations
       - SELECT id, feature_key, scope, organization_id, user_id, value, starts_at, ends_at FROM feature_overrides WHERE organization_id IN my_organizations AND revoked_at IS NULL
-      # Lot 06 : propriétaires (sans le compte lié, user_id, qui ne quitte pas le serveur), mandats, leurs versions et
-      # leurs portées. Tous les membres les lisent ; seuls le directeur et le gestionnaire les modifient (API).
+      # Lot 06 : propriétaires (sans le compte lié, user_id, qui ne quitte pas le serveur), mandats et leurs versions.
+      # Tous les membres les lisent ; seuls le directeur et le gestionnaire les modifient (API). Les portées des
+      # mandats désignent des biens et des unités : elles suivent les streams des biens (lot 07).
       - SELECT id, organization_id, type, name, phone, email, address, country, representative_name, representative_phone, notes, status, archived_at, created_at, updated_at FROM owners WHERE organization_id IN my_organizations
       - SELECT id, organization_id, owner_id, type, starts_on, ends_on, commission_basis, commission_rate_bp, commission_amount, can_publish, can_take_photos, can_collect_funds, can_sign_leases, exclusive, status, revoked_at, revocation_reason, expired_at, version, created_at, updated_at FROM mandates WHERE organization_id IN my_organizations
       - SELECT id, organization_id, mandate_id, version, starts_on, ends_on, commission_basis, commission_rate_bp, commission_amount, can_publish, can_take_photos, can_collect_funds, can_sign_leases, exclusive, status, revoked_at, revocation_reason, expired_at, changed_by, recorded_at FROM mandate_versions WHERE organization_id IN my_organizations
-      - SELECT id, organization_id, mandate_id, property_id, unit_id, via_property, management_active FROM mandate_scopes WHERE organization_id IN my_organizations
+
+  # Lot 07 : biens, unités, photos et portées des mandats, pour la direction, la gestion et le profil lecture (tous
+  # les rôles sauf l'agent de terrain : PowerSync n'accepte pas de liste littérale, et les quatre rôles sont fermés par
+  # la contrainte de organization_members). Les photos retirées ne descendent plus ; l'original d'une photo
+  # (storage_key) ne quitte jamais le serveur.
+  managed_properties:
+    auto_subscribe: true
+    with:
+      managed_organizations: |
+        SELECT organization_members.organization_id FROM organization_members
+          JOIN organizations ON organizations.id = organization_members.organization_id
+        WHERE organization_members.user_id = auth.user_id()
+          AND organization_members.status = 'active'
+          AND organization_members.role != 'field_agent'
+          AND organizations.verification_status != 'suspended'
+    queries:
+      - SELECT id, organization_id, owner_id, type, operation, name, commune_id, neighborhood_id, address_hint, gps_lat, gps_lng, gps_accuracy_m, declared_land_documents, notes, record_status, archived_at, created_at, updated_at FROM properties WHERE organization_id IN managed_organizations
+      - SELECT id, organization_id, property_id, type, label, bedrooms, living_rooms, kitchens, bathrooms, terraces, laundries, surface_m2, land_area_m2, usage, furnished, amenities, rent, charges, deposit_amount, advance_months, assigned_agent_id, record_status, archived_at, technical_status, technical_reason, technical_expected_on, created_at, updated_at FROM units WHERE organization_id IN managed_organizations
+      - SELECT id, organization_id, property_id, unit_id, kind, mime_type, byte_size, position, caption, variants_key, width, height, status, error, created_at, processed_at FROM media WHERE organization_id IN managed_organizations AND status != 'removed'
+      - SELECT id, organization_id, mandate_id, property_id, unit_id, via_property, management_active FROM mandate_scopes WHERE organization_id IN managed_organizations
+
+  # Agent de terrain : seulement les unités qui lui sont affectées, leur bien, leurs photos et leurs portées. Une unité
+  # non affectée ne descend jamais sur son téléphone ; une unité désaffectée en est effacée à la synchronisation
+  # suivante (vérifié contre le vrai service, apps/web/e2e). Même filtre côté API (lot 07, étape 2).
+  assigned_units:
+    auto_subscribe: true
+    with:
+      my_units: |
+        SELECT units.id FROM units
+          JOIN organization_members ON organization_members.organization_id = units.organization_id
+          JOIN organizations ON organizations.id = units.organization_id
+        WHERE units.assigned_agent_id = auth.user_id()
+          AND organization_members.user_id = auth.user_id()
+          AND organization_members.status = 'active'
+          AND organization_members.role = 'field_agent'
+          AND organizations.verification_status != 'suspended'
+      my_unit_properties: |
+        SELECT units.property_id FROM units
+          JOIN organization_members ON organization_members.organization_id = units.organization_id
+          JOIN organizations ON organizations.id = units.organization_id
+        WHERE units.assigned_agent_id = auth.user_id()
+          AND organization_members.user_id = auth.user_id()
+          AND organization_members.status = 'active'
+          AND organization_members.role = 'field_agent'
+          AND organizations.verification_status != 'suspended'
+    queries:
+      - SELECT id, organization_id, owner_id, type, operation, name, commune_id, neighborhood_id, address_hint, gps_lat, gps_lng, gps_accuracy_m, declared_land_documents, notes, record_status, archived_at, created_at, updated_at FROM properties WHERE id IN my_unit_properties
+      - SELECT id, organization_id, property_id, type, label, bedrooms, living_rooms, kitchens, bathrooms, terraces, laundries, surface_m2, land_area_m2, usage, furnished, amenities, rent, charges, deposit_amount, advance_months, assigned_agent_id, record_status, archived_at, technical_status, technical_reason, technical_expected_on, created_at, updated_at FROM units WHERE id IN my_units
+      - SELECT id, organization_id, property_id, unit_id, kind, mime_type, byte_size, position, caption, variants_key, width, height, status, error, created_at, processed_at FROM media WHERE unit_id IN my_units AND status != 'removed'
+      - SELECT id, organization_id, mandate_id, property_id, unit_id, via_property, management_active FROM mandate_scopes WHERE unit_id IN my_units
+
+  # Documents privés (D22) : métadonnées seulement, jamais la clé de stockage ni le fichier (URL signée de 5 minutes,
+  # en ligne). Matrice des types du lot 07 : direction et gestion ; un document restreint à la direction ne descend que
+  # chez le directeur. Ni l'agent de terrain, ni le profil lecture.
+  organization_documents:
+    auto_subscribe: true
+    with:
+      directed_organizations: |
+        SELECT organization_members.organization_id FROM organization_members
+          JOIN organizations ON organizations.id = organization_members.organization_id
+        WHERE organization_members.user_id = auth.user_id()
+          AND organization_members.status = 'active'
+          AND organization_members.role = 'director'
+          AND organizations.verification_status != 'suspended'
+      managed_organizations: |
+        SELECT organization_members.organization_id FROM organization_members
+          JOIN organizations ON organizations.id = organization_members.organization_id
+        WHERE organization_members.user_id = auth.user_id()
+          AND organization_members.status = 'active'
+          AND organization_members.role = 'manager'
+          AND organizations.verification_status != 'suspended'
+    queries:
+      - SELECT id, organization_id, type, owner_id, mandate_id, property_id, unit_id, version, replaces_id, file_name, mime_type, byte_size, sha256, status, restriction, uploaded_by, created_at, activated_at, replaced_at, withdrawn_at, withdrawal_reason FROM documents WHERE organization_id IN directed_organizations
+      - SELECT id, organization_id, type, owner_id, mandate_id, property_id, unit_id, version, replaces_id, file_name, mime_type, byte_size, sha256, status, restriction, uploaded_by, created_at, activated_at, replaced_at, withdrawn_at, withdrawal_reason FROM documents WHERE organization_id IN managed_organizations AND restriction IS NULL
 
   # Représentant légal (pièce d'identité) : réservé au directeur, comme l'écran des paramètres.
   organization_representatives:

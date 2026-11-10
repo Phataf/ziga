@@ -28,6 +28,7 @@ import { bullConnection } from '../src/redis/redis.module.js';
 import { WorkerModule } from '../src/worker.module.js';
 import { newPhone, startApp, type TestApp } from './http.js';
 import { addMember, createOrg, type Member, type Org } from './orgs.js';
+import { propertyWithUnit } from './properties.js';
 
 let t: TestApp;
 let a: Org;
@@ -572,8 +573,7 @@ describe('expiration : tâche de nuit et expirations dues avant un nouveau manda
 		const o = await createOwner(a.director);
 		const ended = await createMandate(a.director, rentalMandate(o.id, { startsOn: addDays(today, -30), endsOn: addDays(today, -1) }));
 		// L'unité est encore occupée par le mandat échu (la tâche de nuit n'est pas passée).
-		const property = newId();
-		const unit = newId();
+		const { property, unit } = await asOwner(a.id, (c) => propertyWithUnit(c, a.id, o.id));
 		await asOwner(a.id, (c) =>
 			c.query(`insert into mandate_scopes (id, organization_id, mandate_id, property_id, unit_id) values ($1, $2, $3, $4, $5)`, [
 				newId(),

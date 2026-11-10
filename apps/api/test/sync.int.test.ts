@@ -13,17 +13,21 @@ import { createOrg, sqlError, type Org } from './orgs.js';
 /** Tables synchronisées (lots 05 et 06) : toute nouvelle table passe par docs/SYNC.md et par cette liste. */
 const PUBLISHED = [
 	'communes',
+	'documents',
 	'feature_overrides',
 	'features',
 	'mandate_scopes',
 	'mandate_versions',
 	'mandates',
+	'media',
 	'neighborhoods',
 	'organization_feature_settings',
 	'organization_members',
 	'organizations',
 	'owners',
-	'plan_features'
+	'plan_features',
+	'properties',
+	'units'
 ];
 
 async function connect(url: string): Promise<pg.Client> {
