@@ -3,7 +3,8 @@
  * Une opération refusée par le serveur quitte la file (elle ne la bloque jamais) ; la synchronisation suivante remet
  * sur l'appareil la valeur du serveur. Pour que rien ne se perde en silence, chaque refus est gardé dans une table
  * locale de l'appareil (jamais envoyée, vidée à la déconnexion), avec ce qui avait été saisi et le motif du serveur.
- * Fonctions pures, testées ; l'écriture dans la base passe par `recordRejections`.
+ * Fonctions pures, testées ; l'écriture dans la base passe par `recordRejections`, et « J'ai compris » retire un refus
+ * de la liste (`acknowledgeRejection`).
  */
 import type { SyncOperation, SyncOperationResult } from '@ziga/shared/sync';
 
@@ -95,4 +96,9 @@ export async function recordRejections(
 			);
 		}
 	});
+}
+
+/** « J'ai compris » : le refus quitte la liste de l'appareil (rien n'est envoyé au serveur). */
+export async function acknowledgeRejection(db: { execute(sql: string, params?: unknown[]): Promise<unknown> }, id: string): Promise<void> {
+	await db.execute(`DELETE FROM ${REJECTIONS_TABLE} WHERE id = ?`, [id]);
 }

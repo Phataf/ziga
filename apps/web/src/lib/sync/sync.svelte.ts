@@ -8,7 +8,7 @@
  */
 import type { PowerSyncDatabase, SyncStatus } from '@powersync/web';
 import { auth } from '../auth/auth.svelte';
-import { noticeOf, recordRejections, rejectionRows, type RejectionNotice } from './rejections';
+import { acknowledgeRejection, noticeOf, recordRejections, rejectionRows, type RejectionNotice } from './rejections';
 import { syncState, type SyncState } from './status';
 
 const OWNER_KEY = 'ziga:base-locale';
@@ -132,6 +132,12 @@ class Sync {
 	/** Ferme la notification des modifications refusées (elles restent dans la liste). */
 	dismissNotice(): void {
 		this.notice = null;
+	}
+
+	/** « J'ai compris » : retire un refus de la liste « Modifications non acceptées » de l'appareil. */
+	async acknowledgeRejection(id: string): Promise<void> {
+		const db = this.db ?? (await this.start());
+		await acknowledgeRejection(db, id);
 	}
 
 	/** Déconnexion : synchronisation arrêtée et base locale vidée (lot 05, point 9). */

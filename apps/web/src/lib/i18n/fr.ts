@@ -450,7 +450,7 @@ export const fr = {
 	rejections: {
 		title: 'Modifications non acceptées',
 		subtitle:
-			'Le serveur a refusé ces modifications faites sur l’appareil. Rien n’a changé sur le serveur, et l’appareil affiche de nouveau la valeur enregistrée. La liste reste sur cet appareil jusqu’à la déconnexion.',
+			'Le serveur a refusé ces modifications faites sur l’appareil. Rien n’a changé sur le serveur, et l’appareil affiche de nouveau la valeur enregistrée. Chaque refus reste ici jusqu’à « J’ai compris » ou jusqu’à la déconnexion.',
 		notice: (n: number, reason: string) =>
 			`${n > 1 ? `${n} modifications n’ont pas été acceptées` : 'Une modification n’a pas été acceptée'} : ${reason || 'refusée par le serveur.'}`,
 		noticeHint: 'La valeur enregistrée sur le serveur est revenue sur l’appareil.',
@@ -461,6 +461,8 @@ export const fr = {
 		reason: 'Motif',
 		entered: 'Saisi',
 		emptyValue: '(vide)',
+		acknowledge: 'J’ai compris',
+		acknowledgeLabel: (what: string) => `J’ai compris : ${what}`,
 		at: (date: string, time: string) => `Refusée le ${date} à ${time}`,
 		what: 'Donnée',
 		when: 'Date',

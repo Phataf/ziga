@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { SyncOperation, SyncOperationResult } from '@ziga/shared/sync';
-import { noticeOf, recordRejections, rejectedFields, rejectionRows, REJECTION_COLUMNS, REJECTIONS_TABLE } from './rejections';
+import {
+	acknowledgeRejection,
+	noticeOf,
+	recordRejections,
+	rejectedFields,
+	rejectionRows,
+	REJECTION_COLUMNS,
+	REJECTIONS_TABLE
+} from './rejections';
 
 const ORG = '0195f3a0-0000-7000-8000-000000000001';
 const op = (key: string, data: Record<string, unknown> | null = { trade_name: 'Nom refusé' }): SyncOperation => ({
@@ -75,5 +83,11 @@ describe('modifications non acceptées (lot 05, étape 4)', () => {
 		expect(calls[0]!.sql).toMatch(new RegExp(`^INSERT OR REPLACE INTO ${REJECTIONS_TABLE} \\(id, `));
 		expect(calls[0]!.params).toHaveLength(1 + Object.keys(REJECTION_COLUMNS).length);
 		expect(calls[0]!.params![0]).toBe('k:1');
+	});
+
+	it('« J’ai compris » efface ce refus de la table locale, et lui seul', async () => {
+		const calls: { sql: string; params?: unknown[] }[] = [];
+		await acknowledgeRejection({ execute: async (sql: string, params?: unknown[]) => calls.push({ sql, params }) }, 'k:1');
+		expect(calls).toEqual([{ sql: `DELETE FROM ${REJECTIONS_TABLE} WHERE id = ?`, params: ['k:1'] }]);
 	});
 });

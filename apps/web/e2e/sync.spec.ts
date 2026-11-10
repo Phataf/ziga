@@ -348,6 +348,9 @@ test.describe('Synchronisation : refus et « Modifications non acceptées » (é
 		await expect(page.getByTestId('etat-synchro')).toHaveAttribute('data-etat', 'offline');
 		const name = `Nom refusé ${newId().slice(-6)}`;
 		await page.getByLabel('Nom commercial').fill(name);
+		// Le représentant légal aussi : une seconde opération, sur une seconde table locale.
+		await page.getByLabel('Nom et prénoms').fill('Awa Kaboré');
+		await page.getByLabel('Qualité').fill('Gérante');
 		await page.getByRole('button', { name: 'Enregistrer' }).click();
 		await expect(page.getByText('Paramètres enregistrés sur l’appareil : ils partiront dès que la connexion revient.')).toBeVisible();
 		await expect(preview).toContainText(name);
@@ -368,7 +371,7 @@ test.describe('Synchronisation : refus et « Modifications non acceptées » (é
 		// Reconnexion : refus notifié avec son motif, file vidée, valeur du serveur revenue sur l'appareil.
 		await context.setOffline(false);
 		const notice = page.getByTestId('refus-notification');
-		await expect(notice).toContainText('Une modification n’a pas été acceptée : Votre rôle ne permet pas cette action.', {
+		await expect(notice).toContainText('2 modifications n’ont pas été acceptées : Votre rôle ne permet pas cette action.', {
 			timeout: 15_000
 		});
 		await synced(page);
@@ -385,12 +388,15 @@ test.describe('Synchronisation : refus et « Modifications non acceptées » (é
 		await notice.getByRole('link', { name: 'Voir les modifications non acceptées' }).click();
 		await expect(page).toHaveURL('/app/modifications-non-acceptees');
 		await expect(page.getByTestId('refus-notification')).toHaveCount(0);
-		const entry = page.getByTestId('refus');
-		await expect(entry).toHaveCount(1);
+		await expect(page.getByTestId('refus')).toHaveCount(2);
+		const entry = page.getByTestId('refus').filter({ hasText: 'Paramètres de l’organisation' });
 		await expect(entry).toHaveAttribute('data-code', 'FORBIDDEN_ACTION');
 		await expect(entry).toContainText('Paramètres de l’organisation');
 		await expect(entry).toContainText(`Nom commercial : ${name}`);
 		await expect(entry).toContainText('Votre rôle ne permet pas cette action.');
+		const representative = page.getByTestId('refus').filter({ hasText: 'Représentant légal' });
+		await expect(representative).toContainText('Nom et prénoms : Awa Kaboré');
+		await expect(representative).toContainText('Qualité : Gérante');
 		for (const [label, shell, viewport] of [
 			['téléphone', 'telephone', { width: 360, height: 800 }],
 			['tablette', 'tablette', { width: 820, height: 1180 }],
@@ -399,10 +405,15 @@ test.describe('Synchronisation : refus et « Modifications non acceptées » (é
 			await page.setViewportSize(viewport);
 			// La coque de l'appareil est rendue avant de mesurer (une seule à la fois, docs/UX.md §3).
 			await expect(page.locator(`[data-coque="${shell}"]`)).toBeVisible();
-			await expect(page.getByTestId('refus')).toHaveCount(1);
-			await expect(page.getByTestId('refus')).toContainText(`Nom commercial : ${name}`);
+			await expect(page.getByTestId('refus')).toHaveCount(2);
+			await expect(page.getByRole('button', { name: 'J’ai compris : Représentant légal' })).toBeVisible();
 			await expectNoHorizontalOverflow(page, `Modifications non acceptées, ${label}`);
 		}
+
+		// « J'ai compris » (lot 06) : ce refus quitte la liste de l'appareil, l'autre reste.
+		await page.getByRole('button', { name: 'J’ai compris : Représentant légal' }).click();
+		await expect(page.getByTestId('refus')).toHaveCount(1);
+		await expect(page.getByTestId('refus')).toContainText(`Nom commercial : ${name}`);
 
 		// Gardée sur l'appareil (table locale) d'un écran à l'autre, et signalée dans l'en-tête tant qu'elle y est.
 		await page.goto('/app/organisation');

@@ -3,11 +3,14 @@
 	 * Modifications non acceptées (lot 05, étape 4, docs/SYNC.md §6) : les modifications faites sur l'appareil que le
 	 * serveur a refusées, avec ce qui avait été saisi et le motif. Lues dans la base de l'appareil, pour l'organisation
 	 * active seulement ; aucun appel réseau. Cartes sur téléphone et tablette, tableau sur ordinateur.
+	 * « J'ai compris » retire un refus de la liste (lot 06, étape 0) : sur téléphone, on ne se déconnecte presque jamais.
 	 */
 	import { onMount } from 'svelte';
+	import { Check } from '@lucide/svelte';
 	import { formatDate } from '@ziga/shared/dates';
 	import FormAlert from '#lib/components/auth/FormAlert.svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
+	import { Button } from '#lib/components/ui/button/index.ts';
 	import { messageOf } from '#lib/auth/forms.ts';
 	import { device } from '#lib/device.svelte.ts';
 	import { fr } from '#lib/i18n/fr.ts';
@@ -36,6 +39,14 @@
 			(error) => (message = messageOf(error))
 		);
 	});
+
+	async function acknowledge(id: string) {
+		try {
+			await sync.acknowledgeRejection(id);
+		} catch (error) {
+			message = messageOf(error);
+		}
+	}
 </script>
 
 <PageHeader title={t.title} subtitle={t.subtitle} />
@@ -63,6 +74,11 @@
 								{#each fields(r) as f (f.label)}<span class="block"><span class="font-medium">{f.label} :</span> {f.value}</span>{/each}
 							</td>
 							<td class="px-4 py-3 break-words">{r.message}</td>
+							<td class="px-4 py-3 text-right">
+								<Button variant="outline" aria-label={t.acknowledgeLabel(what(r))} onclick={() => acknowledge(r.id)}
+									><Check aria-hidden="true" />{t.acknowledge}</Button
+								>
+							</td>
 						</tr>
 					{/each}
 				</tbody>
@@ -78,6 +94,9 @@
 						<p class="text-base break-words"><span class="font-medium">{f.label} :</span> {f.value}</p>
 					{/each}
 					<p class="text-base break-words"><span class="font-medium">{t.reason} :</span> {r.message}</p>
+					<Button variant="outline" class="w-full" aria-label={t.acknowledgeLabel(what(r))} onclick={() => acknowledge(r.id)}
+						><Check aria-hidden="true" />{t.acknowledge}</Button
+					>
 				</li>
 			{/each}
 		</ul>
