@@ -51,6 +51,14 @@ streams:
     auto_subscribe: true
     query: SELECT id, feature_key, scope, organization_id, user_id, value, starts_at, ends_at FROM feature_overrides WHERE user_id = auth.user_id() AND revoked_at IS NULL
 
+  # Référentiel géographique (lot 07) : communes et quartiers, identiques pour tous, sans donnée d'organisation. Le
+  # point central sert au formulaire du bien ; la vérification et la référence OSM restent au back-office.
+  geography:
+    auto_subscribe: true
+    queries:
+      - SELECT id, name, lat, lng FROM communes
+      - SELECT id, commune_id, name, lat, lng FROM neighborhoods
+
   # Catalogue des fonctionnalités et contenu des formules : identiques pour tous, sans donnée d'organisation.
   feature_catalog:
     auto_subscribe: true

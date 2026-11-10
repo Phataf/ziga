@@ -59,6 +59,10 @@
 		"./owners": {
 			"types": "./dist/owners.d.ts",
 			"default": "./dist/owners.js"
+		},
+		"./geography": {
+			"types": "./dist/geography.d.ts",
+			"default": "./dist/geography.js"
 		}
 	},
 	"files": [

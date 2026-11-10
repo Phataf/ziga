@@ -53,6 +53,7 @@ Dans l'ordre, dans le lot qui crée la table :
 | `mandates` | 06 | mandat complet, avec sa version | création, modification (nouvelle version), révocation |
 | `mandate_versions` | 06 | copie de chaque version, écrite par la base seule | jamais |
 | `mandate_scopes` | 06 (remplie au lot 07) | biens et unités couverts, `management_active` calculé | non |
+| `communes`, `neighborhoods` | 07 | référentiel de la plateforme, identique pour tous (nom, commune, point central) ; ni la référence OSM ni la vérification | non (back-office seul) |
 
 ## 4. Lire dans la base locale (écrans)
 

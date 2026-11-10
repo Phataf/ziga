@@ -71,6 +71,18 @@ export const SYNCED_TABLES = {
 		plan_id: 'text',
 		feature_key: 'text'
 	},
+	/** Lot 07 : référentiel géographique de la plateforme, identique pour tous. */
+	communes: {
+		name: 'text',
+		lat: 'real',
+		lng: 'real'
+	},
+	neighborhoods: {
+		commune_id: 'text',
+		name: 'text',
+		lat: 'real',
+		lng: 'real'
+	},
 	/** Lot 06 : propriétaires (sans le compte lié). */
 	owners: {
 		organization_id: 'text',

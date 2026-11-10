@@ -81,6 +81,10 @@ pnpm --filter @ziga/api admin:create-super-admin --phone "+226 70 12 34 56" --na
 
 La commande s'applique après `pnpm db:migrate`.
 
+## Référentiel géographique (lot 07)
+
+Les communes (Ouagadougou et Saaba) et leurs quartiers sont créés par la migration `0009_geography`, à partir de la liste du porteur du projet. Les points centraux viennent d'OpenStreetMap : **© les contributeurs d'OpenStreetMap**, données sous licence ODbL ([openstreetmap.org/copyright](https://www.openstreetmap.org/copyright)). Ils sont approximatifs (`verified = false`) tant qu'ils n'ont pas été vérifiés sur place depuis le back-office. La vitrine (lot 12) affichera la même mention. L'extraction se refait avec `apps/api/scripts/osm-neighborhoods.mjs` ; l'application n'appelle jamais OpenStreetMap.
+
 ## Organisation
 
 | Chemin                     | Rôle                                                                                                              |
