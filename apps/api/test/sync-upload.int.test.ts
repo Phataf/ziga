@@ -182,7 +182,8 @@ describe('POST /sync/upload : refus, avec code et motif, sans bloquer la file', 
 		const before = await organizationRow(a);
 		const r = await upload(manager, [patchOrganization(a, { trade_name: 'Nom du gestionnaire' })]);
 		expect(r.status).toBe(200);
-		expect(r.results[0]).toMatchObject({ status: 'rejected', code: 'FORBIDDEN_ACTION' });
+		// L'organisation visée accompagne le refus : l'appareil le range dans la liste de cette organisation.
+		expect(r.results[0]).toMatchObject({ status: 'rejected', code: 'FORBIDDEN_ACTION', organizationId: a.id });
 		expect(r.results[0]!.message).toBe('Votre rôle ne permet pas cette action.');
 		expect((await organizationRow(a)).trade_name).toBe(before.trade_name);
 	});
@@ -205,6 +206,8 @@ describe('POST /sync/upload : refus, avec code et motif, sans bloquer la file', 
 			{ key: key(), op: 'DELETE', table: 'organizations', id: a.id }
 		]);
 		expect(r.results.map((x) => x.code)).toEqual(['TABLE_NOT_WRITABLE', 'OPERATION_NOT_ALLOWED']);
+		// Table inconnue : pas d'organisation déterminée ; table connue : celle de la ligne.
+		expect(r.results.map((x) => x.organizationId)).toEqual([undefined, a.id]);
 	});
 
 	it('organisation d’autrui : NOT_A_MEMBER, et rien n’est écrit chez elle', async () => {

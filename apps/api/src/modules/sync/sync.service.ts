@@ -45,8 +45,14 @@ export class SyncService {
 	async upload(userId: string, operations: SyncOperation[]): Promise<SyncOperationResult[]> {
 		const results: SyncOperationResult[] = [];
 		// Dans l'ordre de la file : une modification suit toujours celle qui la précède sur l'appareil.
-		for (const op of operations) results.push(await this.one(userId, op));
+		for (const op of operations) results.push(this.withOrganization(op, await this.one(userId, op)));
 		return results;
+	}
+
+	/** Organisation visée, quand elle se détermine : l'appareil range le résultat chez elle (refus compris). */
+	private withOrganization(op: SyncOperation, result: SyncOperationResult): SyncOperationResult {
+		const organizationId = this.registry.get(op.table)?.organizationOf(op);
+		return organizationId && isUuid(organizationId) ? { ...result, organizationId } : result;
 	}
 
 	private async one(userId: string, op: SyncOperation): Promise<SyncOperationResult> {

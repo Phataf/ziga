@@ -34,6 +34,11 @@ export interface SyncOperationResult {
 	status: SyncOperationStatus;
 	/** Opération déjà reçue : son premier résultat est renvoyé, rien n'est rejoué. */
 	replayed: boolean;
+	/**
+	 * Organisation visée par l'opération, quand le serveur a pu la déterminer : l'appareil range un refus dans la
+	 * liste « Modifications non acceptées » de cette organisation seulement (docs/SYNC.md).
+	 */
+	organizationId?: string;
 	/** Refus : code de l'API (FORBIDDEN_ACTION, FEATURE_DISABLED, VALIDATION_ERROR…) et motif lisible. */
 	code?: string;
 	message?: string;
