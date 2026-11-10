@@ -1,0 +1,80 @@
+{
+	"osm3s": {
+		"timestamp_osm_base": "2026-11-10T19:11:13Z",
+		"copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+	},
+	"elements": [
+		{
+			"type": "node",
+			"id": 27565002,
+			"lat": 12.3681873,
+			"lon": -1.5270944,
+			"tags": {
+				"name": "Ouagadougou",
+				"place": "city"
+			}
+		},
+		{
+			"type": "node",
+			"id": 902867125,
+			"lat": 12.376944,
+			"lon": -1.420833,
+			"tags": {
+				"is_in:department": "Saaba",
+				"name": "Saaba",
+				"place": "town"
+			}
+		},
+		{
+			"type": "node",
+			"id": 902962332,
+			"lat": 12.4276348,
+			"lon": -1.3832338,
+			"tags": {
+				"is_in:department": "Saaba",
+				"name": "Gampéla",
+				"place": "village"
+			}
+		},
+		{
+			"type": "node",
+			"id": 903015666,
+			"lat": 12.3705742,
+			"lon": -1.4546789,
+			"tags": {
+				"name": "Tabtenga",
+				"place": "village"
+			}
+		},
+		{
+			"type": "node",
+			"id": 1593087898,
+			"lat": 12.3599824,
+			"lon": -1.5344244,
+			"tags": {
+				"name": "Bilbalogho",
+				"place": "suburb"
+			}
+		},
+		{
+			"type": "node",
+			"id": 3448836389,
+			"lat": 12.3060727,
+			"lon": -1.5028592,
+			"tags": {
+				"name": "Ouaga 2000",
+				"place": "suburb"
+			}
+		},
+		{
+			"type": "node",
+			"id": 5676552380,
+			"lat": 12.4121421,
+			"lon": -1.4943318,
+			"tags": {
+				"name": "Somgande",
+				"place": "neighbourhood"
+			}
+		}
+	]
+}

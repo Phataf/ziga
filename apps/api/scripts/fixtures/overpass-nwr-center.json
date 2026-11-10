@@ -1,0 +1,22 @@
+{
+	"version": 0.6,
+	"generator": "Overpass API (extrait fabriqué, au format nwr + « out center tags » ; à remplacer par un extrait de reponse-overpass-v2.json)",
+	"osm3s": { "timestamp_osm_base": "2026-11-10T00:00:00Z" },
+	"elements": [
+		{ "type": "node", "id": 1, "lat": 12.3714, "lon": -1.5197, "tags": { "name": "Ouagadougou", "place": "city" } },
+		{
+			"type": "relation",
+			"id": 900,
+			"center": { "lat": 12.36, "lon": -1.53 },
+			"tags": { "name": "Ouagadougou", "place": "city", "boundary": "administrative" }
+		},
+		{ "type": "node", "id": 2, "lat": 12.3812, "lon": -1.4268, "tags": { "name": "Saaba", "place": "town" } },
+		{ "type": "node", "id": 4, "lat": 12.355, "lon": -1.535, "tags": { "name": "Gounghin", "place": "quarter" } },
+		{ "type": "way", "id": 40, "center": { "lat": 12.3601, "lon": -1.5402 }, "tags": { "name": "Gounghin", "place": "quarter" } },
+		{ "type": "relation", "id": 41, "center": { "lat": 12.3402, "lon": -1.5001 }, "tags": { "name": "Dassasgho", "place": "suburb" } },
+		{ "type": "way", "id": 42, "center": { "lat": 12.3405, "lon": -1.4999 }, "tags": { "name": "Dassasgho", "place": "neighbourhood" } },
+		{ "type": "way", "id": 43, "center": { "lat": 12.3201, "lon": -1.5302 }, "tags": { "name": "Karpala", "place": "neighbourhood" } },
+		{ "type": "way", "id": 44, "tags": { "name": "Sans centre", "place": "neighbourhood" } },
+		{ "type": "way", "id": 45, "center": { "lat": 12.395, "lon": -1.405 }, "tags": { "name": "Nioko II", "place": "village" } }
+	]
+}
