@@ -575,3 +575,79 @@ Prompt : `prompts/lot-04-interrupteurs-backoffice.md` ; spécification `docs/FEA
   - L'API et le worker comparent les migrations appliquées au journal du dépôt (`src/db/migration-status.ts`, même règle que le migrateur de Drizzle). S'il en manque, ils s'arrêtent avec la liste et la commande à lancer ; si la base est en avance (branche plus ancienne), ils démarrent avec un avertissement.
   - Migration `0005_migration_status` : `app_api` et `app_admin` lisent la table des migrations (lecture seule). Une base sans ce droit est donc au moins en retard de cette migration, et le message le dit.
   - Tests : 7 cas purs (à jour, en retard, sans droit de lecture, jamais migrée, en avance, base injoignable, lecture du journal) et 4 sur de vraies bases (base de test, base jetable jamais migrée, arrêtée à 0004 sans le droit, en retard d'une migration).
+
+## Lot 05 — Synchronisation hors ligne (socle PowerSync) — 10/11/2026
+
+Prompt : `prompts/lot-05-synchronisation.md` ; modèle à suivre : `docs/SYNC.md`. Quatre étapes, chacune montrée puis validée par le porteur, chacune fusionnée par pull request. Plan validé avec :
+- rôle de réplication `app_sync` : lecture seule, sans `BYPASSRLS`, limité aux tables publiées (D30 ; règle 1 de `CLAUDE.md`) ;
+- jeton dédié : audience `ziga-sync`, 5 minutes, sans liste d'organisations ;
+- colonne `display_name` dans `organization_members` ;
+- dépendances `@powersync/web` 2.6.0, `@powersync/service-sync-rules` 0.45.0 (développement de l'API), image `journeyapps/powersync-service:1.28.1`.
+
+### Fait
+- **Étape 1, service et réplication** :
+  - service PowerSync dans `infra/docker-compose.dev.yml`, avec son stockage PostgreSQL (`ziga_powersync`) ; configuration identique partout (`infra/powersync/service.yaml`), variables `PS_*` ;
+  - migration `0006_sync` : rôle `app_sync`, publication `powersync`, droit `SELECT` et politique `sync_read` table par table ;
+  - `GET /sync/credentials` : jeton EdDSA signé par la clé des jetons d'accès, vérifié par le même JWKS, refusé comme jeton d'accès.
+- **Étape 2, lecture synchronisée** :
+  - Sync Streams (`infra/powersync/sync-config.yaml`) partant des appartenances actives de la personne, organisation non suspendue ; représentant légal dans un stream réservé au directeur ;
+  - schéma local décrit une fois (`packages/shared/src/sync-schema.ts`) et comparé par un test à celui que PowerSync déduit des streams ;
+  - base SQLite du navigateur, indicateur « À jour », « Hors ligne », « Synchronisation… », « N modifications en attente » ; écrans de l'organisation et de l'équipe lus en local ; fonctionnalités calculées sur l'appareil ;
+  - base vidée à la déconnexion, au refus de la session (401) et au changement de personne.
+- **Étape 3, écriture et idempotence** :
+  - `POST /sync/upload` : chaque opération rejouée avec les mêmes contrôles que sa route, par les mêmes fonctions (`requireMembership`, `assertWritable`, `assertCan`, fonctionnalité, `assertCreationAllowed`), audit d'origine `sync` ; toujours 200, un résultat par opération ;
+  - migration `0007_sync_operations` : clé d'idempotence par organisation, en ajout seul, cloisonnée ;
+  - registre des tables modifiables (`SyncRegistry`), modèle : paramètres de l'organisation et représentant légal (`organizations.sync.ts`) ;
+  - côté web : écriture locale avec le schéma Zod partagé (`writes.ts`), envoi par lots de 100 (`connector.ts`).
+- **Étape 4, refus et conflits** :
+  - le serveur joint l'organisation visée à chaque résultat (`organizationId`) ;
+  - chaque refus est gardé dans une table de l'appareil (`sync_rejections`, `localOnly`, vidée à la déconnexion), sans doublon au rejeu ; la valeur du serveur revient par la synchronisation suivante ;
+  - notification dans la coque (motif, lien, Échap pour fermer), lien « N modifications non acceptées » tant que la liste n'est pas vide, écran « Modifications non acceptées » (cartes sur téléphone et tablette, tableau sur ordinateur), lu en local pour l'organisation active ;
+  - politique de conflits dans `docs/SYNC.md` §6, avec la limite écrite noir sur blanc : « la dernière écriture gagne, champ par champ » ne vaut que pour les champs descriptifs, jamais pour un montant, un statut ou un numéro de reçu, toujours décidés par le serveur (règles 3, 6 et 9) ;
+  - procédure complète pour rendre une table modifiable : `docs/SYNC.md` §7.
+- **Tests** :
+  - intégration : `sync.int.test.ts` (rôle, publication, politiques), `sync-streams.int.test.ts` (configuration validée par le moteur de PowerSync, schéma local identique), `sync-upload.int.test.ts` (application, idempotence en série et en parallèle, champ par champ, chaque refus avec son code et l'organisation visée, deux lignes d'audit d'un même envoi avec le même `request_id`, accès croisé et ajout seul de `sync_operations`) ;
+  - web : vues, requêtes par organisation, état de l'indicateur, refus (`rejections.test.ts`), accès de test absent de la version de production ;
+  - Playwright contre le vrai service PowerSync (`e2e/sync.spec.ts`) : A ne reçoit rien de B, représentant légal chez le directeur seul, membre retiré, délai, écrans sans appel réseau puis hors ligne, déconnexion, écriture hors ligne avec audit `sync`, et le refus de bout en bout (ci-dessous).
+
+### Tests attendus par le prompt
+- [x] Un utilisateur de A ne reçoit aucune ligne de B : `sync.spec.ts`, flux lu auprès du service avec le jeton de l'API.
+- [x] Écriture hors ligne puis reconnexion : en base, avec une ligne d'audit d'origine `sync` (`sync.spec.ts`, `sync-upload.int.test.ts`).
+- [x] Même opération envoyée deux fois : appliquée une seule fois, aussi en même temps (`sync-upload.int.test.ts`).
+- [x] Opération refusée (gestionnaire qui modifie le nom de l'agence) : en intégration, `FORBIDDEN_ACTION` ; de bout en bout, une directrice rétrogradée gestionnaire pendant qu'elle est hors ligne change le nom : à la reconnexion, notification avec le motif, valeur du serveur revenue sur l'appareil, modification dans « Modifications non acceptées » ; écran vérifié sur téléphone, tablette et ordinateur sans débordement.
+- [x] Fonctionnalité coupée pendant que l'appareil est hors ligne : `FEATURE_DISABLED` à la reconnexion (`sync-upload.int.test.ts`, table de test gardée par `listings.publication` : aucune table métier synchronisée n'a encore d'interrupteur).
+- [x] Membre retiré : ses données locales de l'organisation disparaissent à la synchronisation suivante (`sync.spec.ts`).
+- [x] Déconnexion : base locale vide, liste des refus comprise (`sync.spec.ts`).
+- [x] Playwright : hors ligne (émulation), modifier, revenir en ligne, constater la synchronisation.
+
+### Critères d'acceptation
+- [x] Ouverture d'un écran de l'application sans appel réseau : le test relève les lectures vers l'API pendant l'ouverture de la fiche et de l'équipe (`sync.spec.ts`). La seule est celle des numéros des membres, lus en ligne par choix ; sa réponse est retenue, et l'équipe s'affiche quand même. Hors ligne, les deux écrans s'affichent aussi.
+- [x] Délai de synchronisation inférieur à 5 secondes une fois en ligne, en local : test chronométré (`sync.spec.ts`).
+- [x] `docs/SYNC.md` décrit le modèle à suivre, étape par étape : lecture (§3), écriture (§5), refus et conflits (§6), procédure complète (§7).
+- [x] Journal des lots mis à jour, avec les limites connues de PowerSync rencontrées.
+
+### Limites de PowerSync rencontrées
+- **Réplication sans `BYPASSRLS`** : le rôle de réplication ne voit rien d'une table à RLS sans une politique explicite pour lui (`sync_read`) ; il lui faut aussi `USAGE` sur le schéma `public`.
+- **Base de développement** : `wal_level=logical` est exigé ; la base de la CI d'intégration ne l'a pas (avertissement à la création de la publication, sans effet sur les tests).
+- **Clé de signature** : un `kid` inconnu fait relire le JWKS au service ; après un redémarrage de l'API sans `AUTH_JWT_KEYS` (clé éphémère), la première connexion est refusée, les suivantes passent.
+- **Moteur des règles** (`@powersync/service-sync-rules`) : sur Node 22, il exige `--js-explicit-resource-management` ; le test le lance dans un processus à part (`apps/api/scripts/check-sync-config.mjs`). Le service lui-même demande Node 24 hors Docker.
+- **Flux toujours ouvert** : `networkidle` n'arrive plus ; les tests attendent `apiIdle` et `synced`.
+- **Envoi après une coupure** : PowerSync renvoie la file avec un délai de quelques secondes après le retour du réseau ; les tests de bout en bout attendent jusqu'à 15 secondes la notification d'un refus.
+- **Une table locale, une opération** : un enregistrement qui touche deux tables locales (fiche et représentant légal) part en deux opérations, donc deux lignes d'audit.
+- **Tables `localOnly`** : jamais envoyées ni reçues ; `disconnectAndClear` les vide aussi (choix par défaut, gardé).
+
+### Écarts par rapport au prompt
+- **Jeton sans liste d'organisations** (validé au plan) : la liste se lirait au moment de l'émission et resterait vraie 5 minutes. Les streams lisent les appartenances en direct : un membre retiré ou une organisation suspendue sort à la synchronisation suivante.
+- **Deux lignes d'audit pour un enregistrement** (fiche et représentant légal) : validé par le porteur, à condition qu'elles portent le même `request_id`. Le journal renvoie désormais `requestId`, et le test du lot 03 le vérifie.
+- **Numéros des membres** : jamais synchronisés ; lus en ligne pour le directeur et le gestionnaire ; hors connexion, « Numéro disponible en ligne ».
+- **Refus gardés jusqu'à la déconnexion**, sans bouton pour les retirer de la liste : « rien n'est perdu en silence ». Un refus dont le serveur n'a pas pu déterminer l'organisation (table inconnue) n'apparaît dans aucune liste ; aucun écran ne produit une telle opération.
+- **Correctif de CI en cours de lot** (pull request séparée) : collision de numéros de téléphone entre fichiers de tests d'intégration ; chaque fichier réserve maintenant son bloc de numéros, et Redis est remis à zéro avant chaque fichier (`apps/api/test/test-isolation.int.test.ts`). C'était aussi, très probablement, la cause de l'échec isolé du test d'audit noté au lot 04.
+
+### Dette technique
+- La liste des refus n'est pas paginée : une table par appareil, vidée à la déconnexion, qui ne devrait compter que quelques lignes.
+- Les libellés des colonnes refusées sont dans `fr.rejections` : chaque lot qui rend une table modifiable doit les ajouter (`docs/SYNC.md` §7).
+- Les valeurs codées (type de pièce d'identité) s'affichent brutes dans la liste des refus.
+
+### Questions ouvertes pour le porteur
+1. **Production** : adresse publique du service PowerSync (sous-domaine `sync.` derrière Cloudflare, ou chemin sur le domaine de l'API) ; à décider avec le déploiement.
+2. **Rôles de base** : la migration `0006_sync` crée `app_sync` ; en production, le rôle qui applique les migrations doit pouvoir créer un rôle avec `REPLICATION`, ou `app_sync` doit être créé à la main avant la migration.
