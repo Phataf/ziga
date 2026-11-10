@@ -1,6 +1,7 @@
 /**
  * Test d'architecture (lot 04, critère d'acceptation) : aucune lecture des tables d'interrupteurs hors du module
- * features ; la connexion app_admin n'est utilisée que par le module admin ; toutes les routes de celui-ci sont sous
+ * features ; les tables des modules sync (lot 05) et owners (lot 06) ne sont lues que par eux ; la connexion app_admin
+ * n'est utilisée que par le module admin ; toutes les routes de celui-ci sont sous
  * /admin et protégées par @PlatformCan.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -48,6 +49,18 @@ describe('architecture', () => {
 		);
 		expect(offenders.map((f) => f.path)).toEqual([]);
 		expect(readFileSync(join(src, 'db/schema/index.ts'), 'utf8')).not.toContain('sync');
+	});
+
+	it('seul le module owners lit et écrit les propriétaires et les mandats (lot 06)', () => {
+		const tables = /\b(from|join|update|into)\s+(owners|mandates|mandate_versions|mandate_scopes)\b/i;
+		const offenders = all.filter(
+			(f) =>
+				!f.path.startsWith('modules/owners/') &&
+				f.path !== 'db/schema/owners.ts' &&
+				(imports(f.code).some((i) => /schema\/owners(\.js)?$/.test(i)) || tables.test(f.code))
+		);
+		expect(offenders.map((f) => f.path)).toEqual([]);
+		expect(readFileSync(join(src, 'db/schema/index.ts'), 'utf8')).not.toContain('owners');
 	});
 
 	it('seul le module admin utilise la connexion app_admin', () => {

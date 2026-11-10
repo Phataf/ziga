@@ -20,7 +20,7 @@ import { syncOperations } from '../../db/schema/sync.js';
 import { FeaturesService } from '../features/features.service.js';
 import { SubscriptionsService } from '../features/subscriptions.service.js';
 import { assertCan, assertWritable, requireMembership, runInOrganization } from '../organizations/organization-context.js';
-import { SyncRegistry, type SyncHandler } from './sync-registry.js';
+import { isCreation, permissionFor, SyncRegistry, type SyncHandler } from './sync-registry.js';
 
 type Refusal = { code: string; message: string };
 
@@ -81,7 +81,7 @@ export class SyncService {
 			if (handler.feature) {
 				await this.features.assertEnabled(handler.feature, userId, await this.features.organizationContext(organizationId, scope.planId));
 			}
-			if (handler.creation) await this.subscriptions.assertCreationAllowed(scope);
+			if (isCreation(handler, op.op)) await this.subscriptions.assertCreationAllowed(scope);
 			const applied = await runInOrganization(
 				this.database,
 				scope,
@@ -123,7 +123,14 @@ export class SyncService {
 			});
 		}
 		assertWritable(scope);
-		assertCan(scope.role, handler.permission);
+		const permission = permissionFor(handler, op.op);
+		if (!permission) {
+			throw new AppError('OPERATION_NOT_ALLOWED', 'Cette opération n’est pas permise sur cette donnée.', 409, {
+				op: op.op,
+				table: op.table
+			});
+		}
+		assertCan(scope.role, permission);
 	}
 
 	private previous(organizationId: string, key: string) {

@@ -18,3 +18,23 @@ export interface LogoJobData {
 	organizationId: string;
 	logoId: string;
 }
+
+/**
+ * Mandats (lot 06) : expiration quotidienne. Un planificateur BullMQ ajoute la tâche chaque jour à 00:10 UTC (heure de
+ * Ouagadougou) ; le worker expire les mandats actifs dont la date de fin est passée.
+ */
+export const MANDATES_QUEUE = 'mandates';
+export const MANDATES_EXPIRY_SCHEDULER = 'mandates-daily-expiry';
+export const MANDATES_EXPIRY_JOB = 'expire-due';
+export const MANDATES_EXPIRY_PATTERN = '10 0 * * *';
+
+export interface MandatesExpiryJobData {
+	/** Date du jour imposée (tests) ; sinon la date du jour à Ouagadougou. */
+	today?: string;
+}
+
+export interface MandatesExpiryJobResult {
+	today: string;
+	organizations: number;
+	mandates: number;
+}

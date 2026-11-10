@@ -72,7 +72,7 @@ Dans l'ordre, dans le lot qui crée la table :
 
 1. L'écran valide la saisie avec le schéma Zod partagé et écrit la valeur normalisée dans la base locale (`apps/web/src/lib/sync/writes.ts`, une transaction locale). L'écran l'affiche aussitôt ; l'indicateur montre « 1 modification en attente ».
 2. PowerSync met l'opération en file : `PATCH` ne porte que les colonnes changées ; une mise à jour qui ne change rien n'en crée pas (`ignoreEmptyUpdates`).
-3. Le connecteur (`connector.ts`) envoie la file par lots de 100 au plus à `POST /sync/upload`. Chaque opération a sa clé d'idempotence : identifiant de la base locale et numéro de l'opération.
+3. Le connecteur (`connector.ts`) envoie la file par lots de 100 au plus à `POST /sync/upload`. Chaque opération a sa clé d'idempotence : identifiant de la base locale et numéro de l'opération. Pour une table d'organisation, il joint aussi l'organisation de la ligne (`organizationId`, lue dans la base locale, `upload.ts`) : un `PATCH` ne porte que les colonnes modifiées, jamais `organization_id`. Le serveur ne la croit pas sur parole : membre actif exigé, puis la ligne est cherchée sous la RLS de cette organisation ; une organisation forgée ne mène qu'à un refus.
 4. L'API rejoue chaque opération, dans l'ordre de la file (`apps/api/src/modules/sync/sync.service.ts`) :
    - table déclarée au registre, organisation visée, membre actif (sinon refus, rien n'est écrit chez cette organisation) ;
    - clé déjà reçue : le premier résultat est renvoyé, rien n'est rejoué ;
@@ -84,13 +84,13 @@ Dans l'ordre, dans le lot qui crée la table :
 **Rendre une table modifiable**
 
 1. Dans le module qui possède la table, un fournisseur déclare ses opérations au registre (`SyncRegistry`), au démarrage : modèle dans `apps/api/src/modules/organizations/organizations.sync.ts`.
-   - `operations` (PUT, PATCH, DELETE), `permission` (celle de la route HTTP), `feature` et `creation` si la route les exige ;
-   - `organizationOf` : l'organisation visée (identifiant de la ligne, ou sa colonne `organization_id`) ;
+   - `operations` (PUT, PATCH, DELETE) ; `permission` : celle de la route HTTP, une seule ou une par opération (création et modification) ; `feature` et `creation` si la route les exige (`creation: ['PUT']` : seule la création est bloquée par un abonnement échu) ;
+   - `organizationOf` : l'organisation visée (identifiant de la ligne pour `organizations` ; `organizationOfRow` pour une table d'organisation : colonne envoyée ou organisation jointe par le connecteur) ;
    - `apply` : traduit les colonnes en champs de l'API (une colonne non prévue est un refus `FIELD_NOT_WRITABLE`), valide avec **le même schéma Zod** et appelle **le même service** que la route.
 2. Côté web, l'écriture locale dans `writes.ts`, avec les valeurs du schéma Zod.
 3. Tests : chaque refus (permission, validation, champ, fonctionnalité, création, organisation d'autrui), l'idempotence, l'audit `sync` (modèle : `apps/api/test/sync-upload.int.test.ts`), et un parcours hors ligne dans `apps/web/e2e/sync.spec.ts`.
 
-**Modèle de référence** : les paramètres de l'organisation (nom commercial compris) et le représentant légal. Deux tables locales, donc deux opérations et deux lignes d'audit pour un enregistrement qui touche les deux.
+**Modèles de référence** : les paramètres de l'organisation (nom commercial compris) et le représentant légal (lot 05) ; les propriétaires et les mandats (lot 06, `apps/api/src/modules/owners/owners.sync.ts`), avec création hors ligne, statut traité comme une demande de transition, version décidée par le serveur. Deux tables locales, donc deux opérations et deux lignes d'audit pour un enregistrement qui touche les deux.
 
 ## 6. Refus et conflits (étape 4)
 

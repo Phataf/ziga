@@ -20,7 +20,13 @@ export const syncOperationSchema = z.object({
 	/** Identifiant de la ligne (UUIDv7 pour une ligne créée sur l'appareil). */
 	id: z.string().min(1).max(200),
 	/** Colonnes écrites : toutes pour PUT, seulement celles qui ont changé pour PATCH, aucune pour DELETE. */
-	data: z.record(z.string(), z.unknown()).nullish()
+	data: z.record(z.string(), z.unknown()).nullish(),
+	/**
+	 * Organisation de la ligne, lue dans la base locale par le connecteur (lot 06) : un PATCH ne porte que les colonnes
+	 * modifiées, jamais `organization_id`. Le serveur ne la croit pas sur parole : membre actif exigé, puis la ligne est
+	 * cherchée sous la RLS de cette organisation (une organisation forgée ne mène qu'à un refus).
+	 */
+	organizationId: z.string().max(64).nullish()
 });
 export type SyncOperation = z.output<typeof syncOperationSchema>;
 

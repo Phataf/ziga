@@ -12,13 +12,22 @@ import type { SyncOperation, SyncOperationType } from '@ziga/shared/sync';
 export interface SyncHandler {
 	table: string;
 	operations: readonly SyncOperationType[];
-	/** Permission du rôle, la même que celle de la route HTTP (403 FORBIDDEN_ACTION). */
-	permission: Action;
+	/**
+	 * Permission du rôle, la même que celle de la route HTTP (403 FORBIDDEN_ACTION) : une seule pour toutes les
+	 * opérations, ou une par opération (création et modification n'ont pas toujours la même).
+	 */
+	permission: Action | Partial<Record<SyncOperationType, Action>>;
 	/** Fonctionnalité optionnelle exigée (403 FEATURE_DISABLED), comme @RequiresFeature. */
 	feature?: FeatureKey;
-	/** Création bloquée quand l'abonnement est échu (403 SUBSCRIPTION_EXPIRED), comme @Creation. */
-	creation?: boolean;
-	/** Organisation visée par l'opération : l'identifiant de la ligne, ou sa colonne organization_id. */
+	/**
+	 * Création bloquée quand l'abonnement est échu (403 SUBSCRIPTION_EXPIRED), comme @Creation : pour toutes les
+	 * opérations (`true`), ou pour celles listées (une création, PUT, mais pas une modification).
+	 */
+	creation?: boolean | readonly SyncOperationType[];
+	/**
+	 * Organisation visée par l'opération : l'identifiant de la ligne, sa colonne organization_id, ou l'organisation
+	 * jointe par le connecteur (`organizationOfRow`).
+	 */
 	organizationOf(op: SyncOperation): string | null;
 	/**
 	 * Applique l'opération dans la transaction de l'organisation (RequestContext, origine `sync`), avec la même
@@ -43,4 +52,20 @@ export class SyncRegistry {
 	tables(): string[] {
 		return [...this.#handlers.keys()].sort();
 	}
+}
+
+/** Organisation d'une ligne de table d'organisation : colonne envoyée (PUT) ou organisation jointe par le connecteur (PATCH). */
+export function organizationOfRow(op: SyncOperation): string | null {
+	const column = op.data?.organization_id;
+	return typeof column === 'string' ? column : (op.organizationId ?? null);
+}
+
+/** Permission exigée pour cette opération ; une opération sans permission déclarée n'est pas permise. */
+export function permissionFor(handler: SyncHandler, op: SyncOperationType): Action | null {
+	return typeof handler.permission === 'string' ? handler.permission : (handler.permission[op] ?? null);
+}
+
+/** L'opération est-elle une création, bloquée par un abonnement échu ? */
+export function isCreation(handler: SyncHandler, op: SyncOperationType): boolean {
+	return Array.isArray(handler.creation) ? handler.creation.includes(op) : handler.creation === true;
 }

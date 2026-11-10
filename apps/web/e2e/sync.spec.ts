@@ -115,6 +115,46 @@ test.describe('Synchronisation : ce que reçoit chaque personne (service PowerSy
 		}
 	});
 
+	test('propriétaires et mandats (lot 06) : A ne reçoit rien de B ; B reçoit les siens, sans le compte lié', async ({ request }) => {
+		const tokenB = await loginAs(request, 'directorB');
+		const orgB = (await received(request, tokenB)).find((r) => r.table === 'organizations')!.data.id as string;
+		const headersB = { Authorization: `Bearer ${tokenB}`, 'X-Organization-Id': orgB };
+		const ownerId = newId();
+		const mandateId = newId();
+		expect(
+			(
+				await request.post(`${API_URL}/owners`, {
+					headers: headersB,
+					data: { id: ownerId, type: 'person', name: 'Propriétaire de Sahel Habitat', phone: '+22670900001' }
+				})
+			).status()
+		).toBe(201);
+		expect(
+			(
+				await request.post(`${API_URL}/mandates`, {
+					headers: headersB,
+					data: {
+						id: mandateId,
+						ownerId,
+						type: 'rental_management',
+						startsOn: '2026-11-01',
+						commission: { basis: 'percent_of_collected', rateBp: 1000 }
+					}
+				})
+			).status()
+		).toBe(201);
+		const a = await received(request, await loginAs(request, 'director'));
+		const b = await received(request, tokenB);
+		const lot06 = ['owners', 'mandates', 'mandate_versions', 'mandate_scopes'];
+		expect(a.filter((r) => lot06.includes(r.table) && r.data.organization_id === orgB)).toEqual([]);
+		expect(a.some((r) => r.data.id === ownerId || r.data.id === mandateId || r.data.mandate_id === mandateId)).toBe(false);
+		const mine = b.find((r) => r.table === 'owners' && r.data.id === ownerId)!;
+		expect(mine.data).toMatchObject({ organization_id: orgB, name: 'Propriétaire de Sahel Habitat' });
+		expect(mine.data).not.toHaveProperty('user_id');
+		expect(b.find((r) => r.table === 'mandates' && r.data.id === mandateId)!.data).toMatchObject({ version: 1, status: 'active' });
+		expect(b.some((r) => r.table === 'mandate_versions' && r.data.mandate_id === mandateId)).toBe(true);
+	});
+
 	test('le représentant légal ne descend que chez le directeur', async ({ request }) => {
 		const director = await received(request, await loginAs(request, 'director'));
 		const viewer = await received(request, await loginAs(request, 'viewer'));

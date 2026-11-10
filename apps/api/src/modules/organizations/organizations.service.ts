@@ -35,6 +35,7 @@ import { FeaturesService } from '../features/features.service.js';
 import { QuotasService } from '../features/quotas.service.js';
 import { AuthService } from '../identity/auth.service.js';
 import { sha256 } from '../identity/secrets.js';
+import { OrganizationCreationHooks } from './organization-hooks.js';
 
 type OrganizationRow = typeof organizations.$inferSelect;
 type LogoRow = typeof organizationLogos.$inferSelect;
@@ -97,7 +98,8 @@ export class OrganizationsService implements OnModuleInit {
 		@Inject(APP_CONFIG) private readonly config: AppConfig,
 		private readonly features: FeaturesService,
 		private readonly quotas: QuotasService,
-		private readonly auth: AuthService
+		private readonly auth: AuthService,
+		private readonly creationHooks: OrganizationCreationHooks
 	) {}
 
 	onModuleInit(): void {
@@ -230,6 +232,14 @@ export class OrganizationsService implements OnModuleInit {
 				objectType: 'organization_member',
 				objectId: memberId,
 				after: { userId, role: 'director', status: 'active' }
+			});
+			// Ce qui naît avec l'organisation, dans la même transaction (lot 06 : fiche et mandat d'un bailleur).
+			await this.creationHooks.run(tx, {
+				organizationId: org!.id,
+				type: org!.type,
+				legalName: org!.legalName,
+				phone: org!.phone,
+				userId
 			});
 			return {
 				organizationId: org!.id,

@@ -310,3 +310,49 @@ export function mandateAlert(m: MandateDates, today: string): { daysLeft: number
 export function firstExpiredDay(endsOn: string): string {
 	return addDays(endsOn, 1);
 }
+
+// ---------------------------------------------------------------- vues (réponses de l'API)
+
+export interface OwnerView {
+	id: string;
+	type: OwnerType;
+	name: string;
+	phone: string;
+	email: string | null;
+	address: string | null;
+	country: string;
+	representative: OwnerRepresentative | null;
+	notes: string | null;
+	status: OwnerStatus;
+	archivedAt: string | null;
+	createdAt: string;
+	updatedAt: string;
+}
+
+export interface MandateView extends MandateTerms {
+	id: string;
+	ownerId: string;
+	type: MandateType;
+	status: MandateStatus;
+	revokedAt: string | null;
+	revocationReason: string | null;
+	expiredAt: string | null;
+	version: number;
+	createdAt: string;
+	updatedAt: string;
+}
+
+export interface MandateVersionView extends MandateTerms {
+	mandateId: string;
+	version: number;
+	status: MandateStatus;
+	revokedAt: string | null;
+	revocationReason: string | null;
+	expiredAt: string | null;
+	changedBy: string | null;
+	recordedAt: string;
+}
+
+export interface OwnerDetailView extends OwnerView {
+	mandates: MandateView[];
+}
