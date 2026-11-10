@@ -1,0 +1,414 @@
+{
+	"source": "© les contributeurs d’OpenStreetMap (ODbL), via Overpass",
+	"fetchedAt": "2026-11-10T19:18:30.090Z",
+	"osmTimestamp": "2026-11-10T19:11:13Z",
+	"endpoint": "fichier reponse-overpass.json",
+	"communes": [
+		{
+			"slug": "ouagadougou",
+			"name": "Ouagadougou",
+			"lat": 12.368187,
+			"lng": -1.527094,
+			"osmId": "node/27565002",
+			"verified": false
+		},
+		{
+			"slug": "saaba",
+			"name": "Saaba",
+			"lat": 12.376944,
+			"lng": -1.420833,
+			"osmId": "node/902867125",
+			"verified": false
+		}
+	],
+	"neighborhoods": [
+		{
+			"commune": "ouagadougou",
+			"name": "Bilbalogho",
+			"place": "suburb",
+			"lat": 12.359982,
+			"lng": -1.534424,
+			"osmId": "node/1593087898",
+			"verified": false
+		},
+		{
+			"commune": "ouagadougou",
+			"name": "Boassa",
+			"place": "village",
+			"lat": 12.295151,
+			"lng": -1.618371,
+			"osmId": "node/5109140611",
+			"verified": false
+		},
+		{
+			"commune": "ouagadougou",
+			"name": "Gounghin Nord",
+			"place": "suburb",
+			"lat": 12.361791,
+			"lng": -1.550809,
+			"osmId": "node/3793832332",
+			"verified": false
+		},
+		{
+			"commune": "ouagadougou",
+			"name": "Gounghin Sud",
+			"place": "suburb",
+			"lat": 12.353235,
+			"lng": -1.54548,
+			"osmId": "node/3793832333",
+			"verified": false
+		},
+		{
+			"commune": "ouagadougou",
+			"name": "Kalgodin",
+			"place": "suburb",
+			"lat": 12.356231,
+			"lng": -1.503364,
+			"osmId": "node/3350189466",
+			"verified": false
+		},
+		{
+			"commune": "ouagadougou",
+			"name": "Karpalin",
+			"place": "suburb",
+			"lat": 12.29038,
+			"lng": -1.475408,
+			"osmId": "node/3448394447",
+			"verified": false
+		},
+		{
+			"commune": "ouagadougou",
+			"name": "kouritinga",
+			"place": "neighbourhood",
+			"lat": 12.318511,
+			"lng": -1.549521,
+			"osmId": "node/5490677412",
+			"verified": false
+		},
+		{
+			"commune": "ouagadougou",
+			"name": "Ouaga 2000",
+			"place": "suburb",
+			"lat": 12.306073,
+			"lng": -1.502859,
+			"osmId": "node/3448836389",
+			"verified": false
+		},
+		{
+			"commune": "ouagadougou",
+			"name": "Paglayiri",
+			"place": "suburb",
+			"lat": 12.333399,
+			"lng": -1.531094,
+			"osmId": "node/3296496974",
+			"verified": false
+		},
+		{
+			"commune": "ouagadougou",
+			"name": "Patte d'Oie",
+			"place": "suburb",
+			"lat": 12.327551,
+			"lng": -1.515315,
+			"osmId": "node/3445213338",
+			"verified": false
+		},
+		{
+			"commune": "ouagadougou",
+			"name": "Silmissin",
+			"place": "suburb",
+			"lat": 12.344687,
+			"lng": -1.502702,
+			"osmId": "node/3233239040",
+			"verified": false
+		},
+		{
+			"commune": "ouagadougou",
+			"name": "Somgande",
+			"place": "neighbourhood",
+			"lat": 12.412142,
+			"lng": -1.494332,
+			"osmId": "node/5676552380",
+			"verified": false
+		},
+		{
+			"commune": "ouagadougou",
+			"name": "Tampouy",
+			"place": "suburb",
+			"lat": 12.389868,
+			"lng": -1.576925,
+			"osmId": "node/3423523579",
+			"verified": false
+		},
+		{
+			"commune": "ouagadougou",
+			"name": "Yagma",
+			"place": "village",
+			"lat": 12.41636,
+			"lng": -1.628054,
+			"osmId": "node/9587569259",
+			"verified": false
+		},
+		{
+			"commune": "ouagadougou",
+			"name": "Zékounga I",
+			"place": "village",
+			"lat": 12.389787,
+			"lng": -1.648786,
+			"osmId": "node/12915364746",
+			"verified": false
+		},
+		{
+			"commune": "saaba",
+			"name": "Badnogo 1",
+			"place": "village",
+			"lat": 12.469211,
+			"lng": -1.298698,
+			"osmId": "node/3229707564",
+			"verified": false
+		},
+		{
+			"commune": "saaba",
+			"name": "Badnogo 2",
+			"place": "village",
+			"lat": 12.270588,
+			"lng": -1.370185,
+			"osmId": "node/6211057665",
+			"verified": false
+		},
+		{
+			"commune": "saaba",
+			"name": "Bagayiri",
+			"place": "hamlet",
+			"lat": 12.477361,
+			"lng": -1.272059,
+			"osmId": "node/903015054",
+			"verified": false
+		},
+		{
+			"commune": "saaba",
+			"name": "Baossom",
+			"place": "village",
+			"lat": 12.486862,
+			"lng": -1.299943,
+			"osmId": "node/5806794096",
+			"verified": false
+		},
+		{
+			"commune": "saaba",
+			"name": "Barogo",
+			"place": "village",
+			"lat": 12.411855,
+			"lng": -1.419994,
+			"osmId": "node/5221168816",
+			"verified": false
+		},
+		{
+			"commune": "saaba",
+			"name": "Boudtenga",
+			"place": "village",
+			"lat": 12.480095,
+			"lng": -1.273545,
+			"osmId": "node/4469884780",
+			"verified": false
+		},
+		{
+			"commune": "saaba",
+			"name": "Boudtenga-Peulh",
+			"place": "village",
+			"lat": 12.487749,
+			"lng": -1.263059,
+			"osmId": "node/902962299",
+			"verified": false
+		},
+		{
+			"commune": "saaba",
+			"name": "Gampéla",
+			"place": "village",
+			"lat": 12.427635,
+			"lng": -1.383234,
+			"osmId": "node/902962332",
+			"verified": false
+		},
+		{
+			"commune": "saaba",
+			"name": "Goguen",
+			"place": "village",
+			"lat": 12.302179,
+			"lng": -1.362605,
+			"osmId": "node/6085506428",
+			"verified": false
+		},
+		{
+			"commune": "saaba",
+			"name": "Gonsé",
+			"place": "village",
+			"lat": 12.461855,
+			"lng": -1.312751,
+			"osmId": "node/1893912606",
+			"verified": false
+		},
+		{
+			"commune": "saaba",
+			"name": "Komkaga",
+			"place": "village",
+			"lat": 12.422778,
+			"lng": -1.27355,
+			"osmId": "node/902962368",
+			"verified": false
+		},
+		{
+			"commune": "saaba",
+			"name": "Kouada",
+			"place": "village",
+			"lat": 12.494157,
+			"lng": -1.356726,
+			"osmId": "node/5810672526",
+			"verified": false
+		},
+		{
+			"commune": "saaba",
+			"name": "Kouidi",
+			"place": "village",
+			"lat": 12.459221,
+			"lng": -1.322691,
+			"osmId": "node/902962405",
+			"verified": false
+		},
+		{
+			"commune": "saaba",
+			"name": "Le Massili",
+			"place": "hamlet",
+			"lat": 12.440918,
+			"lng": -1.357677,
+			"osmId": "node/919530802",
+			"verified": false
+		},
+		{
+			"commune": "saaba",
+			"name": "Manegsombo",
+			"place": "village",
+			"lat": 12.499866,
+			"lng": -1.323498,
+			"osmId": "node/5806794098",
+			"verified": false
+		},
+		{
+			"commune": "saaba",
+			"name": "Mogden",
+			"place": "village",
+			"lat": 12.333076,
+			"lng": -1.392784,
+			"osmId": "node/4895241248",
+			"verified": false
+		},
+		{
+			"commune": "saaba",
+			"name": "Nakomestenga-Peulh",
+			"place": "village",
+			"lat": 12.32815,
+			"lng": -1.384436,
+			"osmId": "node/5955180501",
+			"verified": false
+		},
+		{
+			"commune": "saaba",
+			"name": "Nong-Warbin",
+			"place": "village",
+			"lat": 12.451721,
+			"lng": -1.432798,
+			"osmId": "node/5831891633",
+			"verified": false
+		},
+		{
+			"commune": "saaba",
+			"name": "Séloguen",
+			"place": "village",
+			"lat": 12.319469,
+			"lng": -1.371628,
+			"osmId": "node/5957615889",
+			"verified": false
+		},
+		{
+			"commune": "saaba",
+			"name": "Tabtenga",
+			"place": "village",
+			"lat": 12.370574,
+			"lng": -1.454679,
+			"osmId": "node/903015666",
+			"verified": false
+		},
+		{
+			"commune": "saaba",
+			"name": "Tangséga",
+			"place": "village",
+			"lat": 12.309296,
+			"lng": -1.397552,
+			"osmId": "node/5958633790",
+			"verified": false
+		},
+		{
+			"commune": "saaba",
+			"name": "Tanguen",
+			"place": "village",
+			"lat": 12.346322,
+			"lng": -1.367637,
+			"osmId": "node/5891434018",
+			"verified": false
+		},
+		{
+			"commune": "saaba",
+			"name": "Tanlarghin",
+			"place": "village",
+			"lat": 12.30103,
+			"lng": -1.388805,
+			"osmId": "node/902962513",
+			"verified": false
+		},
+		{
+			"commune": "saaba",
+			"name": "Tanlarkouri",
+			"place": "village",
+			"lat": 12.30068,
+			"lng": -1.397785,
+			"osmId": "node/5965077694",
+			"verified": false
+		},
+		{
+			"commune": "saaba",
+			"name": "Tanlarogo",
+			"place": "village",
+			"lat": 12.505009,
+			"lng": -1.330872,
+			"osmId": "node/5810359697",
+			"verified": false
+		},
+		{
+			"commune": "saaba",
+			"name": "Toéssen",
+			"place": "village",
+			"lat": 12.333813,
+			"lng": -1.36651,
+			"osmId": "node/5955180500",
+			"verified": false
+		},
+		{
+			"commune": "saaba",
+			"name": "Wassoudi",
+			"place": "village",
+			"lat": 12.295319,
+			"lng": -1.382075,
+			"osmId": "node/6206681654",
+			"verified": false
+		},
+		{
+			"commune": "saaba",
+			"name": "Zaken",
+			"place": "village",
+			"lat": 12.35763,
+			"lng": -1.373245,
+			"osmId": "node/5892631715",
+			"verified": false
+		}
+	],
+	"duplicates": []
+}
