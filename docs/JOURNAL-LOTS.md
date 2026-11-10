@@ -651,3 +651,77 @@ Prompt : `prompts/lot-05-synchronisation.md` ; modèle à suivre : `docs/SYNC.md
 ### Questions ouvertes pour le porteur
 1. **Production** : adresse publique du service PowerSync (sous-domaine `sync.` derrière Cloudflare, ou chemin sur le domaine de l'API) ; à décider avec le déploiement.
 2. **Rôles de base** : la migration `0006_sync` crée `app_sync` ; en production, le rôle qui applique les migrations doit pouvoir créer un rôle avec `REPLICATION`, ou `app_sync` doit être créé à la main avant la migration.
+
+## Lot 06 — Propriétaires et mandats — 10/11/2026
+
+Prompt : `prompts/lot-06-proprietaires-mandats.md`. Plan validé par le porteur, avec ses réponses et compléments :
+- règle 12 : seuls `rental_management` et `self_managed` sont des mandats de gestion (`letting` n'occupe pas l'unité) ;
+- commission : colonne `commission_basis` stockée, jamais déduite du type (`percent_of_collected` sur les loyers encaissés, `fixed_per_month`, `fixed_per_operation`) ;
+- fiche du bailleur : raison sociale et téléphone de l'organisation ; `LANDLORD_SELF_MANAGED` ; `OWNER_HAS_ACTIVE_MANDATE` ;
+- expiration par une fonction `SECURITY DEFINER` qui ne renvoie que des identifiants d'organisation ; origine d'audit `migration` ;
+- `can_sign_leases` faux par défaut ; permission `mandate.update` ajoutée ;
+- pas d'état `draft` : un mandat naît actif ; statut effectif « à venir » avant la date de début ; expirations dues appliquées avant un nouveau mandat de gestion ;
+- organisation jointe aux opérations de synchronisation (`organizationId`), vérifiée par l'appartenance puis par la RLS.
+
+Cinq pull requests : étape 0 (« J'ai compris », correction du lot 05), étape 1 (règles partagées, migration, synchronisation), étape 2 (API, synchronisation, bailleur, expiration), étape 3 (écrans). Chaque étape terminée est aussi envoyée sur `claude/lot06-sauvegarde`.
+
+### Fait
+- **Étape 0** : sur l'écran « Modifications non acceptées », chaque refus a un bouton « J'ai compris » qui l'efface de la table locale.
+- **`packages/shared/src/owners.ts`** :
+  - schémas des propriétaires (personne, société, groupe avec représentant) et des mandats (création, modification, révocation motivée) ;
+  - commission : taux entier de 0 à 10 000 points de base ou montant entier en FCFA, jamais les deux ; saisie d'un taux en pourcentage convertie en points de base sans flottant (`parseRatePercent`) ;
+  - machine d'états, statut effectif (à venir, en vigueur, expiré dès le lendemain de la fin), autorisations nulles hors vigueur, alerte à 30 jours ;
+  - permissions `owner.*` et `mandate.*` ; vues de l'API.
+- **Migration `0008_owners_mandates`** :
+  - `owners`, `mandates`, `mandate_versions`, `mandate_scopes` : RLS d'organisation, clés composites, aucune suppression ;
+  - versions : la base exige la version suivante à chaque modification d'un mandat actif, un trigger en écrit la copie (aucun rôle de l'application n'écrit les versions), un mandat fermé ne change plus ;
+  - règle 12 : `management_active` calculé par la base, index uniques partiels par unité et par bien entier ;
+  - bailleur : une fiche, un mandat `self_managed` permanent (triggers) ; backfill des bailleurs existants, idempotent ;
+  - `due_mandate_organizations`, `uuid_v7()` ; publication PowerSync, Sync Streams, schéma local.
+- **API, module `owners`** :
+  - routes des propriétaires (liste, fiche, création, modification, archivage) et des mandats (création, modification, révocation, versions) ;
+  - synchronisation : création hors ligne, modification, statut traité comme une demande de transition, version et dates décidées par le serveur ; permission et règle de création par opération (registre de synchronisation étendu) ;
+  - bailleur : crochet de création d'une organisation (le module `organizations` ne lit pas les tables d'`owners`) ;
+  - tâche quotidienne BullMQ (00:10 UTC) ; expirations dues appliquées avant un nouveau mandat de gestion, dans la même transaction ;
+  - tables réservées au module (ESLint et test d'architecture).
+- **Web** :
+  - connecteur : organisation de la ligne jointe à chaque opération d'une table d'organisation (`upload.ts`) ;
+  - écrans en lecture locale : liste avec recherche (nom sans accents, numéro) et bandeau des mandats qui se terminent dans les 30 jours ; création rapide de la fiche et du mandat en un écran ; fiche avec coordonnées, mandats (statut effectif, commission, autorisations en vigueur, version), modification (version suivante annoncée), révocation motivée, historique des versions, archivage ;
+  - cartes sur téléphone et tablette, tableau sur ordinateur ; le bailleur ne voit ni la liste ni l'écran des mandats.
+- **Tests** :
+  - intégration : 21 tests SQL (accès croisé A/B en lecture, modification et référence sur les quatre tables, versions, règle 12, bailleur, fonction d'expiration), 3 tests de migration sur une base du lot 05, 20 tests de l'API et de la synchronisation ;
+  - unitaires : règles partagées (20), formulaires (8), vues locales (5), connecteur (5) ;
+  - Playwright : 5 tests des écrans, et le flux PowerSync (A ne reçoit aucun propriétaire ni mandat de B, `user_id` jamais publié).
+
+### Tests attendus par le prompt
+- [x] Accès croisé A/B sur `owners`, `mandates`, `mandate_scopes` (et `mandate_versions`), en SQL, par l'API et par la synchronisation, flux PowerSync compris.
+- [x] Un mandat ne peut pas référencer le propriétaire d'une autre organisation (clé composite ; `OWNER_NOT_FOUND` par l'API et la synchronisation).
+- [x] Modification d'un mandat actif : nouvelle version, ancienne conservée, audit avec avant et après.
+- [x] Organisation bailleur : fiche et mandat `self_managed` créés automatiquement, une seule fois (crochet, index unique, backfill idempotent).
+- [x] Expiration automatique à la date de fin (tâche de nuit, statut, autorisations, version, audit d'origine `job`) ; alerte à J-30 (règle pure, bandeau et carte).
+- [x] Révocation : autorisations à faux, motif obligatoire.
+- [x] Commission : taux de 0 à 10 000 points de base, ou montant entier en FCFA, jamais les deux.
+- [x] Création d'un propriétaire hors ligne, synchronisée à la reconnexion.
+- [x] `field_agent` ne peut pas créer de mandat (API, synchronisation, écran).
+
+### Critères d'acceptation
+- [x] Un gestionnaire crée un propriétaire et son mandat de gestion en moins d'une minute sur téléphone, hors ligne : test Playwright chronométré à 360 × 800 (quelques secondes), puis synchronisation vérifiée côté serveur.
+- [x] Aucune invitation n'est envoyée au propriétaire, en aucun cas : aucun SMS ni aucune invitation à la création (intégration et Playwright) ; le module n'a aucun appel aux notifications.
+- [x] Journal des lots mis à jour.
+
+### Écarts par rapport au prompt
+- **Pas d'état `draft`** (décision du porteur) : un mandat naît actif ; « à venir » est un statut calculé.
+- **Permission `mandate.update`** ajoutée (directeur, gestionnaire) : modifier un mandat actif n'est ni une création ni une révocation.
+- **Commission** : base stockée en plus du taux ou du montant (`commission_basis`).
+- **Organisation jointe aux opérations de synchronisation** (`organizationId`) : un `PATCH` de PowerSync ne porte pas `organization_id`.
+- **Bailleur particulier** : l'API lui refuse aussi les autres propriétaires et mandats ; son mandat ne se modifie ni ne se révoque (`MANDATE_PERMANENT`).
+- **Agent de terrain** : il lit les propriétaires et les mandats (par l'adresse de l'écran), sans entrée dans sa navigation, qui reste centrée sur sa tournée.
+
+### Dette technique
+- **Règle 12 et succession de gestionnaires** : un mandat de gestion « à venir » compte déjà comme actif pour l'index. Un nouveau mandat qui commence à la fin du précédent ne peut couvrir la même unité qu'après l'expiration de celui-ci ; le transfert de gestion guidé (lot 10 bis) traitera la succession.
+- L'historique des versions montre la date de chaque version, pas encore le nom de son auteur (`changed_by` est l'identifiant de la personne).
+- Recherche faite sur l'appareil, sans index : suffisant pour quelques centaines de propriétaires par organisation.
+
+### Questions ouvertes pour le porteur
+1. **Navigation de l'agent de terrain** : faut-il lui ajouter « Propriétaires » (lecture seule) dans « Plus » ?
+2. **Signature des baux par l'agence** (`can_sign_leases`) : la question ouverte des décisions (« une agence peut-elle signer au nom du propriétaire, avec quel mandat ? ») reste à trancher par le juriste avant le lot 08.

@@ -7,6 +7,10 @@ declare global {
 		interface Error {
 			code?: string;
 		}
+		/** État de navigation : « enregistré », pour le message de la page d'arrivée (lot 06). */
+		interface PageState {
+			saved?: boolean;
+		}
 	}
 }
 

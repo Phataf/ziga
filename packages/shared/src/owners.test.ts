@@ -10,6 +10,8 @@ import {
 	effectiveAuthorizations,
 	effectiveMandateStatus,
 	formatRateBp,
+	parseRatePercent,
+	rateBpToInput,
 	isManagementMandate,
 	mandateAlert,
 	mandateTermsSchema,
@@ -99,6 +101,21 @@ describe('mandats : commission (règle 2)', () => {
 		expect(commissionColumns(null)).toEqual({ commission_basis: null, commission_rate_bp: null, commission_amount: null });
 		const c = { basis: 'fixed_per_month', amount: 30_000 } as const;
 		expect(commissionFromColumns(commissionColumns(c))).toEqual(c);
+	});
+
+	it('saisie d’un taux en pourcentage : points de base entiers, jamais de flottant', () => {
+		expect(parseRatePercent('10')).toBe(1000);
+		expect(parseRatePercent('7,5')).toBe(750);
+		expect(parseRatePercent('12.25')).toBe(1225);
+		expect(parseRatePercent(' 10 % ')).toBe(1000);
+		expect(parseRatePercent('0')).toBe(0);
+		expect(parseRatePercent('100')).toBe(10_000);
+		// 0,1 + 0,2 en flottant donnerait 30,000000000000004 : ici, 0,3 % vaut exactement 30.
+		expect(parseRatePercent('0,3')).toBe(30);
+		for (const bad of ['', '100,01', '101', '7,555', '-5', 'dix', '1e3']) expect(parseRatePercent(bad), bad).toBeNull();
+		expect(rateBpToInput(750)).toBe('7,5');
+		expect(rateBpToInput(1000)).toBe('10');
+		expect(parseRatePercent(rateBpToInput(1225))).toBe(1225);
 	});
 
 	it('affichage du taux', () => {

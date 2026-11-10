@@ -446,6 +446,114 @@ export const fr = {
 		pending: (n: number) => `${n} modification${n > 1 ? 's' : ''} en attente`,
 		notYet: 'Les données de cette organisation ne sont pas encore copiées sur cet appareil. Elles arrivent dès que la connexion revient.'
 	},
+	/** Propriétaires et mandats (lot 06). */
+	owners: {
+		title: 'Propriétaires',
+		subtitle: 'Les propriétaires dont votre organisation gère les biens. Aucune invitation ne leur est jamais envoyée.',
+		search: 'Rechercher un nom ou un numéro',
+		new: 'Nouveau propriétaire',
+		newTitle: 'Nouveau propriétaire',
+		newSubtitle: 'La fiche et son mandat, en un seul écran, même hors connexion.',
+		empty: 'Aucun propriétaire pour l’instant.',
+		noResult: 'Aucun propriétaire ne correspond à cette recherche.',
+		archived: 'Archivé',
+		noMandate: 'Aucun mandat en vigueur',
+		readOnly: 'Consultation seulement : votre rôle ne permet pas de modifier les propriétaires ni les mandats.',
+		landlord: 'Vous gérez vous-même vos logements : aucun propriétaire ni mandat à gérer ici.',
+		notFound: 'Propriétaire introuvable sur cet appareil.',
+		expiring: (n: number) => (n === 1 ? 'Un mandat se termine dans les 30 jours' : `${n} mandats se terminent dans les 30 jours`),
+		expiringLine: (who: string, date: string, days: number) =>
+			`${who} : fin le ${date} (${days === 0 ? 'dernier jour aujourd’hui' : `dans ${days} jour${days > 1 ? 's' : ''}`})`,
+		saved: 'Propriétaire enregistré.',
+		savedOffline: 'Enregistré sur l’appareil : envoyé dès que la connexion revient.',
+		mandateSaved: 'Mandat enregistré.',
+		types: { person: 'Personne', company: 'Société', group: 'Groupe d’indivisaires' } as Record<string, string>,
+		type: 'Type de propriétaire',
+		name: 'Nom ou raison sociale',
+		phone: 'Téléphone',
+		phoneHint: 'Pour joindre le propriétaire. Aucun SMS ni aucune invitation ne lui est envoyé.',
+		email: 'E-mail (facultatif)',
+		address: 'Adresse (facultatif)',
+		country: 'Pays de résidence',
+		representative: 'Représentant du groupe',
+		repName: 'Nom du représentant',
+		repPhone: 'Téléphone du représentant',
+		notes: 'Notes internes (facultatif)',
+		notesHint: 'Visibles seulement par votre organisation.',
+		more: 'Plus de détails (e-mail, adresse, notes)',
+		save: 'Enregistrer',
+		cancel: 'Annuler',
+		contact: 'Coordonnées',
+		edit: 'Modifier',
+		editTitle: 'Modifier les coordonnées',
+		properties: 'Biens',
+		propertiesSoon: 'Les biens de ce propriétaire apparaîtront ici.',
+		archive: 'Archiver la fiche',
+		archiveConfirm: 'La fiche reste consultable, avec ses mandats, mais n’apparaît plus parmi les propriétaires actifs.',
+		archiveBlocked: 'Révoquez d’abord le mandat en vigueur pour archiver cette fiche.',
+		back: 'Propriétaires'
+	},
+	mandates: {
+		title: 'Mandats',
+		none: 'Aucun mandat pour ce propriétaire.',
+		new: 'Nouveau mandat',
+		withMandate: 'Enregistrer aussi le mandat',
+		type: 'Type de mandat',
+		types: {
+			rental_management: 'Gestion locative',
+			letting: 'Mise en location',
+			sale: 'Vente',
+			self_managed: 'Gestion par le propriétaire',
+			other: 'Autre mandat'
+		} as Record<string, string>,
+		statuses: { upcoming: 'À venir', active: 'En vigueur', expired: 'Expiré', revoked: 'Révoqué' } as Record<string, string>,
+		startsOn: 'Début',
+		endsOn: 'Fin (facultatif)',
+		period: (from: string, to: string | null) => (to ? `Du ${from} au ${to}` : `Depuis le ${from}, sans date de fin`),
+		commission: 'Commission',
+		bases: {
+			percent_of_collected: 'Pourcentage des loyers encaissés',
+			fixed_per_month: 'Montant fixe par mois',
+			fixed_per_operation: 'Montant fixe par opération'
+		} as Record<string, string>,
+		noCommission: 'Sans commission',
+		rate: 'Taux (%)',
+		amount: 'Montant (FCFA)',
+		rateInvalid: 'Taux entre 0 et 100 %, deux décimales au plus.',
+		amountInvalid: 'Montant en FCFA, sans centimes.',
+		commissionText: {
+			percent_of_collected: (rate: string) => `${rate} des loyers encaissés`,
+			fixed_per_month: (amount: string) => `${amount} par mois`,
+			fixed_per_operation: (amount: string) => `${amount} par opération`
+		} as Record<string, (v: string) => string>,
+		authorizations: 'Autorisations',
+		authorization: {
+			canPublish: 'Publier les annonces',
+			canTakePhotos: 'Prendre les photos',
+			canCollectFunds: 'Encaisser les loyers',
+			canSignLeases: 'Signer les baux au nom du propriétaire'
+		},
+		noAuthorization: 'Aucune autorisation en vigueur',
+		exclusive: 'Mandat exclusif',
+		version: (n: number) => `Version ${n}`,
+		edit: 'Modifier',
+		editTitle: 'Modifier le mandat',
+		newVersion: (n: number) =>
+			`Ces changements créent la version ${n} du mandat ; la version actuelle reste consultable dans l’historique.`,
+		revoke: 'Révoquer',
+		revokeTitle: 'Révoquer le mandat',
+		revokeHint: 'Ses autorisations tombent immédiatement. Le mandat reste consultable, avec son historique.',
+		reason: 'Motif de la révocation',
+		revokedBecause: (reason: string) => `Révoqué : ${reason}`,
+		history: 'Historique',
+		historyTitle: 'Historique du mandat',
+		historyEmpty: 'L’historique arrive avec la prochaine synchronisation.',
+		permanent: 'Mandat permanent du bailleur qui gère lui-même ses logements.',
+		endsSoon: (days: number, date: string) =>
+			days === 0
+				? `Dernier jour du mandat aujourd’hui (${date}).`
+				: `Ce mandat se termine dans ${days} jour${days > 1 ? 's' : ''}, le ${date}.`
+	},
 	/** Modifications refusées par le serveur (lot 05, étape 4). */
 	rejections: {
 		title: 'Modifications non acceptées',
@@ -468,7 +576,9 @@ export const fr = {
 		when: 'Date',
 		tables: {
 			organizations: 'Paramètres de l’organisation',
-			organization_representatives: 'Représentant légal'
+			organization_representatives: 'Représentant légal',
+			owners: 'Fiche propriétaire',
+			mandates: 'Mandat'
 		} as Record<string, string>,
 		columns: {
 			legal_name: 'Raison sociale',
@@ -488,7 +598,28 @@ export const fr = {
 			rep_id_type_other: 'Précision sur la pièce',
 			rep_id_number: 'Numéro de la pièce',
 			rep_id_issued_on: 'Délivrée le',
-			rep_id_issued_by: 'Délivrée par'
+			rep_id_issued_by: 'Délivrée par',
+			type: 'Type',
+			name: 'Nom',
+			email: 'E-mail',
+			country: 'Pays de résidence',
+			representative_name: 'Représentant',
+			representative_phone: 'Téléphone du représentant',
+			notes: 'Notes',
+			status: 'Statut',
+			owner_id: 'Propriétaire',
+			starts_on: 'Début',
+			ends_on: 'Fin',
+			commission_basis: 'Commission',
+			commission_rate_bp: 'Taux (points de base)',
+			commission_amount: 'Montant (FCFA)',
+			can_publish: 'Publier les annonces',
+			can_take_photos: 'Prendre les photos',
+			can_collect_funds: 'Encaisser les loyers',
+			can_sign_leases: 'Signer les baux',
+			exclusive: 'Exclusif',
+			revocation_reason: 'Motif de la révocation',
+			version: 'Version'
 		} as Record<string, string>
 	},
 	admin: {

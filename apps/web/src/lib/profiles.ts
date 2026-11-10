@@ -93,7 +93,7 @@ function agencyNav(opts: { team: boolean; settings: boolean }): NavItem[] {
 		item({ path: 'app/biens', label: n.propertiesLong, short: n.properties, icon: Building2, section: s.management, tab: true, lot: '07' }),
 		item({ path: 'app/encaissements', label: n.payments, icon: Wallet, section: s.management, tab: true, lot: '09' }),
 		item({ path: 'app/impayes', label: n.arrears, icon: TriangleAlert, section: s.management, lot: '10' }),
-		item({ path: 'app/proprietaires', label: n.owners, icon: Users, section: s.management, lot: '06' }),
+		item({ path: 'app/proprietaires', label: n.owners, icon: Users, section: s.management }),
 		item({ path: 'app/a-valider', label: n.toValidate, icon: ClipboardCheck, section: s.control, lot: '09' }),
 		...organizationItems(opts, s.agency),
 		plus('app')

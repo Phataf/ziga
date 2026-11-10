@@ -17,6 +17,16 @@ export const LOCAL_QUERIES = {
 	/** Catalogue et contenu des formules : identiques pour tous, sans organisation. */
 	features: `SELECT * FROM features`,
 	planFeatures: `SELECT * FROM plan_features`,
+	/** Lot 06 : propriétaires de l'organisation, par nom. */
+	owners: `SELECT * FROM owners WHERE organization_id = ? ORDER BY name COLLATE NOCASE, id`,
+	/** Une fiche propriétaire de l'organisation. */
+	owner: `SELECT * FROM owners WHERE organization_id = ? AND id = ?`,
+	/** Mandats de l'organisation (liste, alertes), les plus récents d'abord. */
+	mandates: `SELECT * FROM mandates WHERE organization_id = ? ORDER BY starts_on DESC, id DESC`,
+	/** Mandats d'un propriétaire. */
+	ownerMandates: `SELECT * FROM mandates WHERE organization_id = ? AND owner_id = ? ORDER BY starts_on DESC, id DESC`,
+	/** Versions d'un mandat, la plus récente d'abord. */
+	mandateVersions: `SELECT * FROM mandate_versions WHERE organization_id = ? AND mandate_id = ? ORDER BY version DESC`,
 	/** Modifications refusées par le serveur (table locale de l'appareil), de l'organisation, les plus récentes d'abord. */
 	rejections: `SELECT * FROM sync_rejections WHERE organization_id = ? ORDER BY rejected_at DESC, id DESC`,
 	rejectionCount: `SELECT count(*) AS n FROM sync_rejections WHERE organization_id = ?`

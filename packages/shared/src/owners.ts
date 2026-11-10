@@ -178,6 +178,24 @@ export function formatRateBp(bp: number): string {
 	return `${whole}${decimals}${NBSP}%`;
 }
 
+/**
+ * Taux saisi en pourcentage (« 10 », « 7,5 », « 12.25 », « 10 % ») → points de base entiers (1000, 750, 1225), sans
+ * jamais passer par un flottant ; `null` au-delà de deux décimales ou hors de 0 à 100 %.
+ */
+export function parseRatePercent(input: string): number | null {
+	const m = /^(\d{1,3})(?:[.,](\d{1,2}))?$/.exec(input.replace(/%/g, '').replace(/\s/g, ''));
+	if (!m) return null;
+	const bp = Number.parseInt(m[1]!, 10) * 100 + Number.parseInt((m[2] ?? '0').padEnd(2, '0'), 10);
+	return bp <= MAX_RATE_BP ? bp : null;
+}
+
+/** Points de base → saisie en pourcentage (1000 → « 10 », 750 → « 7,5 »). */
+export function rateBpToInput(bp: number): string {
+	return formatRateBp(bp)
+		.replace(/\s*%$/, '')
+		.replace(/\u00a0/g, '');
+}
+
 // ---- conditions d'un mandat
 
 export const MANDATE_AUTHORIZATIONS = ['canPublish', 'canTakePhotos', 'canCollectFunds', 'canSignLeases'] as const;
