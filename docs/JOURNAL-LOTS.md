@@ -715,13 +715,13 @@ Cinq pull requests : étape 0 (« J'ai compris », correction du lot 05), étape
 - **Commission** : base stockée en plus du taux ou du montant (`commission_basis`).
 - **Organisation jointe aux opérations de synchronisation** (`organizationId`) : un `PATCH` de PowerSync ne porte pas `organization_id`.
 - **Bailleur particulier** : l'API lui refuse aussi les autres propriétaires et mandats ; son mandat ne se modifie ni ne se révoque (`MANDATE_PERMANENT`).
-- **Agent de terrain** : il lit les propriétaires et les mandats (par l'adresse de l'écran), sans entrée dans sa navigation, qui reste centrée sur sa tournée.
+- **Agent de terrain** : il lit les propriétaires et les mandats, sans entrée dans sa navigation, qui reste centrée sur sa tournée ; il y accédera depuis la fiche du bien ou de l'unité (lot 07).
 
 ### Dette technique
-- **Règle 12 et succession de gestionnaires** : un mandat de gestion « à venir » compte déjà comme actif pour l'index. Un nouveau mandat qui commence à la fin du précédent ne peut couvrir la même unité qu'après l'expiration de celui-ci ; le transfert de gestion guidé (lot 10 bis) traitera la succession.
+- **Règle 12, mandat « à venir » (limite acceptée par le porteur)** : un mandat de gestion « à venir » compte déjà comme actif pour l'index et occupe l'unité. Un renouvellement ne crée pas de second mandat : il passe par la modification de la date de fin du mandat en cours (nouvelle version). Un changement de gestionnaire passe par le transfert de gestion guidé du lot 10 bis.
 - L'historique des versions montre la date de chaque version, pas encore le nom de son auteur (`changed_by` est l'identifiant de la personne).
 - Recherche faite sur l'appareil, sans index : suffisant pour quelques centaines de propriétaires par organisation.
 
 ### Questions ouvertes pour le porteur
-1. **Navigation de l'agent de terrain** : faut-il lui ajouter « Propriétaires » (lecture seule) dans « Plus » ?
+1. **Navigation de l'agent de terrain** : pas d'entrée « Propriétaires » pour l'instant (décision du porteur) ; il y accédera depuis la fiche du bien ou de l'unité au lot 07. Question laissée ouverte pour le pilote : en aura-t-il besoin dans sa navigation ?
 2. **Signature des baux par l'agence** (`can_sign_leases`) : la question ouverte des décisions (« une agence peut-elle signer au nom du propriétaire, avec quel mandat ? ») reste à trancher par le juriste avant le lot 08.
