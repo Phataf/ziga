@@ -725,3 +725,108 @@ Cinq pull requests : étape 0 (« J'ai compris », correction du lot 05), étape
 ### Questions ouvertes pour le porteur
 1. **Navigation de l'agent de terrain** : pas d'entrée « Propriétaires » pour l'instant (décision du porteur) ; il y accédera depuis la fiche du bien ou de l'unité au lot 07. Question laissée ouverte pour le pilote : en aura-t-il besoin dans sa navigation ?
 2. **Signature des baux par l'agence** (`can_sign_leases`) : la question ouverte des décisions (« une agence peut-elle signer au nom du propriétaire, avec quel mandat ? ») reste à trancher par le juriste avant le lot 08.
+
+## Lot 07 — Biens, unités, médias et documents — 11/11/2026
+
+Prompt : `prompts/lot-07-biens-unites-medias.md`. Plan validé par le porteur, avec ses réponses :
+- **Stockage** :
+  - envoi par PUT présigné qui signe la taille et le type : Cloudflare R2 n'accepte pas le POST signé ;
+  - seule dépendance ajoutée : `@aws-sdk/s3-request-presigner` ;
+  - clé décidée par le serveur, URL de 10 minutes ;
+  - seconde barrière dans la tâche ; le stockage local imite le même PUT ;
+  - test du refus d'une autre taille par SeaweedFS.
+- **Variantes WebP** : servies par une route publique, sous une clé aléatoire de 128 bits ; l'original n'est jamais servi et il est effacé après traitement.
+- **Quartiers** :
+  - la liste du porteur fait foi ;
+  - point OSM repris quand le nom correspond (ou pour les lieux désignés par le porteur), point vide sinon, `verified = false` partout ;
+  - mention « © les contributeurs d'OpenStreetMap ».
+- **Droits** :
+  - le profil lecture ne voit aucun document privé ;
+  - l'agent de terrain ne voit que ses unités affectées : photos et état technique seulement.
+- **Listes fermées** validées : 13 types d'unité, 16 équipements.
+- **Assistant** : l'étape « documents privés » exige la connexion.
+
+Quatre pull requests :
+- étape 1 : référentiel, règles partagées, schéma, synchronisation (Phataf/ziga#17) ;
+- étape 2 : API, synchronisation, portées, back-office (Phataf/ziga#18) ;
+- étape 3 : stockage présigné, photos, documents (Phataf/ziga#19) ;
+- étape 4 : écrans, Playwright, journal.
+
+Chaque étape terminée est aussi envoyée sur `claude/lot07-sauvegarde`.
+
+### Fait
+- **Référentiel géographique** (migration `0009`, puis `0011` pour un droit du back-office) :
+  - communes et quartiers de la plateforme, sans organisation ni RLS : app_api lit, le back-office complète, personne ne supprime ;
+  - synchronisés vers tous les appareils ;
+  - Ouagadougou : 39 quartiers, dont 21 avec un point ; Saaba : 27 villages, tous avec un point ;
+  - un nom par commune, accents et casse confondus.
+  - `publicLocation` renvoie le centre du quartier, ou celui de la commune, jamais le point GPS du bien.
+- **`packages/shared`** :
+  - listes fermées ; `occupancyOf` et `isAvailable` (règle 13) ;
+  - matrice de confidentialité des documents : une restriction ne fait que réduire les droits ;
+  - schémas des biens, unités, photos et documents ; permissions du lot.
+  - Correctif du lot 06 : les schémas de modification n'ont plus de valeur par défaut.
+- **Migration `0010`** :
+  - tables `properties`, `units`, `media`, `documents` : organisation, RLS, clés composites, aucune suppression ;
+  - aucune colonne d'occupation ;
+  - agent affecté : un agent de terrain actif de l'organisation ;
+  - 15 photos au plus par unité ;
+  - documents : versions figées avec leur empreinte, chaîne de remplacement ;
+  - règle 12 dans les deux sens, par des déclencheurs `SECURITY DEFINER`.
+- **Synchronisation** :
+  - `managed_properties` : direction, gestion, lecture ;
+  - `assigned_units` : l'agent de terrain ne reçoit que ses unités, leur bien, leurs photos ;
+  - `organization_documents` : métadonnées seulement ; un document restreint ne descend que chez le directeur ;
+  - les règles tenues par la base sont traitées comme des refus, et non plus comme des erreurs passagères.
+- **API** :
+  - modules `properties` et `documents` ; portées des mandats dans `owners` ;
+  - quota d'unités de la formule ;
+  - bailleur couvert par son mandat dès la création du bien ;
+  - photos : URL d'envoi, tâche `property-media` (contrôles, variantes 320, 800 et 1600 sans métadonnée, original effacé) ;
+  - documents : dépôt en ligne, empreinte SHA-256, lecture par URL signée de 5 minutes, chaque consultation journalisée ;
+  - back-office des quartiers (super administrateur et assistance), audité.
+- **Web** :
+  - liste des biens avec filtres (quartier, disponibilité, état technique, propriétaire) ;
+  - fiche du bien : une pastille par dimension du statut, état technique, affectation, galerie avec réordonnancement, documents ;
+  - assistant en cinq étapes, avec brouillon enregistré à chaque étape et reprise ;
+  - photos compressées sur le téléphone (1600 px, JPEG) et file d'envoi hors ligne (IndexedDB), effacée à la déconnexion ;
+  - bouton global « Créer » sur tablette et ordinateur ;
+  - écran « Quartiers » du back-office.
+- **Infrastructure** : SeaweedFS lancé dans la CI, pour vérifier les URL présignées contre un vrai stockage.
+
+### Tests attendus par le prompt
+- [x] Accès croisé A/B sur chaque table (SQL, API, synchronisation), fichiers compris : une URL signée est liée à sa clé, un document de B demandé par A est introuvable, une photo de A est introuvable pour B.
+- [x] EXIF supprimés des variantes : photo de 4 Mo avec position GPS, variantes sans EXIF ni XMP.
+- [x] 16e photo refusée ; quota d'unités de la formule respecté (11e unité en Découverte refusée).
+- [x] Écriture de l'occupation refusée (API et synchronisation) ; `isAvailable` testée sur les 48 combinaisons.
+- [x] Deux mandats de gestion actifs sur la même unité, directement ou par le bien : refusé, dans les deux sens.
+- [x] Point GPS absent des réponses publiques : `publicLocation` testée ; aucun point de bien dans un flux public (vitrine au lot 12).
+- [x] Agent de terrain : ne voit et ne modifie que ses unités affectées (API, synchronisation, et contre le vrai service PowerSync).
+- [x] Document jamais accessible sans URL signée ; URL expirée refusée (SeaweedFS et stockage local) ; consultation journalisée.
+- [x] Photo prise hors ligne envoyée à la reconnexion (Playwright, contre la vraie API et le vrai worker).
+
+### Critères d'acceptation
+- [x] **6 appartements avec 3 photos chacun, depuis un téléphone, en moins de 10 minutes.** Test Playwright chronométré à 360 × 800 : le parcours complet de l'assistant prend environ 16 secondes, et les 18 photos sont traitées par le vrai worker. Le temps d'une saisie humaine reste à confirmer au pilote.
+- [x] **Variantes WebP d'une photo de 4 Mo sous 200 Ko** (taille moyenne) : vérifié en intégration.
+- [x] Journal des lots mis à jour.
+
+### Écarts par rapport au prompt
+- **Clôture et garage** : saisis seulement comme équipements, pas en double dans « clôturé » et dans les pièces (une seule source).
+- **Usage « professionnel »** ajouté aux deux usages du prompt, pour les boutiques, bureaux et magasins.
+- **Photos d'un bien entier** : 15 au plus, comme pour une unité.
+- **HEIC** : sharp ne le décode pas ; le téléphone convertit en JPEG en compressant, et le serveur refuse proprement un HEIC illisible.
+- **Documents « photo d'un document » et « autre »** : traités comme des notes internes, direction et gestion seulement (hors matrice de `docs/UX.md` §10).
+- **Galerie** : réordonnée par « Avancer » et « Reculer » (clavier et 44 px), plutôt que par glisser-déposer.
+- **Bouton « Créer »** : un bien seulement au lot 07 ; locataire, bail et dépense viendront avec leurs lots.
+
+### Dette technique
+- Point GPS saisi sans carte : coordonnées et précision affichées. La carte interactive est au lot 12.
+- Les documents s'affichent sur la fiche du bien. La pièce d'identité du propriétaire y est rattachée aussi à sa fiche ; la liste des documents sur la fiche propriétaire viendra avec l'écran du propriétaire enrichi.
+- La file de photos réessaie toutes les 10 secondes tant qu'elle n'est pas vide ; aucun réessai en arrière-plan quand l'onglet est fermé (service worker, plus tard si le besoin apparaît).
+- Le compartiment S3 de production doit autoriser en CORS le `PUT` depuis les origines du web (README).
+
+### Questions ouvertes pour le porteur
+1. **Tabtenga à Saaba aussi ?** Rangé seulement à Ouagadougou, selon la réponse du porteur ; Saaba compte donc 27 villages et non 28.
+2. **Autorisation « prendre des photos » du mandat** : faut-il l'exiger avant d'ajouter une photo ? Elle n'est pas vérifiée au lot 07.
+3. **Fichiers ajoutés directement sur `main`** (`osm-neighborhoods.json` et les deux réponses brutes d'Overpass à la racine) : proposition, supprimer `osm-neighborhoods.json` (la migration suit la liste du porteur), ranger ou retirer les deux réponses brutes.
+4. **Durée de conservation des documents** : question ouverte du prompt ; rien n'est supprimé automatiquement.
