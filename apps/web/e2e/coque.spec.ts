@@ -97,7 +97,7 @@ const cases: Case[] = [
 		account: 'admin',
 		path: '/admin',
 		tabs: ['Organisations', 'Abonnements', 'Fonctionnalités', 'Plus'],
-		menu: ['Organisations', 'Personnes', 'Formules et abonnements', 'Fonctionnalités', 'Journal', 'Accès d’assistance'],
+		menu: ['Organisations', 'Personnes', 'Formules et abonnements', 'Fonctionnalités', 'Quartiers', 'Journal', 'Accès d’assistance'],
 		sections: ['Plateforme', 'Contrôle']
 	}
 ];

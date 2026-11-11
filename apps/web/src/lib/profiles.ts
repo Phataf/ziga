@@ -17,6 +17,7 @@ import {
 	LayoutDashboard,
 	LifeBuoy,
 	LogOut,
+	MapPin,
 	Receipt,
 	ScrollText,
 	Settings,
@@ -90,7 +91,7 @@ function organizationItems(opts: { team: boolean; settings: boolean }, section: 
 function agencyNav(opts: { team: boolean; settings: boolean }): NavItem[] {
 	return [
 		item({ path: 'app', label: n.dashboard, short: n.home, icon: LayoutDashboard, section: s.steering, tab: true, lot: '09' }),
-		item({ path: 'app/biens', label: n.propertiesLong, short: n.properties, icon: Building2, section: s.management, tab: true, lot: '07' }),
+		item({ path: 'app/biens', label: n.propertiesLong, short: n.properties, icon: Building2, section: s.management, tab: true }),
 		item({ path: 'app/encaissements', label: n.payments, icon: Wallet, section: s.management, tab: true, lot: '09' }),
 		item({ path: 'app/impayes', label: n.arrears, icon: TriangleAlert, section: s.management, lot: '10' }),
 		item({ path: 'app/proprietaires', label: n.owners, icon: Users, section: s.management }),
@@ -112,7 +113,7 @@ export const profiles: Record<ProfileId, Profile> = {
 		home: 'app',
 		nav: [
 			item({ path: 'app', label: n.myRound, short: n.round, icon: CalendarClock, section: s.field, tab: true, lot: '09' }),
-			item({ path: 'app/biens', label: n.myProperties, short: n.properties, icon: Building2, section: s.field, tab: true, lot: '07' }),
+			item({ path: 'app/biens', label: n.myProperties, short: n.properties, icon: Building2, section: s.field, tab: true }),
 			item({ path: 'app/encaissements', label: n.myPayments, short: n.payments, icon: Wallet, section: s.field, tab: true, lot: '09' }),
 			item({ path: 'app/impayes', label: n.late, icon: TriangleAlert, section: s.field, lot: '10' }),
 			plus('app')
@@ -125,7 +126,7 @@ export const profiles: Record<ProfileId, Profile> = {
 		home: 'app',
 		nav: [
 			item({ path: 'app', label: n.home, icon: LayoutDashboard, section: s.myHomes, tab: true, lot: '09' }),
-			item({ path: 'app/biens', label: n.myHomes, short: n.homes, icon: House, section: s.myHomes, tab: true, lot: '07' }),
+			item({ path: 'app/biens', label: n.myHomes, short: n.homes, icon: House, section: s.myHomes, tab: true }),
 			item({ path: 'app/encaissements', label: n.rentsReceived, short: n.rents, icon: Wallet, section: s.myHomes, tab: true, lot: '09' }),
 			item({ path: 'app/impayes', label: n.late, icon: TriangleAlert, section: s.myHomes, lot: '10' }),
 			// Le bailleur est directeur de son organisation : ses paramètres (logo des reçus) et son journal.
@@ -206,6 +207,7 @@ export const profiles: Record<ProfileId, Profile> = {
 			item({ path: 'admin/personnes', label: n.people, icon: Users, section: s.platform }),
 			item({ path: 'admin/formules', label: n.plansLong, short: n.plans, icon: Wallet, section: s.platform, tab: true }),
 			item({ path: 'admin/fonctionnalites', label: n.features, icon: ToggleRight, section: s.platform, tab: true }),
+			item({ path: 'admin/quartiers', label: n.neighborhoods, icon: MapPin, section: s.platform }),
 			item({ path: 'admin/journal', label: n.journal, icon: ScrollText, section: s.control }),
 			item({ path: 'admin/assistance', label: n.support, icon: LifeBuoy, section: s.control }),
 			plus('admin')

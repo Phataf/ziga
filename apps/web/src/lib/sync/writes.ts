@@ -6,7 +6,16 @@
  */
 import type { PowerSyncDatabase } from '@powersync/web';
 import type { UpdateOrganizationOutput as OrganizationSettings } from '@ziga/shared/organizations';
+import { newId } from '@ziga/shared/ids';
 import { commissionColumns, type CreateMandateData, type MandateTerms, type OwnerData } from '@ziga/shared/owners';
+import type {
+	CreateMediaData,
+	CreatePropertyData,
+	CreateUnitData,
+	PropertyData,
+	TechnicalStatusData,
+	UnitData
+} from '@ziga/shared/properties';
 
 /** Paramètres de l'organisation : une transaction locale ; seuls les champs modifiés partent (PATCH). */
 export async function saveOrganizationSettings(db: PowerSyncDatabase, organizationId: string, s: OrganizationSettings): Promise<void> {
@@ -156,4 +165,165 @@ export async function revokeMandate(db: PowerSyncDatabase, organizationId: strin
 			can_sign_leases: 0
 		})
 	);
+}
+
+// ---------------------------------------------------------------- lot 07 : biens, unités, photos
+
+/** Tableau écrit dans la base locale : texte JSON, comme PowerSync le reçoit du serveur. */
+const json = (v: unknown[]) => JSON.stringify(v);
+
+function propertyColumns(p: PropertyData) {
+	return {
+		owner_id: p.ownerId,
+		type: p.type,
+		operation: p.operation,
+		name: p.name,
+		commune_id: p.communeId,
+		neighborhood_id: p.neighborhoodId,
+		address_hint: p.addressHint,
+		gps_lat: p.gps?.lat ?? null,
+		gps_lng: p.gps?.lng ?? null,
+		gps_accuracy_m: p.gps?.accuracyM ?? null,
+		declared_land_documents: json(p.declaredLandDocuments),
+		notes: p.notes
+	};
+}
+
+function unitColumns(u: UnitData) {
+	return {
+		type: u.type,
+		label: u.label,
+		bedrooms: u.rooms.bedrooms,
+		living_rooms: u.rooms.livingRooms,
+		kitchens: u.rooms.kitchens,
+		bathrooms: u.rooms.bathrooms,
+		terraces: u.rooms.terraces,
+		laundries: u.rooms.laundries,
+		surface_m2: u.surfaceM2,
+		land_area_m2: u.landAreaM2,
+		usage: u.usage,
+		furnished: b(u.furnished),
+		amenities: json(u.amenities),
+		rent: u.rent,
+		charges: u.charges,
+		deposit_amount: u.depositAmount,
+		advance_months: u.advanceMonths
+	};
+}
+
+/**
+ * Bien créé sur l'appareil, en brouillon, comme le serveur le créera ; avec, s'il y en a un, le mandat qui le couvre
+ * (portée sur le bien entier : la base pose celles des unités). Une seule transaction locale.
+ */
+export async function createProperty(
+	db: PowerSyncDatabase,
+	organizationId: string,
+	property: CreatePropertyData,
+	mandateId: string | null
+): Promise<void> {
+	await db.writeTransaction(async (tx) => {
+		await insert(tx, 'properties', {
+			id: property.id,
+			organization_id: organizationId,
+			...propertyColumns(property),
+			record_status: 'draft'
+		});
+		if (mandateId) {
+			await insert(tx, 'mandate_scopes', {
+				id: newId(),
+				organization_id: organizationId,
+				mandate_id: mandateId,
+				property_id: property.id
+			});
+		}
+	});
+}
+
+/** Bien modifié (localisation, nom…) : seules les colonnes changées partent. */
+export async function saveProperty(db: PowerSyncDatabase, organizationId: string, id: string, property: PropertyData): Promise<void> {
+	await db.writeTransaction((tx) => update(tx, 'properties', id, organizationId, propertyColumns(property)));
+}
+
+/** Fiche du bien ou de l'unité : « active » ou « archived » ; le serveur applique ses règles (localisation, unités). */
+export async function setRecordStatus(
+	db: PowerSyncDatabase,
+	organizationId: string,
+	table: 'properties' | 'units',
+	id: string,
+	status: 'active' | 'archived'
+): Promise<void> {
+	await db.writeTransaction((tx) => update(tx, table, id, organizationId, { record_status: status }));
+}
+
+/** Unités créées sur l'appareil, en brouillon et prêtes, dans une seule transaction locale. */
+export async function createUnits(db: PowerSyncDatabase, organizationId: string, units: CreateUnitData[]): Promise<void> {
+	await db.writeTransaction(async (tx) => {
+		for (const u of units) {
+			await insert(tx, 'units', {
+				id: u.id,
+				organization_id: organizationId,
+				property_id: u.propertyId,
+				...unitColumns(u),
+				record_status: 'draft',
+				technical_status: 'ready'
+			});
+		}
+	});
+}
+
+export async function saveUnit(db: PowerSyncDatabase, organizationId: string, id: string, unit: UnitData): Promise<void> {
+	await db.writeTransaction((tx) => update(tx, 'units', id, organizationId, unitColumns(unit)));
+}
+
+/** État technique (le seul changement de statut ouvert à l'agent de terrain, sur ses unités). */
+export async function setTechnicalStatus(db: PowerSyncDatabase, organizationId: string, id: string, s: TechnicalStatusData): Promise<void> {
+	await db.writeTransaction((tx) =>
+		update(tx, 'units', id, organizationId, {
+			technical_status: s.technicalStatus,
+			technical_reason: s.reason,
+			technical_expected_on: s.expectedOn
+		})
+	);
+}
+
+export async function assignUnit(db: PowerSyncDatabase, organizationId: string, id: string, agentId: string | null): Promise<void> {
+	await db.writeTransaction((tx) => update(tx, 'units', id, organizationId, { assigned_agent_id: agentId }));
+}
+
+/** Photo annoncée sur l'appareil (le fichier attend dans la file d'envoi) : en attente, comme le serveur la créera. */
+export async function createMedia(db: PowerSyncDatabase, organizationId: string, m: CreateMediaData): Promise<void> {
+	await db.writeTransaction((tx) =>
+		insert(tx, 'media', {
+			id: m.id,
+			organization_id: organizationId,
+			property_id: m.propertyId,
+			unit_id: m.unitId,
+			kind: 'photo',
+			mime_type: m.mimeType,
+			byte_size: m.byteSize,
+			position: m.position,
+			caption: m.caption,
+			status: 'pending'
+		})
+	);
+}
+
+/** Nouvel ordre de la galerie : les positions changées, dans une seule transaction. */
+export async function reorderMedia(
+	db: PowerSyncDatabase,
+	organizationId: string,
+	moves: { id: string; position: number }[]
+): Promise<void> {
+	await db.writeTransaction(async (tx) => {
+		for (const m of moves) await update(tx, 'media', m.id, organizationId, { position: m.position });
+	});
+}
+
+export async function saveMediaCaption(db: PowerSyncDatabase, organizationId: string, id: string, caption: string | null): Promise<void> {
+	await db.writeTransaction((tx) => update(tx, 'media', id, organizationId, { caption }));
+}
+
+/** Retrait : le serveur efface les fichiers ; la ligne quitte l'appareil à la synchronisation. */
+export async function removeMedia(db: PowerSyncDatabase, organizationId: string, id: string): Promise<void> {
+	await db.writeTransaction((tx) => update(tx, 'media', id, organizationId, { status: 'removed' }));
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ORGANIZATION_SCOPED_TABLES } from '@ziga/shared/sync-schema';
-import { LOCAL_QUERIES } from './queries';
+import { GEOGRAPHY_QUERIES, LOCAL_QUERIES } from './queries';
 
 describe('lectures locales : jamais deux organisations à la fois (lot 05)', () => {
 	it('chaque requête qui lit une table d’organisation filtre sur l’organisation passée en paramètre', () => {
@@ -17,5 +17,11 @@ describe('lectures locales : jamais deux organisations à la fois (lot 05)', () 
 
 	it('la fiche de l’organisation est lue par son identifiant', () => {
 		expect(LOCAL_QUERIES.organization).toMatch(/WHERE o\.id = \?/);
+	});
+
+	it('le référentiel géographique (lot 07) ne lit aucune table d’organisation', () => {
+		for (const sql of Object.values(GEOGRAPHY_QUERIES)) {
+			for (const table of ORGANIZATION_SCOPED_TABLES) expect(sql).not.toMatch(new RegExp(`\\b${table}\\b`));
+		}
 	});
 });

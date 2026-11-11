@@ -27,7 +27,27 @@ export const LOCAL_QUERIES = {
 	ownerMandates: `SELECT * FROM mandates WHERE organization_id = ? AND owner_id = ? ORDER BY starts_on DESC, id DESC`,
 	/** Versions d'un mandat, la plus récente d'abord. */
 	mandateVersions: `SELECT * FROM mandate_versions WHERE organization_id = ? AND mandate_id = ? ORDER BY version DESC`,
+	/** Lot 07 : biens de l'organisation (l'agent de terrain ne reçoit que ceux de ses unités affectées), par nom. */
+	properties: `SELECT * FROM properties WHERE organization_id = ? ORDER BY name COLLATE NOCASE, id`,
+	property: `SELECT * FROM properties WHERE organization_id = ? AND id = ?`,
+	/** Unités de l'organisation (liste, filtres), puis celles d'un bien. */
+	units: `SELECT * FROM units WHERE organization_id = ? ORDER BY label COLLATE NOCASE, id`,
+	propertyUnits: `SELECT * FROM units WHERE organization_id = ? AND property_id = ? ORDER BY label COLLATE NOCASE, id`,
+	/** Photos d'un bien et de ses unités (les retirées ne descendent pas). */
+	propertyMedia: `SELECT * FROM media WHERE organization_id = ? AND property_id = ? ORDER BY position, created_at, id`,
+	/** Portées des mandats sur un bien (mandat qui le couvre). */
+	propertyScopes: `SELECT * FROM mandate_scopes WHERE organization_id = ? AND property_id = ? AND unit_id IS NULL`,
+	/** Agents de terrain actifs de l'organisation (affectation). */
+	fieldAgents: `SELECT * FROM organization_members WHERE organization_id = ? AND status = 'active' AND role = 'field_agent' ORDER BY display_name`,
+	/** Métadonnées des documents privés d'un bien (direction et gestion seulement : les autres n'en reçoivent pas). */
+	propertyDocuments: `SELECT * FROM documents WHERE organization_id = ? AND property_id = ? ORDER BY type, version DESC, id`,
 	/** Modifications refusées par le serveur (table locale de l'appareil), de l'organisation, les plus récentes d'abord. */
 	rejections: `SELECT * FROM sync_rejections WHERE organization_id = ? ORDER BY rejected_at DESC, id DESC`,
 	rejectionCount: `SELECT count(*) AS n FROM sync_rejections WHERE organization_id = ?`
+} as const;
+
+/** Référentiel géographique (lot 07) : tables de la plateforme, sans organisation, identiques pour tous. */
+export const GEOGRAPHY_QUERIES = {
+	communes: `SELECT * FROM communes ORDER BY name`,
+	neighborhoods: `SELECT * FROM neighborhoods ORDER BY name COLLATE NOCASE`
 } as const;

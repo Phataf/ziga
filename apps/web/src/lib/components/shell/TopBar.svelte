@@ -5,6 +5,7 @@
 	import { organizations } from '#lib/org/organizations.svelte.ts';
 	import { fr } from '#lib/i18n/fr.ts';
 	import type { Profile } from '#lib/profiles.ts';
+	import CreateButton from './CreateButton.svelte';
 	import SyncIndicator from './SyncIndicator.svelte';
 
 	let { profile }: { profile: Profile } = $props();
@@ -23,4 +24,5 @@
 			{fr.auth.offline}
 		</p>{/if}
 	<p class="ml-auto text-muted-foreground">{fr.app.today(formatDate(new Date()))}</p>
+	{#if profile.space === 'agency'}<CreateButton />{/if}
 </header>
