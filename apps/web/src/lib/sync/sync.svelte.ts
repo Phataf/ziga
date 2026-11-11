@@ -167,6 +167,9 @@ class Sync {
 			await db.disconnectAndClear();
 			await db.close();
 		}
+		// Photos en attente d'envoi (lot 07) : elles aussi quittent l'appareil.
+		const { photoQueue } = await import('../properties/photo-queue.svelte');
+		await photoQueue.clear();
 	}
 }
 

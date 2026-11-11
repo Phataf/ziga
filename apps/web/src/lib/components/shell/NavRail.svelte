@@ -7,6 +7,7 @@
 	import { fr } from '#lib/i18n/fr.ts';
 	import { activeNav, menuOf, type Profile } from '#lib/profiles.ts';
 	import { cn } from '#lib/utils.ts';
+	import CreateButton from './CreateButton.svelte';
 
 	let { profile }: { profile: Profile } = $props();
 	const items = $derived(menuOf(profile));
@@ -14,6 +15,7 @@
 </script>
 
 <div class="fixed inset-y-0 left-0 z-40 flex w-28 flex-col border-r bg-card py-3" data-testid="rail">
+	{#if profile.space === 'agency'}<div class="mb-2 flex flex-col"><CreateButton compact /></div>{/if}
 	<nav aria-label={fr.app.mainNav} class="flex flex-1 flex-col items-center gap-1 overflow-y-auto">
 		<ul class="flex w-full flex-1 flex-col gap-1 px-2">
 			{#each items as item (item.href)}
