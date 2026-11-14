@@ -85,6 +85,13 @@
 			"when": 1794700000000,
 			"tag": "0011_geography_admin_insert",
 			"breakpoints": true
+		},
+		{
+			"idx": 12,
+			"version": "7",
+			"when": 1794750000000,
+			"tag": "0012_tabtenga_ouagadougou",
+			"breakpoints": true
 		}
 	]
 }

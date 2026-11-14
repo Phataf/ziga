@@ -830,3 +830,9 @@ Chaque étape terminée est aussi envoyée sur `claude/lot07-sauvegarde`.
 2. **Autorisation « prendre des photos » du mandat** : faut-il l'exiger avant d'ajouter une photo ? Elle n'est pas vérifiée au lot 07.
 3. **Fichiers ajoutés directement sur `main`** (`osm-neighborhoods.json` et les deux réponses brutes d'Overpass à la racine) : proposition, supprimer `osm-neighborhoods.json` (la migration suit la liste du porteur), ranger ou retirer les deux réponses brutes.
 4. **Durée de conservation des documents** : question ouverte du prompt ; rien n'est supprimé automatiquement.
+
+### Réponses du porteur (correction après le lot, 14/11/2026)
+1. **Tabtenga** : seulement à Ouagadougou. Ce n'est pas un quartier de Saaba (aucune ligne n'y est créée) ; la migration `0012` le garantit sur toute base.
+2. **Photos** : l'autorisation « prendre des photos » est exigée. Une photo n'est acceptée que si un mandat en vigueur de l'organisation couvre le bien (ou l'unité) avec `can_take_photos` ; le mandat `self_managed` d'un bailleur l'accorde toujours. Refus `PHOTOS_NOT_AUTHORIZED` (API et synchronisation), bouton désactivé avec la raison. Les photos existantes ne sont jamais supprimées.
+3. **Fichiers déposés sur `main` par erreur** : les deux réponses brutes d'Overpass et `osm-neighborhoods.json` sont retirés du dépôt et ignorés par git ; les extraits de `apps/api/scripts/fixtures` restent.
+4. **Conservation des documents** : aucun effacement automatique maintenant ; proposition « durée du mandat ou du bail, puis 5 ans après sa fin », à valider par le juriste avec la nouvelle loi sur les données personnelles (question ouverte des décisions). Effacement automatique au lot 13.

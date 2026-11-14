@@ -9,9 +9,12 @@
  *   3. il envoie le fichier directement au stockage, puis le signale : la tâche du worker contrôle le fichier réel,
  *      produit les variantes WebP sans EXIF et efface l'original.
  * Agent de terrain : seulement les photos de ses unités affectées (jamais celles d'un bien entier).
+ * Mandat : une photo n'est acceptée que si un mandat en vigueur autorise les photos du bien ou de l'unité
+ * (PHOTOS_NOT_AUTHORIZED) ; le mandat self_managed d'un bailleur l'accorde toujours.
  */
 import { InjectQueue } from '@nestjs/bullmq';
 import { Inject, Injectable } from '@nestjs/common';
+import { PHOTO_DENIAL_MESSAGES } from '@ziga/shared/owners';
 import {
 	MEDIA_VARIANT_SIZES,
 	mediaVariantPath,
@@ -29,6 +32,7 @@ import { media } from '../../db/schema/properties.js';
 import { MEDIA_QUEUE, type MediaJobData } from '../../jobs/queues.js';
 import { STORAGE, type PresignedUpload, type StorageAdapter } from '../../storage/storage.js';
 import { AuditService, diff } from '../audit/audit.service.js';
+import { OwnersService } from '../owners/owners.service.js';
 import { mediaOriginalKey, mediaVariantKey } from './media-processing.js';
 import { PropertiesService } from './properties.service.js';
 
@@ -63,6 +67,7 @@ export class MediaService {
 	constructor(
 		private readonly audit: AuditService,
 		private readonly properties: PropertiesService,
+		private readonly owners: OwnersService,
 		@Inject(STORAGE) private readonly storage: StorageAdapter,
 		@InjectQueue(MEDIA_QUEUE) private readonly queue: Queue<MediaJobData>
 	) {}
@@ -116,6 +121,12 @@ export class MediaService {
 	async create(input: CreateMediaData): Promise<MediaView> {
 		const { tx, organizationId, actor, userId } = this.context();
 		await this.checkObject(input.propertyId, input.unitId);
+		// Correction du lot 07 : un mandat en vigueur doit autoriser les photos de ce bien ou de cette unité. Les photos
+		// déjà enregistrées ne sont jamais supprimées ; seules les nouvelles sont refusées.
+		const authorization = await this.owners.photoAuthorization(input.propertyId, input.unitId);
+		if (!authorization.allowed) {
+			throw new AppError('PHOTOS_NOT_AUTHORIZED', PHOTO_DENIAL_MESSAGES[authorization.reason], 403, { reason: authorization.reason });
+		}
 		const exists = await tx.select({ id: media.id }).from(media).where(eq(media.id, input.id)).limit(1);
 		if (exists.length) throw new AppError('CONFLICT', 'Cette photo existe déjà.', 409);
 		const [row] = await tx

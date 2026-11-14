@@ -16,7 +16,7 @@
 	import type { DocumentView } from '@ziga/shared/documents';
 	import { newId } from '@ziga/shared/ids';
 	import { parseFcfa } from '@ziga/shared/money';
-	import { effectiveMandateStatus, type MandateView, type OwnerView } from '@ziga/shared/owners';
+	import { effectiveMandateStatus, type MandateView, type OwnerView, type PhotoScope } from '@ziga/shared/owners';
 	import { can } from '@ziga/shared/permissions';
 	import {
 		createPropertySchema,
@@ -46,7 +46,7 @@
 	import { organizations } from '#lib/org/organizations.svelte.ts';
 	import { toMandate, toOwner } from '#lib/owners/views.ts';
 	import { photoQueue } from '#lib/properties/photo-queue.svelte.ts';
-	import { galleryOf, suggestLabels, toDocument, toMedia, toProperty, toUnit } from '#lib/properties/views.ts';
+	import { galleryOf, photoBlock, toScope, suggestLabels, toDocument, toMedia, toProperty, toUnit } from '#lib/properties/views.ts';
 	import { GEOGRAPHY_QUERIES, LOCAL_QUERIES } from '#lib/sync/queries.ts';
 	import { sync } from '#lib/sync/sync.svelte.ts';
 	import { createProperty, createUnits, saveProperty, setRecordStatus } from '#lib/sync/writes.ts';
@@ -73,6 +73,7 @@
 	let communes = $state<{ id: string; name: string }[]>([]);
 	let neighborhoods = $state<{ id: string; communeId: string; name: string }[]>([]);
 	let message = $state<string | null>(null);
+	let scopes = $state<PhotoScope[]>([]);
 	let errors = $state<Record<string, string>>({});
 	let busy = $state(false);
 
@@ -141,7 +142,8 @@
 				if (property && !filled) fill(property);
 			}),
 			sync.watch<Record<string, unknown>>(LOCAL_QUERIES.propertyUnits, [org, id], (rows) => (units = rows.map(toUnit))),
-			sync.watch<Record<string, unknown>>(LOCAL_QUERIES.propertyMedia, [org, id], (rows) => (media = rows.map(toMedia)))
+			sync.watch<Record<string, unknown>>(LOCAL_QUERIES.propertyMedia, [org, id], (rows) => (media = rows.map(toMedia))),
+			sync.watch<Record<string, unknown>>(LOCAL_QUERIES.propertyAllScopes, [org, id], (rows) => (scopes = rows.map(toScope)))
 		];
 		if (can(role, 'document.read')) {
 			stops.push(
@@ -167,6 +169,9 @@
 
 	const today = toIsoDate();
 	const ownerMandates = $derived(mandates.filter((m) => m.ownerId === ownerId && effectiveMandateStatus(m, today) === 'active'));
+	/** Raison du refus des photos (mandat), même règle que le serveur ; null si elles sont permises. */
+	const blockOf = (unitId: string | null) =>
+		property ? photoBlock({ propertyId: property.id, unitId }, scopes, mandates, { landlord, today }) : null;
 	const communeNeighborhoods = $derived(neighborhoods.filter((n) => n.communeId === communeId));
 
 	async function db() {
@@ -529,6 +534,7 @@
 									label={u.label}
 									gallery={galleryOf(media, property.id, u.id)}
 									canEdit
+									blocked={blockOf(u.id)}
 									testid="galerie-unite"
 								/>
 							</section>
@@ -539,6 +545,7 @@
 								label={fr.photos.propertyPhotos}
 								gallery={galleryOf(media, property.id, null)}
 								canEdit
+								blocked={blockOf(null)}
 								testid="galerie-bien"
 							/>
 						</section>

@@ -11,6 +11,9 @@ import {
 	effectiveMandateStatus,
 	formatRateBp,
 	parseRatePercent,
+	photoAuthorization,
+	type PhotoMandate,
+	type PhotoScope,
 	rateBpToInput,
 	isManagementMandate,
 	mandateAlert,
@@ -239,5 +242,63 @@ describe('modification partielle (correctif du lot 07)', () => {
 	it('un champ absent ne reprend pas sa valeur par défaut : renommer ne remet pas le pays à BF', () => {
 		expect(updateOwnerSchema.parse({ name: 'Nouveau nom' })).toEqual({ name: 'Nouveau nom' });
 		expect(updateOwnerSchema.parse({ country: 'fr' })).toEqual({ country: 'FR' });
+	});
+});
+
+describe('photos autorisées par le mandat (correction du lot 07)', () => {
+	const today = '2026-11-14';
+	const mandate = (id: string, extra: Partial<PhotoMandate> = {}): PhotoMandate => ({
+		id,
+		type: 'rental_management',
+		status: 'active',
+		startsOn: '2026-01-01',
+		endsOn: null,
+		canTakePhotos: true,
+		...extra
+	});
+	const onProperty = (mandateId: string): PhotoScope => ({ mandateId, propertyId: 'p1', unitId: null });
+	const onUnit = (mandateId: string): PhotoScope => ({ mandateId, propertyId: 'p1', unitId: 'u1' });
+
+	it('autorisé : mandat en vigueur avec photos, sur le bien entier (bien et unités) ou sur l’unité (l’unité seulement)', () => {
+		expect(photoAuthorization({ propertyId: 'p1', unitId: 'u1' }, [onProperty('m')], [mandate('m')], today)).toEqual({ allowed: true });
+		expect(photoAuthorization({ propertyId: 'p1', unitId: null }, [onProperty('m')], [mandate('m')], today)).toEqual({ allowed: true });
+		expect(photoAuthorization({ propertyId: 'p1', unitId: 'u1' }, [onUnit('m')], [mandate('m')], today)).toEqual({ allowed: true });
+		// Une portée sur une unité ne couvre ni le bien entier ni une autre unité.
+		expect(photoAuthorization({ propertyId: 'p1', unitId: null }, [onUnit('m')], [mandate('m')], today)).toEqual({
+			allowed: false,
+			reason: 'NO_MANDATE'
+		});
+		expect(photoAuthorization({ propertyId: 'p1', unitId: 'u2' }, [onUnit('m')], [mandate('m')], today)).toEqual({
+			allowed: false,
+			reason: 'NO_MANDATE'
+		});
+	});
+
+	it('refusé : aucun mandat, ou un mandat sans l’autorisation des photos', () => {
+		expect(photoAuthorization({ propertyId: 'p1', unitId: 'u1' }, [], [], today)).toEqual({ allowed: false, reason: 'NO_MANDATE' });
+		expect(
+			photoAuthorization({ propertyId: 'p1', unitId: 'u1' }, [onProperty('m')], [mandate('m', { canTakePhotos: false })], today)
+		).toEqual({
+			allowed: false,
+			reason: 'MANDATE_NO_PHOTOS'
+		});
+	});
+
+	it('mandat révoqué, expiré ou à venir : refusé', () => {
+		for (const m of [
+			mandate('m', { status: 'revoked', canTakePhotos: false }),
+			mandate('m', { endsOn: '2026-11-13' }),
+			mandate('m', { startsOn: '2026-12-01' })
+		]) {
+			expect(photoAuthorization({ propertyId: 'p1', unitId: 'u1' }, [onProperty('m')], [m], today)).toEqual({
+				allowed: false,
+				reason: 'NO_MANDATE'
+			});
+		}
+	});
+
+	it('bailleur : son mandat self_managed l’accorde toujours', () => {
+		const own = mandate('s', { type: 'self_managed', canTakePhotos: false });
+		expect(photoAuthorization({ propertyId: 'p1', unitId: 'u1' }, [onProperty('s')], [own], today)).toEqual({ allowed: true });
 	});
 });

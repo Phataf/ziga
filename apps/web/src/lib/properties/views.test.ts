@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { MediaView, UnitView } from '@ziga/shared/properties';
 import {
 	filterProperties,
+	photoBlock,
 	galleryOf,
 	NO_FILTERS,
 	reorder,
@@ -99,5 +100,39 @@ describe('vues des biens (lot 07)', () => {
 			{ id: 'b', position: 2 }
 		]);
 		expect(reorder(gallery, 'a', -1)).toEqual([]);
+	});
+
+	it('photos : refusées sans mandat qui les autorise (raison affichée) ; le bailleur, toujours autorisé', () => {
+		const mandate = {
+			id: 'm',
+			ownerId: 'o',
+			type: 'rental_management',
+			startsOn: '2026-01-01',
+			endsOn: null,
+			commission: null,
+			canPublish: false,
+			canTakePhotos: true,
+			canCollectFunds: false,
+			canSignLeases: false,
+			exclusive: false,
+			status: 'active',
+			revokedAt: null,
+			revocationReason: null,
+			expiredAt: null,
+			version: 1,
+			createdAt: '',
+			updatedAt: ''
+		} as const;
+		const opts = { landlord: false, today: '2026-11-14' };
+		const scope = { mandateId: 'm', propertyId: 'p1', unitId: null };
+		expect(photoBlock({ propertyId: 'p1', unitId: 'u1' }, [scope], [mandate], opts)).toBeNull();
+		expect(photoBlock({ propertyId: 'p1', unitId: 'u1' }, [], [mandate], opts)).toMatch(/Aucun mandat en vigueur/);
+		expect(photoBlock({ propertyId: 'p1', unitId: 'u1' }, [scope], [{ ...mandate, canTakePhotos: false }], opts)).toMatch(
+			/n’autorise pas les photos/
+		);
+		expect(photoBlock({ propertyId: 'p1', unitId: 'u1' }, [scope], [{ ...mandate, status: 'revoked' }], opts)).toMatch(
+			/Aucun mandat en vigueur/
+		);
+		expect(photoBlock({ propertyId: 'p1', unitId: 'u1' }, [], [], { ...opts, landlord: true })).toBeNull();
 	});
 });

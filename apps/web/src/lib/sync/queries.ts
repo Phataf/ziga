@@ -35,6 +35,8 @@ export const LOCAL_QUERIES = {
 	propertyUnits: `SELECT * FROM units WHERE organization_id = ? AND property_id = ? ORDER BY label COLLATE NOCASE, id`,
 	/** Photos d'un bien et de ses unités (les retirées ne descendent pas). */
 	propertyMedia: `SELECT * FROM media WHERE organization_id = ? AND property_id = ? ORDER BY position, created_at, id`,
+	/** Toutes les portées d'un bien (le bien entier et ses unités) : autorisation des photos. */
+	propertyAllScopes: `SELECT * FROM mandate_scopes WHERE organization_id = ? AND property_id = ?`,
 	/** Portées des mandats sur un bien (mandat qui le couvre). */
 	propertyScopes: `SELECT * FROM mandate_scopes WHERE organization_id = ? AND property_id = ? AND unit_id IS NULL`,
 	/** Agents de terrain actifs de l'organisation (affectation). */

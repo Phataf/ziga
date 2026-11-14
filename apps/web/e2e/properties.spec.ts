@@ -105,8 +105,8 @@ async function tampouy(request: APIRequestContext, agency: Agency): Promise<stri
 }
 
 /** Bien actif avec ses unités, créé par l'API (données de départ). */
-async function propertyWithUnits(request: APIRequestContext, agency: Agency, labels: string[]) {
-	const { ownerId } = await ownerWithMandate(request, agency, 'Propriétaire de départ');
+async function propertyWithUnits(request: APIRequestContext, agency: Agency, labels: string[], opts: { mandate?: boolean } = {}) {
+	const { ownerId, mandateId } = await ownerWithMandate(request, agency, 'Propriétaire de départ');
 	const propertyId = newId();
 	await post(request, agency, '/properties', {
 		id: propertyId,
@@ -117,6 +117,8 @@ async function propertyWithUnits(request: APIRequestContext, agency: Agency, lab
 		neighborhoodId: await tampouy(request, agency)
 	});
 	await post(request, agency, `/properties/${propertyId}/status`, { status: 'active' });
+	// Le mandat (photos autorisées) couvre le bien entier, sauf demande contraire.
+	if (opts.mandate !== false) await post(request, agency, `/mandates/${mandateId}/scopes`, { id: newId(), propertyId });
 	const units: string[] = [];
 	for (const label of labels) {
 		const id = newId();
@@ -235,6 +237,21 @@ test.describe('Assistant d’ajout d’un bien sur téléphone (critère d’acc
 
 		await context.setOffline(false);
 		await expect(photo).toHaveAttribute('data-status', 'ready', { timeout: 90_000 });
+	});
+});
+
+test.describe('Photos autorisées par le mandat (correction du lot 07)', () => {
+	test.use(phone);
+
+	test('sans mandat qui couvre le bien, le bouton est désactivé et la raison affichée', async ({ page, request }) => {
+		const agency = await freshAgency(request, `Agence sans mandat ${newId().slice(-6)}`);
+		const { propertyId } = await propertyWithUnits(request, agency, ['N1'], { mandate: false });
+		await signInWith(page, agency.director, `/app/biens/${propertyId}`);
+		await synced(page);
+		const gallery = page.getByTestId('galerie-unite');
+		await expect(gallery.getByTestId('galerie-unite-ajouter')).toBeDisabled();
+		await expect(gallery.getByTestId('galerie-unite-refus')).toHaveText(/Aucun mandat en vigueur ne couvre ce bien/);
+		await expectNoHorizontalOverflow(page, 'fiche sans mandat (téléphone)');
 	});
 });
 

@@ -27,11 +27,13 @@ import {
 	type OwnerData,
 	type OwnerDetailView,
 	type OwnerView,
+	type PhotoDenial,
+	photoAuthorization,
 	type UpdateMandateInput,
 	type UpdateOwnerInput
 } from '@ziga/shared/owners';
 import { newId } from '@ziga/shared/ids';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import { AppError } from '../../common/app-error.js';
 import { RequestContext } from '../../common/request-context.js';
 import type { Tx } from '../../db/database.js';
@@ -513,6 +515,41 @@ export class OwnersService {
 			viaProperty: r.viaProperty,
 			managementActive: r.managementActive
 		}));
+	}
+
+	/**
+	 * Photos (correction du lot 07) : un mandat en vigueur de l'organisation couvre-t-il ce bien, ou cette unité, avec
+	 * l'autorisation de prendre des photos ? Le mandat self_managed d'un bailleur l'accorde toujours (règle partagée).
+	 */
+	async photoAuthorization(
+		propertyId: string,
+		unitId: string | null
+	): Promise<{ allowed: true } | { allowed: false; reason: PhotoDenial }> {
+		const { tx, organizationId } = this.context();
+		const scopes = await tx
+			.select({ mandateId: mandateScopes.mandateId, propertyId: mandateScopes.propertyId, unitId: mandateScopes.unitId })
+			.from(mandateScopes)
+			.where(and(eq(mandateScopes.organizationId, organizationId), eq(mandateScopes.propertyId, propertyId)));
+		const ids = [...new Set(scopes.map((sc) => sc.mandateId))];
+		const rows = ids.length
+			? await tx
+					.select()
+					.from(mandates)
+					.where(and(eq(mandates.organizationId, organizationId), inArray(mandates.id, ids)))
+			: [];
+		return photoAuthorization(
+			{ propertyId, unitId },
+			scopes,
+			rows.map((m) => ({
+				id: m.id,
+				type: m.type,
+				status: m.status,
+				startsOn: m.startsOn,
+				endsOn: m.endsOn,
+				canTakePhotos: m.canTakePhotos
+			})),
+			toIsoDate()
+		);
 	}
 
 	/**

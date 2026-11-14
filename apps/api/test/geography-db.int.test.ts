@@ -73,7 +73,8 @@ describe('référentiel géographique : données initiales', () => {
 			{ name: 'Tabtenga', osm_ref: 'node/903015666' },
 			{ name: 'Zékounga', osm_ref: 'node/12915364746' }
 		]);
-		const tabtenga = await api.query(`select commune_id from neighborhoods where name = 'Tabtenga'`);
+		// Tabtenga : Ouagadougou seulement, jamais Saaba (réponse du porteur ; migration 0012).
+		const tabtenga = await api.query(`select commune_id from neighborhoods where geo_name_key(name) = 'tabtenga'`);
 		expect(tabtenga.rows).toEqual([{ commune_id: 'ouagadougou' }]);
 	});
 

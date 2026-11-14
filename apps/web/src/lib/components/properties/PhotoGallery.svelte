@@ -26,8 +26,18 @@
 		label,
 		gallery,
 		canEdit,
+		blocked = null,
 		testid = 'galerie'
-	}: { propertyId: string; unitId?: string | null; label: string; gallery: MediaView[]; canEdit: boolean; testid?: string } = $props();
+	}: {
+		propertyId: string;
+		unitId?: string | null;
+		label: string;
+		gallery: MediaView[];
+		canEdit: boolean;
+		/** Raison du refus des nouvelles photos (mandat), ou null : le bouton est désactivé et la raison affichée. */
+		blocked?: string | null;
+		testid?: string;
+	} = $props();
 
 	const t = fr.photos;
 	let message = $state<string | null>(null);
@@ -44,6 +54,7 @@
 		(event.currentTarget as HTMLInputElement).value = '';
 		const organizationId = organizations.activeId;
 		if (!files.length || !organizationId) return;
+		if (blocked) return void (message = blocked);
 		message = null;
 		busy = true;
 		const problems: string[] = [];
@@ -125,9 +136,12 @@
 				onchange={add}
 				data-testid="{testid}-fichier"
 			/>
-			<Button variant="outline" disabled={busy || full} onclick={() => input?.click()}><Camera aria-hidden="true" />{t.add}</Button>
+			<Button variant="outline" disabled={busy || full || !!blocked} onclick={() => input?.click()} data-testid="{testid}-ajouter"
+				><Camera aria-hidden="true" />{t.add}</Button
+			>
 		{/if}
 	</div>
+	{#if canEdit && blocked}<p class="text-base text-muted-foreground" data-testid="{testid}-refus">{blocked}</p>{/if}
 	<FormAlert {message} tone="info" />
 	{#if !gallery.length}
 		<p class="text-base text-muted-foreground">{t.empty}</p>

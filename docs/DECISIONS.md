@@ -48,7 +48,7 @@ Journal des décisions structurantes. Une décision ne change que par une nouvel
 | Une agence peut-elle se désigner « bailleur » en son nom, et quelles obligations endosse-t-elle ? Une agence peut-elle signer au nom du propriétaire, avec quel mandat ? | 06 et 08 | Juriste |
 | Reconduction tacite pour une durée égale : compatible avec le passage légal à durée indéterminée ? Intérêts de retard au profit de l'agence, préavis réduit à un mois, indemnité de départ anticipé : clauses valables ? | 08 | Juriste |
 | Délai et coût de la légalisation et de l'enregistrement ; qui s'en charge en pratique | 08 bis | Juriste, agences pilotes |
-| Durée de conservation des copies de pièces d'identité après la fin du bail | 07 | Juriste |
+| Durée de conservation des documents privés (pièces d'identité, titres, mandats, baux) : aucun effacement automatique d'ici là ; proposition « durée du mandat ou du bail, puis 5 ans après sa fin », à valider au regard de la nouvelle loi sur les données personnelles (votée le 3 août 2026). L'effacement automatique est construit au lot 13 | 13 | Juriste, ARCOD |
 | Relecture du modèle de contrat par défaut (D25) ; nombre d'exemplaires et mentions exigés par la loi | 08 bis, avant la première signature réelle | Juriste |
 | Demandes de recherche des visiteurs (D31) : texte du consentement ; durée de conservation après pause ou arrêt (proposition : données personnelles effacées 6 mois après la mise en pause, 30 jours après l'arrêt) | 12 bis | Juriste, ARCOD |
 | Prestataire SMS réel pour les codes de vérification (coût par SMS, couverture Orange et Moov) | 10 ter | Grilles des prestataires |

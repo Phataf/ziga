@@ -17,6 +17,7 @@ import {
 	type UnitView
 } from '@ziga/shared/properties';
 import type { DocumentView } from '@ziga/shared/documents';
+import { PHOTO_DENIAL_MESSAGES, photoAuthorization, type MandateView, type PhotoScope } from '@ziga/shared/owners';
 import { fr } from '../i18n/fr';
 
 type Row = Record<string, unknown>;
@@ -252,4 +253,37 @@ export function toDocument(r: Row): DocumentView {
 		withdrawnAt: str(r.withdrawn_at),
 		withdrawalReason: str(r.withdrawal_reason)
 	};
+}
+
+/**
+ * Raison pour laquelle les photos sont refusées sur ce bien ou cette unité (correction du lot 07), ou null si elles
+ * sont permises : même règle que le serveur (photoAuthorization). Le bailleur particulier est toujours autorisé : son
+ * mandat self_managed couvre ses biens dès leur création, avant même que la portée n'arrive sur l'appareil.
+ */
+export function photoBlock(
+	target: { propertyId: string; unitId: string | null },
+	scopes: PhotoScope[],
+	mandates: MandateView[],
+	opts: { landlord: boolean; today: string }
+): string | null {
+	if (opts.landlord) return null;
+	const r = photoAuthorization(
+		target,
+		scopes,
+		mandates.map((m) => ({
+			id: m.id,
+			type: m.type,
+			status: m.status,
+			startsOn: m.startsOn,
+			endsOn: m.endsOn,
+			canTakePhotos: m.canTakePhotos
+		})),
+		opts.today
+	);
+	return r.allowed ? null : PHOTO_DENIAL_MESSAGES[r.reason];
+}
+
+/** Portées lues dans la base locale. */
+export function toScope(r: Row): PhotoScope {
+	return { mandateId: String(r.mandate_id), propertyId: String(r.property_id), unitId: str(r.unit_id) };
 }

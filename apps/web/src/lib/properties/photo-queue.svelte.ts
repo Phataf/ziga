@@ -4,10 +4,11 @@
  * présignée : demande de l'URL, envoi direct au stockage, signal à l'API, puis la photo quitte la file.
  *
  * Une photo dont la fiche n'est pas encore arrivée au serveur (introuvable) attend le passage suivant ; une photo déjà
- * envoyée (ou retirée) quitte la file. La file est vidée à la déconnexion, avec la base locale.
+ * envoyée (ou retirée) quitte la file, comme celle dont la fiche a été refusée (elle n'existe plus sur l'appareil). La file est vidée à la déconnexion, avec la base locale.
  */
 import { ApiError, NetworkError } from '../auth/http';
 import { organizations } from '../org/organizations.svelte';
+import { sync } from '../sync/sync.svelte';
 
 const DB_NAME = 'ziga-photos';
 const STORE = 'queue';
@@ -110,6 +111,11 @@ class PhotoQueue {
 		for (const p of all.sort((a, b) => a.createdAt - b.createdAt)) {
 			if (p.organizationId !== organizations.activeId) {
 				retry = true;
+				continue;
+			}
+			// Fiche refusée par le serveur (photos non autorisées, quota) : la ligne locale a disparu, le fichier ne part plus.
+			if (sync.db && !(await sync.db.getOptional('SELECT id FROM media WHERE id = ?', [p.id]))) {
+				await this.#drop(p.id);
 				continue;
 			}
 			this.states = { ...this.states, [p.id]: 'sending' };

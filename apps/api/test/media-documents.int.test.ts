@@ -136,8 +136,26 @@ beforeAll(async () => {
 	otherUnit = (await manager.call<UnitView>('POST', '/units', { id: newId(), propertyId: property.id, type: 'apartment', label: 'P2' }))
 		.body;
 	await manager.call('POST', `/units/${unit.id}/assign`, { agentId: agent.userId });
+	// Correction du lot 07 : un mandat en vigueur qui autorise les photos couvre le bien.
+	await coverWithMandate(o.id, property.id, true);
 	photo4mb = await makePhoto();
 }, 60_000);
+
+/** Mandat de gestion du propriétaire, posé sur le bien entier ; `photos` : autorisation de prendre des photos. */
+async function coverWithMandate(ownerId: string, propertyId: string, photos: boolean, m: Member = manager): Promise<string> {
+	const mandateId = newId();
+	const created = await m.call('POST', '/mandates', {
+		id: mandateId,
+		ownerId,
+		type: 'rental_management',
+		startsOn: '2026-01-01',
+		commission: { basis: 'percent_of_collected', rateBp: 1000 },
+		canTakePhotos: photos
+	});
+	expect(created.status, JSON.stringify(created.body)).toBe(201);
+	expect((await m.call('POST', `/mandates/${mandateId}/scopes`, { id: newId(), propertyId })).status).toBe(201);
+	return mandateId;
+}
 
 afterAll(async () => {
 	await owner.end();
@@ -274,6 +292,76 @@ describe('photos : envoi présigné et variantes (lot 07)', () => {
 			byteSize: 10
 		});
 		expect(intrus.status).toBe(404);
+	});
+});
+
+describe('photos autorisées par le mandat (correction du lot 07)', () => {
+	async function bare(m: Member = manager) {
+		const o = (await m.call<OwnerView>('POST', '/owners', { id: newId(), type: 'person', name: 'Ousmane Tiendrébéogo', phone: newPhone() }))
+			.body;
+		const p = (await m.call<PropertyView>('POST', '/properties', { id: newId(), ownerId: o.id, type: 'house', name: 'Villa sans photos' }))
+			.body;
+		const u = (await m.call<UnitView>('POST', '/units', { id: newId(), propertyId: p.id, type: 'villa', label: 'Villa' })).body;
+		return { ownerId: o.id, propertyId: p.id, unitId: u.id };
+	}
+	const announceOn = (m: Member, propertyId: string, unitId: string | null) =>
+		m.call<MediaView>('POST', '/media', { id: newId(), propertyId, unitId, mimeType: 'image/jpeg', byteSize: 1000 });
+
+	it('autorisé : un mandat en vigueur avec l’autorisation des photos couvre le bien (bien et unités)', async () => {
+		const b = await bare();
+		await coverWithMandate(b.ownerId, b.propertyId, true);
+		expect((await announceOn(manager, b.propertyId, b.unitId)).status).toBe(201);
+		expect((await announceOn(manager, b.propertyId, null)).status).toBe(201);
+	});
+
+	it('refusé : aucun mandat, ou un mandat sans l’autorisation des photos ; par l’API et par la synchronisation', async () => {
+		const b = await bare();
+		const none = await announceOn(manager, b.propertyId, b.unitId);
+		expect(none.status).toBe(403);
+		expect(none.body).toMatchObject({ code: 'PHOTOS_NOT_AUTHORIZED', details: { reason: 'NO_MANDATE' } });
+		await coverWithMandate(b.ownerId, b.propertyId, false);
+		expect((await announceOn(manager, b.propertyId, b.unitId)).body).toMatchObject({
+			code: 'PHOTOS_NOT_AUTHORIZED',
+			details: { reason: 'MANDATE_NO_PHOTOS' }
+		});
+		const id = newId();
+		const [r] = (
+			await manager.client.call<{ results: SyncOperationResult[] }>('POST', '/sync/upload', {
+				operations: [
+					{
+						key: `media-refus-${id}`,
+						op: 'PUT',
+						table: 'media',
+						id,
+						data: { organization_id: a.id, property_id: b.propertyId, unit_id: b.unitId, mime_type: 'image/jpeg', byte_size: 1000 }
+					}
+				]
+			})
+		).body.results;
+		expect(r).toMatchObject({ status: 'rejected', code: 'PHOTOS_NOT_AUTHORIZED' });
+		expect((await owner.query(`select count(*)::int as n from media where property_id = $1`, [b.propertyId])).rows[0].n).toBe(0);
+	});
+
+	it('mandat révoqué : plus de nouvelles photos ; les photos déjà enregistrées restent', async () => {
+		const b = await bare();
+		const mandateId = await coverWithMandate(b.ownerId, b.propertyId, true);
+		const kept = (await announceOn(manager, b.propertyId, b.unitId)).body;
+		expect((await manager.call('POST', `/mandates/${mandateId}/revoke`, { reason: 'Fin de la gestion' })).status).toBe(200);
+		expect((await announceOn(manager, b.propertyId, b.unitId)).body).toMatchObject({ code: 'PHOTOS_NOT_AUTHORIZED' });
+		expect((await manager.call<MediaView>('GET', `/media/${kept.id}`)).body).toMatchObject({ id: kept.id, status: 'pending' });
+		expect((await owner.query(`select status from media where id = $1`, [kept.id])).rows[0].status).toBe('pending');
+	});
+
+	it('bailleur particulier : son mandat self_managed l’accorde toujours', async () => {
+		const landlord = await createOrg(t, 'landlord', 'Bailleur aux photos');
+		const sheet = (await landlord.director.call<OwnerView[]>('GET', '/owners')).body[0]!;
+		const p = (
+			await landlord.director.call<PropertyView>('POST', '/properties', { id: newId(), ownerId: sheet.id, type: 'house', name: 'Maison' })
+		).body;
+		const u = (await landlord.director.call<UnitView>('POST', '/units', { id: newId(), propertyId: p.id, type: 'villa', label: 'Maison' }))
+			.body;
+		expect((await announceOn(landlord.director, p.id, u.id)).status).toBe(201);
+		expect((await announceOn(landlord.director, p.id, null)).status).toBe(201);
 	});
 });
 

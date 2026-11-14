@@ -401,3 +401,43 @@ export interface MandateScopeView {
 	viaProperty: boolean;
 	managementActive: boolean;
 }
+
+// ---------------------------------------------------------------- photos autorisées par le mandat (correction du lot 07)
+
+/** Portée d'un mandat, réduite à ce que la règle des photos lit. */
+export interface PhotoScope {
+	mandateId: string;
+	propertyId: string;
+	unitId: string | null;
+}
+
+export type PhotoMandate = MandateDates & { id: string; type: MandateType; canTakePhotos: boolean };
+
+export type PhotoDenial = 'NO_MANDATE' | 'MANDATE_NO_PHOTOS';
+
+export const PHOTO_DENIAL_MESSAGES: Record<PhotoDenial, string> = {
+	NO_MANDATE: 'Aucun mandat en vigueur ne couvre ce bien : les photos ne sont pas autorisées.',
+	MANDATE_NO_PHOTOS: 'Le mandat qui couvre ce bien n’autorise pas les photos : modifiez-le depuis la fiche du propriétaire.'
+};
+
+/**
+ * Une photo d'un bien (`unitId` vide) ou d'une unité n'est acceptée que si un mandat en vigueur de l'organisation
+ * couvre ce bien, ou cette unité, avec l'autorisation de prendre des photos. Le mandat `self_managed` d'un bailleur
+ * l'accorde toujours. Une unité est couverte par une portée sur elle-même ou sur le bien entier ; le bien entier, par
+ * une portée sur le bien seulement. Règle pure, la même pour le serveur (refus PHOTOS_NOT_AUTHORIZED) et l'écran.
+ */
+export function photoAuthorization(
+	target: { propertyId: string; unitId: string | null },
+	scopes: readonly PhotoScope[],
+	mandates: readonly PhotoMandate[],
+	today: string
+): { allowed: true } | { allowed: false; reason: PhotoDenial } {
+	const covering = scopes.filter(
+		(s) => s.propertyId === target.propertyId && (s.unitId === null || (target.unitId !== null && s.unitId === target.unitId))
+	);
+	const inForce = covering
+		.map((s) => mandates.find((m) => m.id === s.mandateId))
+		.filter((m): m is PhotoMandate => !!m && effectiveMandateStatus(m, today) === 'active');
+	if (inForce.some((m) => m.type === 'self_managed' || m.canTakePhotos)) return { allowed: true };
+	return { allowed: false, reason: inForce.length ? 'MANDATE_NO_PHOTOS' : 'NO_MANDATE' };
+}

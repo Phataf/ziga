@@ -14,3 +14,8 @@ playwright-report/
 
 # Sondes de santé écrites par PowerSync dans son dossier de travail (lot 05)
 .probes/
+
+# Extractions OpenStreetMap faites sur un poste (lot 07) : jamais versionnées. Les extraits des tests restent dans
+# apps/api/scripts/fixtures.
+apps/api/src/db/data/osm-neighborhoods.json
+reponse-overpass*.json
