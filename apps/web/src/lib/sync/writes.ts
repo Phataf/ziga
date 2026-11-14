@@ -327,3 +327,14 @@ export async function saveMediaCaption(db: PowerSyncDatabase, organizationId: st
 export async function removeMedia(db: PowerSyncDatabase, organizationId: string, id: string): Promise<void> {
 	await db.writeTransaction((tx) => update(tx, 'media', id, organizationId, { status: 'removed' }));
 }
+
+/**
+ * Rattachement d'un bien entier à un mandat (assistant, étape des photos) : la portée part par la synchronisation et le
+ * serveur la contrôle comme les autres (mandat en vigueur, propriétaire du bien, règle 12). Refusée, elle arrive dans
+ * « Modifications non acceptées » et disparaît de l'appareil.
+ */
+export async function attachMandate(db: PowerSyncDatabase, organizationId: string, propertyId: string, mandateId: string): Promise<void> {
+	await db.writeTransaction((tx) =>
+		insert(tx, 'mandate_scopes', { id: newId(), organization_id: organizationId, mandate_id: mandateId, property_id: propertyId })
+	);
+}

@@ -255,6 +255,121 @@ test.describe('Photos autorisées par le mandat (correction du lot 07)', () => {
 	});
 });
 
+test.describe('Assistant : rattacher le bien à un mandat pour les photos (correction du lot 07)', () => {
+	test.use(phone);
+
+	/** Bien actif du propriétaire, sans portée ; `photos` : mandats créés (autorisation des photos de chacun). */
+	async function setup(request: APIRequestContext, agency: Agency, photos: boolean[], scopedFirst = false) {
+		const ownerId = newId();
+		await post(request, agency, '/owners', { id: ownerId, type: 'person', name: 'Adama Sawadogo', phone: '+22670900004' });
+		const mandates: string[] = [];
+		for (const canTakePhotos of photos) {
+			const id = newId();
+			await post(request, agency, '/mandates', {
+				id,
+				ownerId,
+				type: 'rental_management',
+				startsOn: addDays(today, -10),
+				commission: { basis: 'percent_of_collected', rateBp: 1000 },
+				canTakePhotos
+			});
+			mandates.push(id);
+		}
+		const propertyId = newId();
+		await post(request, agency, '/properties', { id: propertyId, ownerId, type: 'house', name: `Villa ${propertyId.slice(-4)}` });
+		await post(request, agency, '/units', { id: newId(), propertyId, type: 'villa', label: 'Villa' });
+		if (scopedFirst) await post(request, agency, `/mandates/${mandates[0]}/scopes`, { id: newId(), propertyId });
+		return { ownerId, propertyId, mandates };
+	}
+
+	test('le bien rattaché au mandat qui autorise les photos : les photos se débloquent et partent', async ({ page, request }) => {
+		test.setTimeout(3 * 60_000);
+		const agency = await freshAgency(request, `Agence rattachement ${newId().slice(-6)}`);
+		const { propertyId } = await setup(request, agency, [true]);
+		await signInWith(page, agency.director, `/app/biens/assistant?bien=${propertyId}&etape=4`);
+		await synced(page);
+		const gallery = page.getByTestId('galerie-unite');
+		await expect(gallery.getByTestId('galerie-unite-ajouter')).toBeDisabled();
+		const attach = page.getByTestId('rattacher-mandat');
+		await attach.getByLabel('Mandat qui autorise les photos').selectOption({ index: 1 });
+		await attach.getByRole('button', { name: 'Rattacher et débloquer les photos' }).click();
+		await expect(page.getByTestId('rattacher-mandat')).toHaveCount(0);
+		await expect(gallery.getByTestId('galerie-unite-ajouter')).toBeEnabled();
+		await gallery.getByTestId('galerie-unite-fichier').setInputFiles(files(1));
+		await expect(gallery.getByTestId('galerie-unite-photo')).toHaveAttribute('data-status', 'ready', { timeout: 90_000 });
+		await expectNoHorizontalOverflow(page, 'assistant, rattachement (téléphone)');
+	});
+
+	test('aucun mandat n’autorise les photos : message, lien vers la fiche du propriétaire, « Passer cette étape »', async ({
+		page,
+		request
+	}) => {
+		const agency = await freshAgency(request, `Agence sans photos ${newId().slice(-6)}`);
+		const { ownerId, propertyId } = await setup(request, agency, [false]);
+		await signInWith(page, agency.director, `/app/biens/assistant?bien=${propertyId}&etape=4`);
+		await synced(page);
+		const attach = page.getByTestId('rattacher-mandat');
+		await expect(attach).toContainText('Aucun mandat en vigueur de ce propriétaire n’autorise les photos');
+		await expect(attach.getByRole('link', { name: 'Ouvrir la fiche du propriétaire' })).toHaveAttribute(
+			'href',
+			`/app/proprietaires/${ownerId}`
+		);
+		await attach.getByRole('button', { name: 'Passer cette étape' }).click();
+		await expect(page.getByTestId('assistant')).toHaveAttribute('data-etape', '5');
+	});
+
+	test('rattachement hors ligne refusé à la reconnexion (règle 12) : refus listés, photo refusée, jamais renvoyée', async ({
+		page,
+		context,
+		request
+	}) => {
+		test.setTimeout(3 * 60_000);
+		const agency = await freshAgency(request, `Agence règle 12 ${newId().slice(-6)}`);
+		// Le bien est déjà géré par un mandat sans photos ; un second mandat de gestion, avec photos, ne peut pas le couvrir.
+		const { propertyId, mandates } = await setup(request, agency, [false, true], true);
+		await signInWith(page, agency.director, `/app/biens/assistant?bien=${propertyId}&etape=4`);
+		await synced(page);
+		const gallery = page.getByTestId('galerie-unite');
+		await expect(gallery.getByTestId('galerie-unite-refus')).toHaveText(/n’autorise pas les photos/);
+
+		await context.setOffline(true);
+		await expect(page.getByTestId('etat-synchro')).toHaveAttribute('data-etat', 'offline');
+		const attach = page.getByTestId('rattacher-mandat');
+		await attach.getByLabel('Mandat qui autorise les photos').selectOption({ index: 1 });
+		await attach.getByRole('button', { name: 'Rattacher et débloquer les photos' }).click();
+		await expect(gallery.getByTestId('galerie-unite-ajouter')).toBeEnabled();
+		await gallery.getByTestId('galerie-unite-fichier').setInputFiles(files(1));
+		await expect(gallery.getByTestId('galerie-unite-photo')).toHaveCount(1);
+
+		// Reconnexion : la portée est refusée (règle 12), puis la photo (aucun mandat ne l'autorise) ; les deux refus sont
+		// gardés avec leur raison, la photo disparaît et ne repart pas.
+		const uploads: string[] = [];
+		page.on('request', (r) => {
+			if (/\/media\/[0-9a-f-]+\/upload-url$/.test(r.url())) uploads.push(r.url());
+		});
+		await context.setOffline(false);
+		await expect(page.getByTestId('refus-notification')).toBeVisible({ timeout: 30_000 });
+		await expect(gallery.getByTestId('galerie-unite-photo')).toHaveCount(0, { timeout: 30_000 });
+		await expect(gallery.getByTestId('galerie-unite-ajouter')).toBeDisabled();
+		await page.goto('/app/modifications-non-acceptees');
+		await expect(page.locator('[data-testid="refus"][data-code="UNIT_ALREADY_MANAGED"]')).toHaveCount(1);
+		await expect(page.locator('[data-testid="refus"][data-code="PHOTOS_NOT_AUTHORIZED"]')).toHaveCount(1);
+		await expect(page.getByTestId('refus').filter({ hasText: 'Rattachement d’un bien à un mandat' })).toHaveCount(1);
+		await expect(page.getByTestId('refus').filter({ hasText: 'Photo' })).toHaveCount(1);
+		// La file d'envoi ne renvoie pas la photo refusée.
+		const seen = uploads.length;
+		await page.waitForTimeout(12_000);
+		expect(uploads.length).toBe(seen);
+		// Côté serveur : le second mandat ne couvre rien.
+		const token = await login(request, agency.director.phone, agency.director.password);
+		const scopes = await request.get(`${API_URL}/mandates/${mandates[1]}/scopes`, {
+			headers: { Authorization: `Bearer ${token}`, 'X-Organization-Id': agency.id }
+		});
+		expect(await scopes.json()).toEqual([]);
+		await expectNoHorizontalOverflow(page, 'Modifications non acceptées (téléphone)');
+	});
+});
+
 test.describe('Agent de terrain : ses unités affectées seulement', () => {
 	test.use(phone);
 

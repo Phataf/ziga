@@ -754,6 +754,15 @@ export const fr = {
 			finishDraft: 'Terminer (garder en brouillon)',
 			draftSaved: 'Brouillon enregistré à chaque étape : vous pouvez reprendre plus tard depuis la fiche du bien.',
 			documentsOnline: 'Les documents privés s’envoient en ligne seulement. Vous pourrez les ajouter depuis la fiche du bien.',
+			attachTitle: 'Rattacher ce bien à un mandat',
+			attachHint:
+				'Les photos exigent un mandat en vigueur qui les autorise. Choisissez-le : le rattachement est enregistré sur l’appareil et vérifié par le serveur.',
+			attachChoose: 'Mandat qui autorise les photos',
+			attachPlaceholder: 'Choisir un mandat',
+			attachSubmit: 'Rattacher et débloquer les photos',
+			attachNone:
+				'Aucun mandat en vigueur de ce propriétaire n’autorise les photos. Modifiez son mandat depuis sa fiche, ou ajoutez les photos plus tard depuis la fiche du bien.',
+			attachOwner: 'Ouvrir la fiche du propriétaire',
 			done: 'Bien créé.'
 		}
 	},
@@ -838,7 +847,11 @@ export const fr = {
 			organizations: 'Paramètres de l’organisation',
 			organization_representatives: 'Représentant légal',
 			owners: 'Fiche propriétaire',
-			mandates: 'Mandat'
+			mandates: 'Mandat',
+			mandate_scopes: 'Rattachement d’un bien à un mandat',
+			properties: 'Bien',
+			units: 'Unité',
+			media: 'Photo'
 		} as Record<string, string>,
 		columns: {
 			legal_name: 'Raison sociale',

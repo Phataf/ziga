@@ -8,7 +8,7 @@
 	 * Téléphone : une étape par écran ; tablette et ordinateur : étapes à gauche, formulaire à droite.
 	 */
 	import { onMount } from 'svelte';
-	import { ArrowLeft, Check, CheckCircle2, LocateFixed, Plus, Save, X } from '@lucide/svelte';
+	import { ArrowLeft, Check, CheckCircle2, Link2, LocateFixed, Plus, Save, UserRound, X } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
@@ -49,7 +49,7 @@
 	import { galleryOf, photoBlock, toScope, suggestLabels, toDocument, toMedia, toProperty, toUnit } from '#lib/properties/views.ts';
 	import { GEOGRAPHY_QUERIES, LOCAL_QUERIES } from '#lib/sync/queries.ts';
 	import { sync } from '#lib/sync/sync.svelte.ts';
-	import { createProperty, createUnits, saveProperty, setRecordStatus } from '#lib/sync/writes.ts';
+	import { attachMandate, createProperty, createUnits, saveProperty, setRecordStatus } from '#lib/sync/writes.ts';
 
 	const t = fr.properties;
 	const w = t.wizard;
@@ -172,6 +172,29 @@
 	/** Raison du refus des photos (mandat), même règle que le serveur ; null si elles sont permises. */
 	const blockOf = (unitId: string | null) =>
 		property ? photoBlock({ propertyId: property.id, unitId }, scopes, mandates, { landlord, today }) : null;
+	/** Photos bloquées sur le bien ou sur l'une de ses unités : l'étape propose de rattacher le bien à un mandat. */
+	const photosBlocked = $derived(!!property && (blockOf(null) !== null || units.some((u) => blockOf(u.id) !== null)));
+	/** Mandats en vigueur du propriétaire qui autorisent les photos et ne couvrent pas déjà le bien. */
+	const photoMandates = $derived(
+		mandates.filter(
+			(m) =>
+				m.ownerId === property?.ownerId &&
+				m.canTakePhotos &&
+				effectiveMandateStatus(m, today) === 'active' &&
+				!scopes.some((sc) => sc.mandateId === m.id && sc.unitId === null)
+		)
+	);
+	let attachId = $state('');
+
+	async function attach(event: SubmitEvent) {
+		event.preventDefault();
+		const org = organizations.activeId;
+		if (!org || !property || !attachId) return;
+		await run(async () => {
+			await attachMandate(await db(), org, property!.id, attachId);
+			attachId = '';
+		});
+	}
 	const communeNeighborhoods = $derived(neighborhoods.filter((n) => n.communeId === communeId));
 
 	async function db() {
@@ -526,6 +549,32 @@
 				{:else if step === 4 && property}
 					<div class="space-y-4" data-testid="etape-4">
 						{#if photoQueue.count}<FormAlert message={fr.photos.offlineQueue(photoQueue.count)} tone="info" />{/if}
+						{#if photosBlocked && !landlord}
+							<section class="space-y-3 rounded-2xl border border-warning bg-warning-soft p-4 md:p-6" data-testid="rattacher-mandat">
+								<h2 class="text-lg font-semibold">{w.attachTitle}</h2>
+								{#if photoMandates.length}
+									<p class="text-base">{w.attachHint}</p>
+									<form class="space-y-3" onsubmit={attach} novalidate>
+										<div class={field}>
+											<label for="mandat-photos" class={labelClass}>{w.attachChoose}</label>
+											<select id="mandat-photos" bind:value={attachId} class={select}>
+												<option value="">{w.attachPlaceholder}</option>
+												{#each photoMandates as m (m.id)}<option value={m.id}>{fr.mandates.types[m.type]} · {m.startsOn}</option>{/each}
+											</select>
+										</div>
+										<Button type="submit" disabled={busy || !attachId}><Link2 aria-hidden="true" />{w.attachSubmit}</Button>
+									</form>
+								{:else}
+									<p class="text-base">{w.attachNone}</p>
+									<div class="flex flex-wrap gap-2">
+										<Button variant="outline" href={resolve('/app/proprietaires/[id]', { id: property.ownerId })}
+											><UserRound aria-hidden="true" />{w.attachOwner}</Button
+										>
+										<Button variant="outline" onclick={() => go(5)}>{w.skip}</Button>
+									</div>
+								{/if}
+							</section>
+						{/if}
 						{#each units as u (u.id)}
 							<section class="rounded-2xl border bg-card p-4 md:p-6">
 								<PhotoGallery
