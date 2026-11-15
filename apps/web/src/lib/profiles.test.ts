@@ -41,7 +41,7 @@ describe('navigation par profil (docs/UX.md §2)', () => {
 
 	it('« Plus » n’apparaît que sur téléphone et rassemble les entrées sans onglet', () => {
 		expect(menuOf(profiles.manager).some((i) => i.phoneOnly)).toBe(false);
-		expect(moreOf(profiles.manager).map((i) => i.label)).toEqual(['Impayés', 'Propriétaires', 'À valider', 'Équipe']);
+		expect(moreOf(profiles.manager).map((i) => i.label)).toEqual(['Impayés', 'Propriétaires', 'Locataires', 'À valider', 'Équipe']);
 	});
 
 	it('trouve l’entrée active par le plus long préfixe', () => {

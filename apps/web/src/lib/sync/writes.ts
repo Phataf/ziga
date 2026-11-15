@@ -9,6 +9,16 @@ import type { UpdateOrganizationOutput as OrganizationSettings } from '@ziga/sha
 import { newId } from '@ziga/shared/ids';
 import { commissionColumns, type CreateMandateData, type MandateTerms, type OwnerData } from '@ziga/shared/owners';
 import type {
+	CreateDepositAccountData,
+	CreateLeaseData,
+	CreateTenantData,
+	DepositHolderChangeData,
+	DepositReceiptData,
+	LeaseTerms,
+	TenantData,
+	TenantIdentity
+} from '@ziga/shared/leases';
+import type {
 	CreateMediaData,
 	CreatePropertyData,
 	CreateUnitData,
@@ -336,5 +346,238 @@ export async function removeMedia(db: PowerSyncDatabase, organizationId: string,
 export async function attachMandate(db: PowerSyncDatabase, organizationId: string, propertyId: string, mandateId: string): Promise<void> {
 	await db.writeTransaction((tx) =>
 		insert(tx, 'mandate_scopes', { id: newId(), organization_id: organizationId, mandate_id: mandateId, property_id: propertyId })
+	);
+}
+
+// ---------------------------------------------------------------- lot 08 : locataires, baux, cautions
+
+/**
+ * Colonnes d'un locataire. L'état civil et la pièce d'identité vont dans `tenant_identities` (stream réservé au
+ * directeur et au gestionnaire) : deux tables locales, donc deux opérations, comme l'organisation et son représentant.
+ */
+function tenantColumns(t: TenantData) {
+	return {
+		civility: t.civility,
+		full_name: t.fullName,
+		phone: t.phone,
+		secondary_phone: t.secondaryPhone,
+		nationality: t.nationality,
+		profession: t.profession,
+		previous_address: t.previousAddress,
+		emergency_contact_name: t.emergencyContactName,
+		emergency_contact_phone: t.emergencyContactPhone,
+		notes: t.notes
+	};
+}
+
+function identityColumns(i: TenantIdentity) {
+	return {
+		birth_date: i.birthDate,
+		birth_place: i.birthPlace,
+		id_type: i.idType,
+		id_type_other: i.idTypeOther,
+		id_number: i.idNumber,
+		id_issued_on: i.idIssuedOn,
+		id_issued_by: i.idIssuedBy
+	};
+}
+
+/** Conditions et paramètres du bail (D24), tels que le serveur les acceptera ; jamais d'occupation. */
+function leaseTermColumns(t: Omit<LeaseTerms, 'billingMode'> & { billingMode?: LeaseTerms['billingMode'] }) {
+	return {
+		starts_on: t.startsOn,
+		ends_on: t.endsOn,
+		duration_months: t.durationMonths,
+		dues_start_on: t.duesStartOn,
+		rent: t.rent,
+		charges: t.charges,
+		periodicity: t.periodicity,
+		due_day: t.dueDay,
+		...(t.billingMode ? { billing_mode: t.billingMode } : {}),
+		advance_months: t.advanceMonths,
+		lessor_type: t.lessorType,
+		payment_terms: t.paymentTerms,
+		penalty_rate_bp: t.penaltyRateBp,
+		penalty_grace_days: t.penaltyGraceDays,
+		penalty_beneficiary: t.penaltyBeneficiary,
+		notice_tenant_fixed_term_months: t.noticeTenantFixedTermMonths,
+		notice_tenant_open_ended_months: t.noticeTenantOpenEndedMonths,
+		notice_lessor_fixed_term_months: t.noticeLessorFixedTermMonths,
+		notice_lessor_open_ended_months: t.noticeLessorOpenEndedMonths,
+		reduced_notice_months: t.reducedNoticeMonths,
+		reduced_notice_cases: t.reducedNoticeCases,
+		early_termination_indemnity_months: t.earlyTerminationIndemnityMonths,
+		renewal_mode: t.renewalMode,
+		deposit_refund_days: t.depositRefundDays
+	};
+}
+
+/** Nouveau locataire (et son état civil, s'il est saisi), dans une seule transaction locale. */
+export async function createTenant(
+	db: PowerSyncDatabase,
+	organizationId: string,
+	tenant: CreateTenantData,
+	identity: TenantIdentity | null
+): Promise<void> {
+	await db.writeTransaction(async (tx) => {
+		await insert(tx, 'tenants', { id: tenant.id, organization_id: organizationId, ...tenantColumns(tenant), status: 'active' });
+		if (identity && Object.values(identity).some((v) => v !== null)) {
+			await insert(tx, 'tenant_identities', { id: tenant.id, organization_id: organizationId, ...identityColumns(identity) });
+		}
+	});
+}
+
+export async function saveTenant(db: PowerSyncDatabase, organizationId: string, id: string, tenant: TenantData): Promise<void> {
+	await db.writeTransaction((tx) => update(tx, 'tenants', id, organizationId, tenantColumns(tenant)));
+}
+
+/** État civil : la ligne existe si elle a été reçue (directeur, gestionnaire) ; sinon elle est créée. */
+export async function saveTenantIdentity(
+	db: PowerSyncDatabase,
+	organizationId: string,
+	id: string,
+	identity: TenantIdentity,
+	exists: boolean
+): Promise<void> {
+	await db.writeTransaction((tx) =>
+		exists
+			? update(tx, 'tenant_identities', id, organizationId, identityColumns(identity))
+			: insert(tx, 'tenant_identities', { id, organization_id: organizationId, ...identityColumns(identity) })
+	);
+}
+
+/**
+ * Bail en brouillon, créé sur l'appareil (assistant, étape des conditions). Le découpage est celui choisi dans
+ * l'assistant (recopié du réglage de l'organisation) ; le serveur le figera à la validation.
+ */
+export async function createLeaseDraft(
+	db: PowerSyncDatabase,
+	organizationId: string,
+	lease: CreateLeaseData & { billingMode: LeaseTerms['billingMode'] }
+): Promise<void> {
+	await db.writeTransaction((tx) =>
+		insert(tx, 'leases', {
+			id: lease.id,
+			organization_id: organizationId,
+			unit_id: lease.unitId,
+			tenant_id: lease.tenantId,
+			...leaseTermColumns(lease),
+			status: 'draft',
+			version: 1
+		})
+	);
+}
+
+/** Conditions d'un brouillon modifiées (seules les colonnes changées partent). */
+export async function saveLeaseDraft(
+	db: PowerSyncDatabase,
+	organizationId: string,
+	id: string,
+	terms: LeaseTerms,
+	tenantId?: string
+): Promise<void> {
+	await db.writeTransaction((tx) =>
+		update(tx, 'leases', id, organizationId, { ...leaseTermColumns(terms), ...(tenantId ? { tenant_id: tenantId } : {}) })
+	);
+}
+
+/**
+ * Demande de validation : l'appareil montre le statut attendu (signé à venir, ou en vigueur) ; le serveur décide,
+ * vérifie les garde-fous et génère les échéances. Refusée (unité déjà louée…), elle arrive dans « Modifications non
+ * acceptées » et le bail redevient un brouillon sur l'appareil.
+ */
+export async function requestLeaseValidation(
+	db: PowerSyncDatabase,
+	organizationId: string,
+	id: string,
+	startsOn: string,
+	today: string
+): Promise<void> {
+	await db.writeTransaction((tx) => update(tx, 'leases', id, organizationId, { status: startsOn > today ? 'signed' : 'active' }));
+}
+
+export async function cancelLease(db: PowerSyncDatabase, organizationId: string, id: string, reason: string): Promise<void> {
+	await db.writeTransaction((tx) => update(tx, 'leases', id, organizationId, { status: 'cancelled', cancellation_reason: reason }));
+}
+
+/** Changement de loyer : la version envoyée est la suivante ; celle d'avant est la version attendue par le serveur. */
+export async function changeRent(
+	db: PowerSyncDatabase,
+	organizationId: string,
+	id: string,
+	change: { rent: number; charges: number; effectiveFrom: string; currentVersion: number }
+): Promise<void> {
+	await db.writeTransaction((tx) =>
+		update(tx, 'leases', id, organizationId, {
+			rent: change.rent,
+			charges: change.charges,
+			rent_effective_from: change.effectiveFrom,
+			version: change.currentVersion + 1
+		})
+	);
+}
+
+/** Compte de caution (ou de garantie des factures) : détenteur obligatoire ; statut calculé par le serveur. */
+export async function createDepositAccount(db: PowerSyncDatabase, organizationId: string, a: CreateDepositAccountData): Promise<void> {
+	await db.writeTransaction((tx) =>
+		insert(tx, 'deposit_accounts', {
+			id: a.id,
+			organization_id: organizationId,
+			lease_id: a.leaseId,
+			type: a.type,
+			agreed_amount: a.agreedAmount,
+			agreed_months: a.agreedMonths,
+			holder: a.holder,
+			status: 'pending'
+		})
+	);
+}
+
+/** Montant convenu, tant que le bail est un brouillon. */
+export async function saveDepositAgreed(
+	db: PowerSyncDatabase,
+	organizationId: string,
+	id: string,
+	agreedAmount: number,
+	agreedMonths: number | null
+): Promise<void> {
+	await db.writeTransaction((tx) =>
+		update(tx, 'deposit_accounts', id, organizationId, { agreed_amount: agreedAmount, agreed_months: agreedMonths })
+	);
+}
+
+/** Versement reçu : un mouvement en ajout seul. */
+export async function recordDepositReceipt(db: PowerSyncDatabase, organizationId: string, r: DepositReceiptData): Promise<void> {
+	await db.writeTransaction((tx) =>
+		insert(tx, 'deposit_movements', {
+			id: r.id,
+			organization_id: organizationId,
+			account_id: r.accountId,
+			type: 'received',
+			amount: r.amount,
+			occurred_on: r.occurredOn,
+			reason: r.reason
+		})
+	);
+}
+
+/** Changement de détenteur : un mouvement motivé, jamais une modification du compte. */
+export async function changeDepositHolder(
+	db: PowerSyncDatabase,
+	organizationId: string,
+	c: DepositHolderChangeData & { previousHolder: 'organization' | 'owner' }
+): Promise<void> {
+	await db.writeTransaction((tx) =>
+		insert(tx, 'deposit_movements', {
+			id: c.id,
+			organization_id: organizationId,
+			account_id: c.accountId,
+			type: 'holder_changed',
+			amount: 0,
+			previous_holder: c.previousHolder,
+			new_holder: c.newHolder,
+			occurred_on: c.occurredOn,
+			reason: c.reason
+		})
 	);
 }

@@ -4,6 +4,8 @@
 	 * (type et taille), envoi direct au stockage, puis le serveur contrôle le fichier et calcule son empreinte.
 	 * Consultation : un lien signé de 5 minutes, journalisé. La liste vient des métadonnées synchronisées, que seuls la
 	 * direction et la gestion reçoivent (matrice par type ; un document restreint, le directeur seul).
+	 * Lot 08 : avec `leaseId`, documents du bail : bail signé scanné (rattaché au bail) et pièce d'identité du locataire
+	 * (rattachée au locataire).
 	 */
 	import { ExternalLink, FileUp } from '@lucide/svelte';
 	import { formatDate } from '@ziga/shared/dates';
@@ -20,17 +22,43 @@
 	import { organizations } from '#lib/org/organizations.svelte.ts';
 	import { sync } from '#lib/sync/sync.svelte.ts';
 
-	let { propertyId, ownerId, documents }: { propertyId: string; ownerId: string; documents: DocumentView[] } = $props();
+	let {
+		propertyId = null,
+		ownerId = null,
+		leaseId = null,
+		tenantId = null,
+		documents,
+		disabled = false
+	}: {
+		propertyId?: string | null;
+		ownerId?: string | null;
+		leaseId?: string | null;
+		tenantId?: string | null;
+		documents: DocumentView[];
+		/** Dépôt impossible pour l'instant (bail pas encore synchronisé). */
+		disabled?: boolean;
+	} = $props();
 
 	const t = fr.documents;
 	// Le bail scanné et la pièce du locataire se déposent depuis le bail ou la fiche du locataire (lot 08).
 	const PROPERTY_DOCUMENT_TYPES = DOCUMENT_TYPES.filter((d) => !(LEASE_DOCUMENT_TYPES as readonly DocumentType[]).includes(d));
+	const TYPES = $derived<readonly DocumentType[]>(leaseId ? LEASE_DOCUMENT_TYPES : PROPERTY_DOCUMENT_TYPES);
 	const role = $derived(organizations.active?.role);
 	const canUpload = $derived(can(role, 'document.upload'));
 	const canRestrict = $derived(can(role, 'document.restrict'));
 	const select = 'min-h-12 w-full rounded-lg border-2 border-input bg-card px-3 text-base';
 
-	let type = $state<DocumentType>('title_deed');
+	let chosen = $state<DocumentType | null>(null);
+	/** Type choisi, ou le premier proposé (bail scanné pour un bail, titre foncier pour un bien). */
+	const type = $derived<DocumentType>(chosen ?? TYPES[0]!);
+
+	/** Objets liés du document, selon son type. */
+	function subjectOf(t: DocumentType) {
+		if (t === 'signed_lease_scan') return { leaseId };
+		if (t === 'tenant_identity') return { tenantId };
+		// Pièce d'identité du propriétaire : rattachée à sa fiche ; les autres pièces, au bien.
+		return { ownerId: t === 'owner_identity' ? ownerId : null, propertyId };
+	}
 	let restricted = $state(false);
 	let file = $state<File | null>(null);
 	let message = $state<string | null>(null);
@@ -52,9 +80,7 @@
 				{
 					id: newId(),
 					type,
-					// Pièce d'identité du propriétaire : rattachée à sa fiche ; les autres pièces, au bien.
-					ownerId: type === 'owner_identity' ? ownerId : null,
-					propertyId,
+					...subjectOf(type),
 					fileName: file.name,
 					mimeType: file.type,
 					byteSize: file.size,
@@ -120,8 +146,13 @@
 			<h3 class="font-semibold">{t.add}</h3>
 			<div class="space-y-1">
 				<label for="document-type" class="block font-medium">{t.type}</label>
-				<select id="document-type" bind:value={type} class={select}>
-					{#each PROPERTY_DOCUMENT_TYPES as d (d)}<option value={d}>{t.types[d]}</option>{/each}
+				<select
+					id="document-type"
+					value={type}
+					onchange={(e) => (chosen = (e.currentTarget as HTMLSelectElement).value as DocumentType)}
+					class={select}
+				>
+					{#each TYPES as d (d)}<option value={d}>{t.types[d]}</option>{/each}
 				</select>
 			</div>
 			<div class="space-y-1">
@@ -135,7 +166,9 @@
 				/>
 			</div>
 			{#if canRestrict}<CheckField bind:checked={restricted} label={t.restricted} />{/if}
-			<Button type="submit" disabled={busy || !file || !sync.online}><FileUp aria-hidden="true" />{busy ? t.sending : t.send}</Button>
+			<Button type="submit" disabled={busy || !file || !sync.online || disabled}
+				><FileUp aria-hidden="true" />{busy ? t.sending : t.send}</Button
+			>
 		</form>
 	{/if}
 </section>

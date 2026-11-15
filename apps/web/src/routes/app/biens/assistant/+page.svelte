@@ -141,7 +141,7 @@
 				property = rows[0] ? toProperty(rows[0]) : null;
 				if (property && !filled) fill(property);
 			}),
-			sync.watch<Record<string, unknown>>(LOCAL_QUERIES.propertyUnits, [org, id], (rows) => (units = rows.map(toUnit))),
+			sync.watch<Record<string, unknown>>(LOCAL_QUERIES.propertyUnits, [org, id], (rows) => (units = rows.map((r) => toUnit(r)))),
 			sync.watch<Record<string, unknown>>(LOCAL_QUERIES.propertyMedia, [org, id], (rows) => (media = rows.map(toMedia))),
 			sync.watch<Record<string, unknown>>(LOCAL_QUERIES.propertyAllScopes, [org, id], (rows) => (scopes = rows.map(toScope)))
 		];

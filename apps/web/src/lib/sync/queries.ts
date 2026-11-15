@@ -1,4 +1,11 @@
 /**
+ * Signaux d'occupation des baux d'une unité (lot 08, règle 13) : l'occupation n'est jamais stockée, elle se calcule
+ * sur l'appareil à partir de ces baux (packages/shared, unitOccupancy), comme sur le serveur.
+ */
+const LEASE_SIGNALS = `(SELECT json_group_array(json_object('status', l.status, 'starts_on', l.starts_on)) FROM leases l
+		WHERE l.organization_id = u.organization_id AND l.unit_id = u.id AND l.status IN ('signed', 'active', 'notice')) AS lease_signals`;
+
+/**
  * Lectures locales des écrans (lot 05). Chaque requête d'une table d'organisation prend l'organisation active en
  * premier paramètre et filtre dessus : un écran de gestion n'affiche jamais deux organisations (CLAUDE.md §4, D17).
  * Vérifié par queries.test.ts.
@@ -31,8 +38,10 @@ export const LOCAL_QUERIES = {
 	properties: `SELECT * FROM properties WHERE organization_id = ? ORDER BY name COLLATE NOCASE, id`,
 	property: `SELECT * FROM properties WHERE organization_id = ? AND id = ?`,
 	/** Unités de l'organisation (liste, filtres), puis celles d'un bien. */
-	units: `SELECT * FROM units WHERE organization_id = ? ORDER BY label COLLATE NOCASE, id`,
-	propertyUnits: `SELECT * FROM units WHERE organization_id = ? AND property_id = ? ORDER BY label COLLATE NOCASE, id`,
+	units: `SELECT u.*, ${LEASE_SIGNALS} FROM units u WHERE u.organization_id = ? ORDER BY u.label COLLATE NOCASE, u.id`,
+	propertyUnits: `SELECT u.*, ${LEASE_SIGNALS} FROM units u WHERE u.organization_id = ? AND u.property_id = ? ORDER BY u.label COLLATE NOCASE, u.id`,
+	/** Lot 08 : une unité, avec les signaux de ses baux (assistant de bail). */
+	unit: `SELECT u.*, ${LEASE_SIGNALS} FROM units u WHERE u.organization_id = ? AND u.id = ?`,
 	/** Photos d'un bien et de ses unités (les retirées ne descendent pas). */
 	propertyMedia: `SELECT * FROM media WHERE organization_id = ? AND property_id = ? ORDER BY position, created_at, id`,
 	/** Toutes les portées d'un bien (le bien entier et ses unités) : autorisation des photos. */
@@ -43,6 +52,28 @@ export const LOCAL_QUERIES = {
 	fieldAgents: `SELECT * FROM organization_members WHERE organization_id = ? AND status = 'active' AND role = 'field_agent' ORDER BY display_name`,
 	/** Métadonnées des documents privés d'un bien (direction et gestion seulement : les autres n'en reçoivent pas). */
 	propertyDocuments: `SELECT * FROM documents WHERE organization_id = ? AND property_id = ? ORDER BY type, version DESC, id`,
+	/** Lot 08 : locataires de l'organisation (l'agent de terrain ne reçoit que ceux des baux de ses unités). */
+	tenants: `SELECT * FROM tenants WHERE organization_id = ? ORDER BY full_name COLLATE NOCASE, id`,
+	tenant: `SELECT * FROM tenants WHERE organization_id = ? AND id = ?`,
+	/** État civil (directeur et gestionnaire seulement : les autres rôles n'en reçoivent aucune ligne). */
+	tenantIdentity: `SELECT * FROM tenant_identities WHERE organization_id = ? AND id = ?`,
+	leases: `SELECT * FROM leases WHERE organization_id = ? ORDER BY starts_on DESC, id DESC`,
+	lease: `SELECT * FROM leases WHERE organization_id = ? AND id = ?`,
+	unitLeases: `SELECT * FROM leases WHERE organization_id = ? AND unit_id = ? ORDER BY starts_on DESC, id DESC`,
+	tenantLeases: `SELECT * FROM leases WHERE organization_id = ? AND tenant_id = ? ORDER BY starts_on DESC, id DESC`,
+	leaseVersions: `SELECT * FROM lease_versions WHERE organization_id = ? AND lease_id = ? ORDER BY version DESC`,
+	leaseDues: `SELECT * FROM rent_dues WHERE organization_id = ? AND lease_id = ? ORDER BY period_start, id`,
+	/** Échéances des baux d'un locataire (reste à payer de sa fiche). */
+	tenantDues: `SELECT d.* FROM rent_dues d JOIN leases l ON l.id = d.lease_id WHERE d.organization_id = ? AND l.tenant_id = ?`,
+	/** Échéances de toute l'organisation : encours des locataires (liste). */
+	dues: `SELECT lease_id, due_on, amount_due, amount_paid, status FROM rent_dues WHERE organization_id = ?`,
+	leaseDeposits: `SELECT * FROM deposit_accounts WHERE organization_id = ? AND lease_id = ? ORDER BY type, id`,
+	leaseMovements: `SELECT m.* FROM deposit_movements m JOIN deposit_accounts a ON a.id = m.account_id
+		WHERE m.organization_id = ? AND a.lease_id = ? ORDER BY m.occurred_on, m.id`,
+	/** Documents du bail et de son locataire (métadonnées ; direction et gestion seulement). */
+	leaseDocuments: `SELECT * FROM documents WHERE organization_id = ? AND (lease_id = ? OR tenant_id = ?) ORDER BY type, version DESC, id`,
+	/** Baux qui ont un bail signé scanné en vigueur (alerte « Contrat non signé »). */
+	signedScans: `SELECT DISTINCT lease_id FROM documents WHERE organization_id = ? AND type = 'signed_lease_scan' AND status = 'active'`,
 	/** Modifications refusées par le serveur (table locale de l'appareil), de l'organisation, les plus récentes d'abord. */
 	rejections: `SELECT * FROM sync_rejections WHERE organization_id = ? ORDER BY rejected_at DESC, id DESC`,
 	rejectionCount: `SELECT count(*) AS n FROM sync_rejections WHERE organization_id = ?`

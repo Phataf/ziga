@@ -21,6 +21,7 @@
 	import PhoneField from '#lib/components/auth/PhoneField.svelte';
 	import FeaturesSection from '#lib/components/org/FeaturesSection.svelte';
 	import PaymentMethodsSection from '#lib/components/org/PaymentMethodsSection.svelte';
+	import BillingModeSection from '#lib/components/org/BillingModeSection.svelte';
 	import ReceiptHeader from '#lib/components/org/ReceiptHeader.svelte';
 	import SubscriptionSection from '#lib/components/org/SubscriptionSection.svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
@@ -370,6 +371,7 @@
 		<div class="grid grid-cols-1 gap-4 xl:grid-cols-2 xl:items-start">
 			<div class="space-y-4">
 				<PaymentMethodsSection bind:view {editable} />
+				<BillingModeSection bind:view {editable} />
 				<SubscriptionSection />
 			</div>
 			<FeaturesSection {editable} />

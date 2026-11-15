@@ -7,7 +7,6 @@ import {
 	isAvailable,
 	MEDIA_VARIANT_SIZES,
 	mediaVariantPath,
-	occupancyOf,
 	type MediaStatus,
 	type MediaVariantSize,
 	type MediaView,
@@ -18,7 +17,9 @@ import {
 } from '@ziga/shared/properties';
 import type { DocumentView } from '@ziga/shared/documents';
 import { PHOTO_DENIAL_MESSAGES, photoAuthorization, type MandateView, type PhotoScope } from '@ziga/shared/owners';
+import { toIsoDate } from '@ziga/shared/dates';
 import { fr } from '../i18n/fr';
+import { occupancyFromSignals } from '../leases/views';
 
 type Row = Record<string, unknown>;
 
@@ -61,9 +62,9 @@ export function toProperty(r: Row): PropertyView {
 	};
 }
 
-export function toUnit(r: Row): UnitView {
-	// Au lot 07, aucun bail : l'occupation calculée est « libre » (lot 08 : signaux des baux de l'unité).
-	const occupancy = occupancyOf([]);
+/** Unité ; l'occupation se calcule à partir des signaux de ses baux (colonne `lease_signals` des requêtes, lot 08). */
+export function toUnit(r: Row, today: string = toIsoDate()): UnitView {
+	const occupancy = occupancyFromSignals(r.lease_signals, today);
 	const recordStatus = (str(r.record_status) ?? 'draft') as UnitView['recordStatus'];
 	const technicalStatus = (str(r.technical_status) ?? 'ready') as TechnicalStatus;
 	return {

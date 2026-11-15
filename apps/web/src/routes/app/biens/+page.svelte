@@ -47,7 +47,7 @@
 		const onError = (error: Error) => (message = messageOf(error));
 		const stops = [
 			sync.watch<Record<string, unknown>>(LOCAL_QUERIES.properties, [id], (rows) => (properties = rows.map(toProperty)), onError),
-			sync.watch<Record<string, unknown>>(LOCAL_QUERIES.units, [id], (rows) => (units = rows.map(toUnit)), onError),
+			sync.watch<Record<string, unknown>>(LOCAL_QUERIES.units, [id], (rows) => (units = rows.map((r) => toUnit(r))), onError),
 			sync.watch<Record<string, unknown>>(LOCAL_QUERIES.owners, [id], (rows) => (owners = rows.map(toOwner)), onError),
 			sync.watch<Record<string, unknown>>(
 				GEOGRAPHY_QUERIES.neighborhoods,

@@ -6,7 +6,7 @@
 	 * terrain ne voit que ses unités affectées et n'y change que l'état technique et les photos.
 	 */
 	import { onMount } from 'svelte';
-	import { Archive, CheckCircle2, MapPin, Pencil, Wrench } from '@lucide/svelte';
+	import { Archive, CheckCircle2, KeyRound, MapPin, Pencil, Plus, Wrench } from '@lucide/svelte';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { formatDate, toIsoDate } from '@ziga/shared/dates';
@@ -33,6 +33,8 @@
 	import { messageOf } from '#lib/auth/forms.ts';
 	import { fr } from '#lib/i18n/fr.ts';
 	import { organizations } from '#lib/org/organizations.svelte.ts';
+	import { toLease } from '#lib/leases/views.ts';
+	import type { LeaseView } from '@ziga/shared/leases';
 	import { toMandate, toOwner } from '#lib/owners/views.ts';
 	import { galleryOf, photoBlock, toScope, toDocument, toMedia, toProperty, toUnit, unitDimensions } from '#lib/properties/views.ts';
 	import { photoQueue } from '#lib/properties/photo-queue.svelte.ts';
@@ -63,6 +65,17 @@
 	let message = $state<string | null>(null);
 	let scopes = $state<PhotoScope[]>([]);
 	let mandates = $state<MandateView[]>([]);
+	let leases = $state<LeaseView[]>([]);
+	/** Bail de l'unité à montrer : en vigueur ou en préavis, puis à venir, puis brouillon. */
+	const leaseOf = (unitId: string) => {
+		const mine = leases.filter((l) => l.unitId === unitId);
+		return (
+			mine.find((l) => l.status === 'active' || l.status === 'notice') ??
+			mine.find((l) => l.status === 'signed') ??
+			mine.find((l) => l.status === 'draft') ??
+			null
+		);
+	};
 	const today = toIsoDate();
 	/** Raison du refus des photos (mandat), même règle que le serveur ; null si elles sont permises. */
 	const blockOf = (unitId: string | null) =>
@@ -90,10 +103,12 @@
 				},
 				onError
 			),
-			sync.watch<Record<string, unknown>>(LOCAL_QUERIES.propertyUnits, [org, id], (rows) => (units = rows.map(toUnit)), onError),
+			sync.watch<Record<string, unknown>>(LOCAL_QUERIES.propertyUnits, [org, id], (rows) => (units = rows.map((r) => toUnit(r))), onError),
 			sync.watch<Record<string, unknown>>(LOCAL_QUERIES.propertyMedia, [org, id], (rows) => (media = rows.map(toMedia)), onError),
 			sync.watch<Record<string, unknown>>(LOCAL_QUERIES.propertyAllScopes, [org, id], (rows) => (scopes = rows.map(toScope)), onError),
 			sync.watch<Record<string, unknown>>(LOCAL_QUERIES.mandates, [org], (rows) => (mandates = rows.map(toMandate)), onError),
+			// Lot 08 : baux de l'organisation (bail de chaque unité, « Créer un bail » sur une unité disponible).
+			sync.watch<Record<string, unknown>>(LOCAL_QUERIES.leases, [org], (rows) => (leases = rows.map((r) => toLease(r))), onError),
 			sync.watch<Record<string, unknown>>(
 				LOCAL_QUERIES.fieldAgents,
 				[org],
@@ -263,6 +278,17 @@
 								{/if}
 							</div>
 							<div class="flex flex-wrap gap-2">
+								{#if leaseOf(u.id)}
+									{@const l = leaseOf(u.id)!}
+									<Button variant="outline" href={resolve('/app/baux/[id]', { id: l.id })} data-testid="voir-bail"
+										><KeyRound aria-hidden="true" />{fr.leases.title} · {fr.leases.status[l.status]}</Button
+									>
+								{/if}
+								{#if u.available && can(role, 'lease.create')}
+									<Button href={resolve(`/app/baux/assistant?unite=${u.id}`)} data-testid="creer-bail"
+										><Plus aria-hidden="true" />{fr.leases.newLease}</Button
+									>
+								{/if}
 								{#if canStatus}
 									<Button variant="outline" onclick={() => openTechnical(u)}><Wrench aria-hidden="true" />{t.changeTechnical}</Button>
 								{/if}
