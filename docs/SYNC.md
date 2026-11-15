@@ -58,13 +58,13 @@ Dans l'ordre, dans le lot qui crée la table :
 | `media` | 07 | photos, sans l'original (`storage_key`) ; les photos retirées ne descendent plus | annonce hors ligne (le fichier part ensuite par l’URL présignée, en ligne), légende, ordre, retrait |
 | `documents` | 07 | métadonnées seulement (ni fichier, ni clé de stockage) ; direction et gestion ; un document restreint, directeur seul | jamais (en ligne) |
 | `communes`, `neighborhoods` | 07 | référentiel de la plateforme, identique pour tous (nom, commune, point central) ; ni la référence OSM ni la vérification | non (back-office seul) |
-| `organizations.rent_billing_mode` | 08 | découpage des périodes de loyer, recopié dans chaque bail à sa création | réglage (directeur), étape 3 |
-| `tenants` | 08 | fiche du locataire **sans** l'état civil ni la pièce d'identité, ni le compte lié (`user_id`) ; agent de terrain : les locataires des baux de ses unités, coordonnées seulement (ni notes, ni nationalité, ni profession, ni domicile précédent) | création et modification (direction, gestion), étape 3 |
-| `tenant_identities` (vue de `tenants`) | 08 | date et lieu de naissance, pièce d'identité (type, numéro, date, autorité) ; directeur et gestionnaire seulement, jamais l'agent de terrain ni le profil lecture | modification (direction, gestion), étape 3 |
-| `leases` | 08 | bail complet, paramètres D24 compris ; jamais d'occupation (elle se calcule) ; agent de terrain : les baux de ses unités | création, brouillon, demande de transition, changement de loyer avec la version attendue, étape 3 ; statut décidé par le serveur |
+| `organizations.rent_billing_mode` | 08 | découpage des périodes de loyer, recopié dans chaque bail à sa création | non (réglage du directeur, en ligne : `PUT /organization/rent-billing-mode`) |
+| `tenants` | 08 | fiche du locataire **sans** l'état civil ni la pièce d'identité, ni le compte lié (`user_id`) ; agent de terrain : les locataires des baux de ses unités, coordonnées seulement (ni notes, ni nationalité, ni profession, ni domicile précédent) | création et modification (direction, gestion) |
+| `tenant_identities` (vue de `tenants`) | 08 | date et lieu de naissance, pièce d'identité (type, numéro, date, autorité) ; directeur et gestionnaire seulement, jamais l'agent de terrain ni le profil lecture | modification (direction, gestion) |
+| `leases` | 08 | bail complet, paramètres D24 compris ; jamais d'occupation (elle se calcule) ; agent de terrain : les baux de ses unités | création, brouillon, demande de transition, changement de loyer avec la version attendue ; statut décidé par le serveur |
 | `lease_versions` | 08 | copie de chaque version validée, écrite par la base seule | jamais |
 | `rent_dues` | 08 | échéances, écrites par le serveur seul (validation du bail, tâche quotidienne) ; agent de terrain : celles de ses unités | jamais |
-| `deposit_accounts`, `deposit_movements` | 08 | comptes de caution (statut et détenteur écrits par la base) et mouvements en ajout seul ; direction, gestion, profil lecture ; jamais l'agent de terrain | création d'un compte, versement reçu, changement de détenteur (direction, gestion), étape 3 |
+| `deposit_accounts`, `deposit_movements` | 08 | comptes de caution (statut et détenteur écrits par la base) et mouvements en ajout seul ; direction, gestion, profil lecture ; jamais l'agent de terrain | création d'un compte, versement reçu, changement de détenteur (direction, gestion) |
 
 ## 4. Lire dans la base locale (écrans)
 

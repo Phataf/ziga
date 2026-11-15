@@ -273,6 +273,7 @@ export class OrganizationsService implements OnModuleInit {
 			logo: this.logoView(shown ?? null),
 			planId: org.planId,
 			acceptedPaymentMethods: org.acceptedPaymentMethods,
+			rentBillingMode: org.rentBillingMode,
 			createdAt: org.createdAt.toISOString(),
 			updatedAt: org.updatedAt.toISOString()
 		};
@@ -548,6 +549,34 @@ export class OrganizationsService implements OnModuleInit {
 			});
 		}
 		return this.view(tx);
+	}
+
+	/**
+	 * Lot 08 : découpage des périodes de loyer (réglage du directeur). Recopié dans chaque nouveau bail ; ne touche
+	 * jamais un bail existant.
+	 */
+	async setRentBillingMode(mode: OrganizationRow['rentBillingMode']): Promise<OrganizationView> {
+		const tx = RequestContext.tx();
+		const scope = RequestContext.organization();
+		const org = await this.row(tx);
+		if (org.rentBillingMode !== mode) {
+			await tx.update(organizations).set({ rentBillingMode: mode, updatedAt: new Date() }).where(eq(organizations.id, org.id));
+			await this.audit.record(tx, {
+				actor: this.actor(),
+				organizationId: scope.organizationId,
+				action: 'organization.rent_billing_mode',
+				objectType: 'organization',
+				objectId: org.id,
+				before: { rentBillingMode: org.rentBillingMode },
+				after: { rentBillingMode: mode }
+			});
+		}
+		return this.view(tx);
+	}
+
+	/** Lot 08 : réglage lu par le module leases à la création d'un bail. */
+	async rentBillingMode(tx: Tx = RequestContext.tx()): Promise<OrganizationRow['rentBillingMode']> {
+		return (await this.row(tx)).rentBillingMode;
 	}
 
 	async revokeInvitation(invitationId: string): Promise<void> {

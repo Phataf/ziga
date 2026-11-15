@@ -28,8 +28,10 @@ import {
 	type UnitData,
 	type UnitView,
 	type UpdatePropertyInput,
+	type OccupancySignal,
 	type UpdateUnitInput
 } from '@ziga/shared/properties';
+import { toIsoDate } from '@ziga/shared/dates';
 import type { OrganizationRole } from '@ziga/shared/permissions';
 import { and, asc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { AppError } from '../../common/app-error.js';
@@ -41,6 +43,7 @@ import { AuditService, diff, type AuditActor } from '../audit/audit.service.js';
 import { QuotasService } from '../features/quotas.service.js';
 import { assertCan } from '../organizations/organization-context.js';
 import { OwnersService } from '../owners/owners.service.js';
+import { UnitOccupancy } from './occupancy.js';
 
 type PropertyRow = typeof properties.$inferSelect;
 type UnitRow = typeof units.$inferSelect;
@@ -67,9 +70,9 @@ export function propertyView(p: PropertyRow): PropertyView {
 	};
 }
 
-export function unitView(u: UnitRow): UnitView {
-	// Au lot 07, aucun bail : l'occupation calculée est « libre » (lot 08 : signaux des baux de l'unité).
-	const occupancy = occupancyOf([]);
+/** Vue d'une unité ; l'occupation est calculée à partir des signaux de ses baux (lot 08), jamais lue en base. */
+export function unitView(u: UnitRow, signals: readonly OccupancySignal[] = []): UnitView {
+	const occupancy = occupancyOf(signals);
 	return {
 		id: u.id,
 		propertyId: u.propertyId,
@@ -196,7 +199,8 @@ export class PropertiesService {
 	constructor(
 		private readonly audit: AuditService,
 		private readonly owners: OwnersService,
-		private readonly quotas: QuotasService
+		private readonly quotas: QuotasService,
+		private readonly occupancy: UnitOccupancy
 	) {}
 
 	private context(): Context {
@@ -211,6 +215,24 @@ export class PropertiesService {
 			userId,
 			actor: { type: 'user', userId, role: scope.role }
 		};
+	}
+
+	/** Vue d'une unité, avec son occupation calculée à partir de ses baux (lot 08). */
+	private async unitViewOf(c: Context, row: UnitRow): Promise<UnitView> {
+		const signals = await this.occupancy.signals(c.tx, c.organizationId, [row.id], toIsoDate());
+		return unitView(row, signals.get(row.id));
+	}
+
+	/** Unités affectées à l'agent de terrain courant (lot 08 : ses baux et ses locataires) ; null pour les autres rôles. */
+	async assignedUnitIds(): Promise<string[] | null> {
+		const c = this.context();
+		const agent = this.agentOnly(c);
+		if (!agent) return null;
+		const rows = await c.tx
+			.select({ id: units.id })
+			.from(units)
+			.where(and(eq(units.organizationId, c.organizationId), eq(units.assignedAgentId, agent)));
+		return rows.map((r) => r.id);
 	}
 
 	/** Agent de terrain : seulement ses unités affectées. Les autres rôles voient toute l'organisation. */
@@ -235,7 +257,16 @@ export class PropertiesService {
 			.from(properties)
 			.where(and(eq(properties.organizationId, c.organizationId), propertyIds ? inArray(properties.id, propertyIds) : undefined))
 			.orderBy(asc(properties.name), asc(properties.id));
-		return rows.map((p) => ({ ...propertyView(p), units: unitRows.filter((u) => u.propertyId === p.id).map(unitView) }));
+		const signals = await this.occupancy.signals(
+			c.tx,
+			c.organizationId,
+			unitRows.map((u) => u.id),
+			toIsoDate()
+		);
+		return rows.map((p) => ({
+			...propertyView(p),
+			units: unitRows.filter((u) => u.propertyId === p.id).map((u) => unitView(u, signals.get(u.id)))
+		}));
 	}
 
 	async get(id: string): Promise<PropertyDetailView> {
@@ -251,12 +282,18 @@ export class PropertiesService {
 			.orderBy(asc(units.label), asc(units.id));
 		// Un bien sans unité affectée n'existe pas pour l'agent de terrain.
 		if (agent && !unitRows.length) throw PROPERTY_NOT_FOUND();
-		return { ...propertyView(row), units: unitRows.map(unitView) };
+		const signals = await this.occupancy.signals(
+			c.tx,
+			c.organizationId,
+			unitRows.map((u) => u.id),
+			toIsoDate()
+		);
+		return { ...propertyView(row), units: unitRows.map((u) => unitView(u, signals.get(u.id))) };
 	}
 
 	async getUnit(id: string): Promise<UnitView> {
 		const c = this.context();
-		return unitView(await this.unitRow(c, id));
+		return this.unitViewOf(c, await this.unitRow(c, id));
 	}
 
 	private async propertyRow(c: Context, id: string, lock = false): Promise<PropertyRow> {
@@ -434,7 +471,7 @@ export class PropertiesService {
 			objectId: input.id,
 			after: { propertyId: input.propertyId, ...unitData(row!), recordStatus: 'draft', technicalStatus: 'ready' }
 		});
-		return unitView(row!);
+		return this.unitViewOf(c, row!);
 	}
 
 	async updateUnit(id: string, input: UpdateUnitInput): Promise<UnitView> {
@@ -443,7 +480,7 @@ export class PropertiesService {
 		const before = unitData(row);
 		const next = unitSchema.parse({ ...before, ...input, rooms: { ...before.rooms, ...(input.rooms ?? {}) } });
 		const changes = diff(before as unknown as Record<string, unknown>, next as unknown as Record<string, unknown>);
-		if (!changes) return unitView(row);
+		if (!changes) return this.unitViewOf(c, row);
 		const [updated] = await c.tx
 			.update(units)
 			.set({ ...unitValues(next), updatedAt: new Date() })
@@ -457,7 +494,7 @@ export class PropertiesService {
 			objectId: id,
 			...changes
 		});
-		return unitView(updated!);
+		return this.unitViewOf(c, updated!);
 	}
 
 	/** État technique (saisi) : le seul changement de statut ouvert à l'agent de terrain, sur ses unités. */
@@ -466,7 +503,7 @@ export class PropertiesService {
 		const row = await this.unitRow(c, id, true);
 		const before = { technicalStatus: row.technicalStatus, reason: row.technicalReason, expectedOn: row.technicalExpectedOn };
 		const changes = diff(before, input);
-		if (!changes) return unitView(row);
+		if (!changes) return this.unitViewOf(c, row);
 		const [updated] = await c.tx
 			.update(units)
 			.set({
@@ -485,14 +522,14 @@ export class PropertiesService {
 			objectId: id,
 			...changes
 		});
-		return unitView(updated!);
+		return this.unitViewOf(c, updated!);
 	}
 
 	/** Fiche de l'unité : mêmes transitions que le bien ; une unité active exige un bien actif. */
 	async setUnitStatus(id: string, status: Exclude<RecordStatus, 'draft'>): Promise<UnitView> {
 		const c = this.context();
 		const row = await this.unitRow(c, id, true);
-		if (row.recordStatus === status) return unitView(row);
+		if (row.recordStatus === status) return this.unitViewOf(c, row);
 		if (!canChangeRecordStatus(row.recordStatus, status)) throw statusRefused(row.recordStatus, status);
 		if (status === 'active') {
 			const property = await this.propertyRow(c, row.propertyId);
@@ -524,7 +561,7 @@ export class PropertiesService {
 			before: { recordStatus: row.recordStatus },
 			after: { recordStatus: status }
 		});
-		return unitView(updated!);
+		return this.unitViewOf(c, updated!);
 	}
 
 	/** Affectation à un agent de terrain actif de l'organisation (la base vérifie le rôle), ou retrait. */
@@ -532,7 +569,7 @@ export class PropertiesService {
 		const c = this.context();
 		assertCan(c.role, 'unit.assign');
 		const row = await this.unitRow(c, id, true);
-		if (row.assignedAgentId === agentId) return unitView(row);
+		if (row.assignedAgentId === agentId) return this.unitViewOf(c, row);
 		const [updated] = await c.tx
 			.update(units)
 			.set({ assignedAgentId: agentId, updatedAt: new Date() })
@@ -547,7 +584,7 @@ export class PropertiesService {
 			before: { assignedAgentId: row.assignedAgentId },
 			after: { assignedAgentId: agentId }
 		});
-		return unitView(updated!);
+		return this.unitViewOf(c, updated!);
 	}
 }
 

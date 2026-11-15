@@ -10,6 +10,7 @@ import {
 	createOrganizationSchema,
 	inviteMemberSchema,
 	paymentMethodsSchema,
+	rentBillingModeSchema,
 	updateOrganizationSchema
 } from '@ziga/shared/organizations';
 import type { Request, Response } from 'express';
@@ -107,6 +108,13 @@ export class OrganizationController {
 	@Can('settings.update')
 	paymentMethods(@Body() body: unknown) {
 		return this.organizations.setPaymentMethods(paymentMethodsSchema.parse(body).methods);
+	}
+
+	/** Lot 08 : découpage des périodes de loyer des nouveaux baux ; les baux existants ne changent jamais. */
+	@Put('rent-billing-mode')
+	@Can('settings.update')
+	rentBillingMode(@Body() body: unknown) {
+		return this.organizations.setRentBillingMode(rentBillingModeSchema.parse(body).mode);
 	}
 
 	@Get('members')

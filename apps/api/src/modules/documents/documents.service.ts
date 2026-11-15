@@ -20,7 +20,7 @@ import {
 	type DocumentView
 } from '@ziga/shared/documents';
 import { MAX_UPLOAD_BYTES, UPLOAD_URL_TTL_SECONDS } from '@ziga/shared/properties';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import { AppError } from '../../common/app-error.js';
 import { detectFileType, matchesDeclared } from '../../common/file-types.js';
 import { RequestContext } from '../../common/request-context.js';
@@ -43,6 +43,8 @@ export function documentView(d: DocumentRow): DocumentView {
 		mandateId: d.mandateId,
 		propertyId: d.propertyId,
 		unitId: d.unitId,
+		tenantId: d.tenantId,
+		leaseId: d.leaseId,
 		version: d.version,
 		replacesId: d.replacesId,
 		fileName: d.fileName,
@@ -107,6 +109,27 @@ export class DocumentsService {
 		return rows.filter((d) => canReadDocument(role, d)).map(documentView);
 	}
 
+	/**
+	 * Lot 08 : baux qui ont un bail signé scanné en vigueur (alerte « Contrat non signé », D20). Existence seulement :
+	 * ne révèle aucun document, quel que soit le rôle (l'agent de terrain voit l'alerte, jamais le document).
+	 */
+	async leasesWithSignedScan(leaseIds: readonly string[]): Promise<Set<string>> {
+		if (!leaseIds.length) return new Set();
+		const { tx, organizationId } = this.context();
+		const rows = await tx
+			.select({ leaseId: documents.leaseId })
+			.from(documents)
+			.where(
+				and(
+					eq(documents.organizationId, organizationId),
+					eq(documents.type, 'signed_lease_scan'),
+					eq(documents.status, 'active'),
+					inArray(documents.leaseId, [...leaseIds])
+				)
+			);
+		return new Set(rows.map((r) => r.leaseId!));
+	}
+
 	async get(id: string): Promise<DocumentView> {
 		return documentView(await this.readable(id));
 	}
@@ -134,7 +157,9 @@ export class DocumentsService {
 			if (previous.status !== 'active') {
 				throw new AppError('DOCUMENT_NOT_ACTIVE', 'Seule la version en vigueur peut être remplacée.', 409, { status: previous.status });
 			}
-			const same = (['type', 'ownerId', 'mandateId', 'propertyId', 'unitId'] as const).every((k) => previous[k] === input[k]);
+			const same = (['type', 'ownerId', 'mandateId', 'propertyId', 'unitId', 'tenantId', 'leaseId'] as const).every(
+				(k) => previous[k] === input[k]
+			);
 			if (!same) throw new AppError('DOCUMENT_VERSION_SUBJECT', 'Une nouvelle version garde le type et les objets liés.', 400);
 			version = previous.version + 1;
 		}
@@ -151,6 +176,10 @@ export class DocumentsService {
 				mandateId: input.mandateId,
 				propertyId: input.propertyId,
 				unitId: input.unitId,
+				// Bail et locataire (lot 08) : la clé composite les vérifie dans l'organisation (LEASE_NOT_FOUND,
+				// TENANT_NOT_FOUND) ; le module documents ne lit pas les tables du module leases.
+				tenantId: input.tenantId,
+				leaseId: input.leaseId,
 				version,
 				replacesId: input.replacesId,
 				fileName: input.fileName,
@@ -174,6 +203,8 @@ export class DocumentsService {
 				mandateId: input.mandateId,
 				propertyId: input.propertyId,
 				unitId: input.unitId,
+				tenantId: input.tenantId,
+				leaseId: input.leaseId,
 				version,
 				replacesId: input.replacesId,
 				fileName: input.fileName,

@@ -46,3 +46,17 @@ export interface MediaJobData {
 	organizationId: string;
 	mediaId: string;
 }
+
+/**
+ * Baux (lot 08) : tâche quotidienne à 00:20 UTC (heure de Ouagadougou), après l'expiration des mandats : baux signés
+ * qui commencent, échéances des baux sans fin sur 12 mois glissants, échéances dues puis en retard le lendemain.
+ */
+export const LEASES_QUEUE = 'leases';
+export const LEASES_DAILY_SCHEDULER = 'leases-daily';
+export const LEASES_DAILY_JOB = 'leases-daily';
+export const LEASES_DAILY_PATTERN = '20 0 * * *';
+
+export interface LeasesDailyJobData {
+	/** Date du jour imposée (tests) ; sinon la date du jour à Ouagadougou. */
+	today?: string;
+}

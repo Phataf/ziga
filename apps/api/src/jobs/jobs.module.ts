@@ -4,10 +4,11 @@ import { APP_CONFIG } from '../config/config.module.js';
 import type { AppConfig } from '../config/env.js';
 import { bullConnection } from '../redis/redis.module.js';
 import { ExampleProcessor } from './example.processor.js';
+import { LeasesDailyProcessor } from './leases-daily.processor.js';
 import { LogoProcessor } from './logo.processor.js';
 import { MandatesExpiryProcessor } from './mandates-expiry.processor.js';
 import { MediaProcessor } from './media.processor.js';
-import { EXAMPLE_QUEUE, LOGO_QUEUE, MANDATES_QUEUE, MEDIA_QUEUE } from './queues.js';
+import { EXAMPLE_QUEUE, LEASES_QUEUE, LOGO_QUEUE, MANDATES_QUEUE, MEDIA_QUEUE } from './queues.js';
 
 /**
  * Files de tâches. Le processus HTTP ne fait qu'ajouter des tâches (`producer`) ;
@@ -29,9 +30,15 @@ export class JobsModule {
 						defaultJobOptions: { attempts: 3, backoff: { type: 'exponential', delay: 1_000 }, removeOnComplete: 1_000, removeOnFail: 5_000 }
 					})
 				}),
-				BullModule.registerQueue({ name: EXAMPLE_QUEUE }, { name: LOGO_QUEUE }, { name: MANDATES_QUEUE }, { name: MEDIA_QUEUE })
+				BullModule.registerQueue(
+					{ name: EXAMPLE_QUEUE },
+					{ name: LOGO_QUEUE },
+					{ name: MANDATES_QUEUE },
+					{ name: MEDIA_QUEUE },
+					{ name: LEASES_QUEUE }
+				)
 			],
-			providers: role === 'worker' ? [ExampleProcessor, LogoProcessor, MandatesExpiryProcessor, MediaProcessor] : [],
+			providers: role === 'worker' ? [ExampleProcessor, LogoProcessor, MandatesExpiryProcessor, MediaProcessor, LeasesDailyProcessor] : [],
 			exports: [BullModule]
 		};
 	}

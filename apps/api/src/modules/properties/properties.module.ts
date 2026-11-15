@@ -10,6 +10,7 @@ import { PropertiesSyncHandlers } from './properties.sync.js';
 import { MediaController, PublicMediaController } from './media.controller.js';
 import { MediaService } from './media.service.js';
 import { MediaSyncHandlers } from './media.sync.js';
+import { UnitOccupancy } from './occupancy.js';
 
 /**
  * Module properties (lot 07) : biens, unités (statut en quatre dimensions), affectation aux agents de terrain, et
@@ -19,7 +20,7 @@ import { MediaSyncHandlers } from './media.sync.js';
 @Module({
 	imports: [OrganizationsModule, SyncModule, FeaturesModule, OwnersModule],
 	controllers: [PropertiesController, UnitsController, MediaController, PublicMediaController],
-	providers: [PropertiesService, PropertiesSyncHandlers, GeographyService, MediaService, MediaSyncHandlers],
-	exports: [PropertiesService, GeographyService, MediaService]
+	providers: [PropertiesService, PropertiesSyncHandlers, GeographyService, MediaService, MediaSyncHandlers, UnitOccupancy],
+	exports: [PropertiesService, GeographyService, MediaService, UnitOccupancy]
 })
 export class PropertiesModule {}

@@ -553,6 +553,39 @@ export class OwnersService {
 	}
 
 	/**
+	 * Lot 08 : mandat de gestion (rental_management ou self_managed) qui couvre cette unité et qui est en vigueur au
+	 * plus tard à la date `from` (début du bail, ou aujourd'hui), sans être échu aujourd'hui. Exigé pour valider un
+	 * bail ; son autorisation d'encaisser propose le détenteur de la caution. Null s'il n'y en a pas.
+	 */
+	async managementMandateFor(
+		unitId: string,
+		from: string
+	): Promise<{ mandateId: string; canCollectFunds: boolean; canSignLeases: boolean } | null> {
+		const { tx, organizationId } = this.context();
+		const today = toIsoDate();
+		const rows = await tx
+			.select({
+				id: mandates.id,
+				type: mandates.type,
+				status: mandates.status,
+				startsOn: mandates.startsOn,
+				endsOn: mandates.endsOn,
+				canCollectFunds: mandates.canCollectFunds,
+				canSignLeases: mandates.canSignLeases
+			})
+			.from(mandateScopes)
+			.innerJoin(mandates, and(eq(mandates.organizationId, mandateScopes.organizationId), eq(mandates.id, mandateScopes.mandateId)))
+			.where(
+				and(eq(mandateScopes.organizationId, organizationId), eq(mandateScopes.unitId, unitId), eq(mandateScopes.managementActive, true))
+			);
+		const limit = from > today ? from : today;
+		const m = rows.find(
+			(r) => isManagementMandate(r.type) && r.status === 'active' && r.startsOn <= limit && (r.endsOn === null || r.endsOn >= today)
+		);
+		return m ? { mandateId: m.id, canCollectFunds: m.canCollectFunds, canSignLeases: m.canSignLeases } : null;
+	}
+
+	/**
 	 * Bailleur particulier : ses biens sont couverts par son mandat self_managed dès leur création, dans la même
 	 * transaction (appelé par le module properties). Sans effet pour une agence.
 	 */
