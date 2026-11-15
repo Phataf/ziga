@@ -79,6 +79,18 @@
 		"./leases": {
 			"types": "./dist/leases.d.ts",
 			"default": "./dist/leases.js"
+		},
+		"./french-words": {
+			"types": "./dist/french-words.d.ts",
+			"default": "./dist/french-words.js"
+		},
+		"./contract-fields": {
+			"types": "./dist/contract-fields.d.ts",
+			"default": "./dist/contract-fields.js"
+		},
+		"./contracts": {
+			"types": "./dist/contracts.d.ts",
+			"default": "./dist/contracts.js"
 		}
 	},
 	"files": [
