@@ -839,3 +839,147 @@ Chaque étape terminée est aussi envoyée sur `claude/lot07-sauvegarde`.
    - Le rattachement passe par les mêmes contrôles serveur que les autres, dont la règle 12. S'il est refusé, il arrive dans « Modifications non acceptées », et les photos qui en dépendaient sont refusées avec leur raison, sans jamais être renvoyées (test Playwright).
 3. **Fichiers déposés sur `main` par erreur** : les deux réponses brutes d'Overpass et `osm-neighborhoods.json` sont retirés du dépôt et ignorés par git ; les extraits de `apps/api/scripts/fixtures` restent.
 4. **Conservation des documents** : aucun effacement automatique maintenant ; proposition « durée du mandat ou du bail, puis 5 ans après sa fin », à valider par le juriste avec la nouvelle loi sur les données personnelles (question ouverte des décisions). Effacement automatique au lot 13.
+
+## Lot 08 — Locataires, baux, échéancier et comptes de caution — 15/11/2026
+
+Prompt : `prompts/lot-08-baux-echeancier.md`. Plan validé par le porteur, avec ses réponses :
+- **Échéances** : générées par le serveur à la validation du bail, avec une clé d'idempotence bail + période, puis descendues par la synchronisation ; hors connexion, l'écran montre un aperçu calculé par la même fonction pure.
+- **Découpage des périodes** : réglage de l'organisation (`rent_billing_mode`), recopié dans chaque bail à sa création, modifiable dans l'assistant, figé ensuite. Trois modes : `calendar_prorata` (par défaut), `calendar_full_first`, `anniversary`.
+- **Avance** : N mois entiers. En `calendar_prorata`, le premier mois incomplet n'en fait pas partie : il est dû en plus, à la signature.
+- **Jour d'échéance** : un seul champ (`due_day`, de 1 à 28, 5 par défaut) ; en retard le lendemain.
+- **Bail repris en cours** : `dues_start_on`.
+- **Garde-fous** :
+  - un seul bail « à venir » par unité ;
+  - un mandat de gestion en vigueur exigé ;
+  - la disponibilité (règle 13, prête comprise) exigée seulement pour un bail qui commence aujourd'hui ou plus tard ;
+  - un bail déjà en cours n'exige que l'absence d'un autre bail actif.
+- **Bailleur particulier** : `organization` comme bailleur désigné et comme détenteur, seule valeur acceptée.
+- **Changement de loyer hors connexion** : avec la version attendue.
+- **Permissions** : `tenant.read`, `tenant.create`, `tenant.update` ajoutées (écart, ci-dessous).
+
+Quatre pull requests, une par étape, toutes fusionnées après une CI verte, chacune aussi envoyée sur `claude/lot08-sauvegarde` :
+- étape 1, fonctions pures (Phataf/ziga#22) ;
+- étape 2, migration et synchronisation en lecture (Phataf/ziga#23) ;
+- étape 3, API, synchronisation en écriture et tâche quotidienne (Phataf/ziga#24) ;
+- étape 4, écrans, Playwright et journal.
+
+### Réponses du porteur aux questions ouvertes du prompt
+1. **Caution supérieure à deux mois de loyer** : avertissement explicite et ligne d'audit (`deposit.above_legal_cap`), sans blocage. Le plafond se calcule sur le loyer seul, hors charges, pour le compte `security_deposit` seulement ; la garantie des factures n'y entre pas. Ce point est ajouté à la question ouverte du juriste (`docs/DECISIONS.md`).
+2. **Détenteur de la caution** :
+   - l'agence ou le propriétaire, selon les cas ; obligatoire pour chaque compte de caution ;
+   - proposé par défaut : `organization` si le mandat qui couvre l'unité a `can_collect_funds`, `owner` sinon ;
+   - un bailleur particulier : `organization` seulement ;
+   - un changement en cours de bail passe par un mouvement `holder_changed`, jamais par une modification.
+3. **Modèle de bail validé par un juriste** : toujours en attente. Il ne bloque pas ce lot (le contrat vient au lot 08 bis).
+4. **Valeurs légales par défaut**, toutes marquées « à confirmer par le juriste » dans le code (`LEGAL_LEASE_DEFAULTS`) :
+   - préavis du locataire : 2 mois en durée déterminée, 3 mois en durée indéterminée ;
+   - préavis du bailleur : 3 mois ;
+   - restitution sous 30 jours ;
+   - reconduction en durée indéterminée ;
+   - ni pénalité ni garantie des factures par défaut.
+
+### Fait
+- **Échéancier en fonction pure** (`packages/shared/src/rent-schedule.ts`, avant toute table) :
+  - trois modes de découpage ;
+  - prorata en entiers exacts, arrondi à l'inférieur ;
+  - avance due à la signature ;
+  - changement de loyer par date d'effet, les échéances émises jamais modifiées (`rentDueUpdates`, `rentChangeBlocker`) ;
+  - bail sans fin sur 12 mois glissants ; bail repris en cours.
+  - Règles retenues pour chaque mode :
+    - `calendar_prorata` : échéance au `due_day` ; dernier mois incomplet au prorata, dû au `due_day` ou à la date de fin si elle tombe avant ;
+    - `calendar_full_first` : premier mois facturé en entier, dû au `due_day` ou au jour d'entrée s'il tombe après ; dernier mois au prorata ;
+    - `anniversary` : échéance le premier jour de la période. Une entrée le 29, le 30 ou le 31 est ramenée au dernier jour des mois plus courts, et chaque période est recalculée depuis le jour d'entrée, sans glissement. Une dernière période écourtée est due en entier. `dues_start_on` doit tomber un jour anniversaire.
+- **Règles des baux et des cautions** (`packages/shared/src/leases.ts`) :
+  - statuts et transitions ; statut validé décidé par la date de début ;
+  - occupation calculée (`unitOccupancy`) ;
+  - garde-fous de création ;
+  - statut d'une échéance ;
+  - soldes et statut d'un compte de caution, plafond de deux mois, détenteur proposé ;
+  - alerte « Contrat non signé » (D20) ;
+  - schémas Zod des locataires (état civil à part), des baux (paramètres D24) et des mouvements ;
+  - vues partagées.
+- **Migration `0013_leases`** :
+  - tables `tenants`, `leases`, `lease_versions`, `rent_dues`, `deposit_accounts`, `deposit_movements` : organisation, RLS, clés composites, aucune suppression ;
+  - règle 8 : un seul bail en vigueur et un seul à venir par unité ;
+  - bail validé : conditions figées, loyer changé par la version suivante, versions copiées par la base seule ;
+  - échéances : une par bail et par période, figées une fois émises ;
+  - caution :
+    - statut et détenteur écrits par la base seule, à partir des mouvements ;
+    - mouvements en ajout seul ;
+    - versements plafonnés au convenu, sorties plafonnées au reçu ;
+    - retenue sans état des lieux ni justificatif refusée (règle 14), comme une imputation sur loyer sans accord ;
+  - `organizations.rent_billing_mode` ;
+  - documents : `signed_lease_scan` et `tenant_identity`, rattachés au bail ou au locataire ;
+  - `due_lease_organizations`.
+- **Synchronisation** :
+  - Sync Streams : l'état civil et la pièce d'identité du locataire passent par un stream à part (`tenant_identities`), réservé au directeur et au gestionnaire ;
+  - l'agent de terrain reçoit les baux, les versions et les échéances de ses unités, et les locataires de ces baux avec leurs coordonnées seulement, sans caution ;
+  - le schéma local est identique à celui que déduit PowerSync ;
+  - écriture depuis l'appareil : `tenants`, `tenant_identities`, `leases` (statut traité comme une demande, loyer avec la version attendue), `deposit_accounts`, `deposit_movements`.
+- **API, module `leases`** :
+  - routes des locataires (pagination par curseur), des baux (brouillon, validation, annulation, changement de loyer) et des comptes de caution (versement, changement de détenteur) ;
+  - validation : garde-fous, statut décidé par le serveur, échéances générées dans la même transaction ;
+  - occupation calculée inscrite auprès du module `properties` (lecteur injecté, sans lecture croisée des tables) ;
+  - mandat de gestion en vigueur lu par le service public du module `owners` ;
+  - documents du bail ; réglage du découpage (`PUT /organization/rent-billing-mode`) ;
+  - tâche BullMQ quotidienne (00:20 UTC) : bail signé qui commence, baux sans fin prolongés, échéances dues puis en retard le lendemain, rejouée sans effet.
+- **Web** :
+  - liste des locataires (recherche, reste à payer) ;
+  - fiche locataire (coordonnées, état civil pour la direction et la gestion, baux, reste à payer) ;
+  - assistant de création du bail en cinq étapes depuis une unité disponible, avec brouillon enregistré à chaque étape et reprise ;
+  - fiche bail : conditions et paramètres, échéancier (ou son aperçu, hors connexion), compte de caution (versement, changement de détenteur), documents, chronologie et versions, actions (valider, annuler, modifier le loyer) ;
+  - occupation calculée sur l'appareil ;
+  - « Créer un bail » et lien vers le bail sur la fiche du bien ;
+  - menu « Créer » (bien, bail) ;
+  - entrée « Locataires » dans la navigation ;
+  - réglage du découpage dans les paramètres ;
+  - libellés des refus.
+
+### Tests attendus par le prompt
+- [x] **Accès croisé A/B sur chaque table** : en SQL (`leases-db.int.test.ts`), par l'API et par l'appareil (`leases.int.test.ts`), et dans le flux du vrai service PowerSync (`leases.spec.ts`).
+- [x] **Deux baux actifs sur la même unité, refusés** :
+  - en SQL, par l'API, et par l'appareil, en série comme en même temps ;
+  - deux appareils hors ligne contre le vrai service PowerSync : le second est refusé à la synchronisation, apparaît dans « Modifications non acceptées » et redevient un brouillon.
+- [x] **Occupation calculée** juste pour chaque combinaison de baux ; jamais une colonne, jamais écrite (SQL, API, appareil, flux).
+- [x] **Génération des échéances** : bail de 12 mois, bail sans fin, bail commençant le 31 (et le 29, le 30), jour d'échéance 28, changement de loyer en cours de bail.
+- [x] **Passage en `overdue` à la bonne date** : règle pure, et tâche du worker à J-1, J et J+1.
+- [x] **Compte de caution** :
+  - avertissement et audit au-delà de deux mois ;
+  - versements partiels et solde restant dû justes ;
+  - `UPDATE` et `DELETE` refusés sur `deposit_movements`, même pour le propriétaire du schéma ;
+  - détenteur obligatoire.
+- [x] **Montants** : uniquement des entiers FCFA (schémas, API, base).
+
+### Critères d'acceptation
+- [x] **Bail complet en moins de 3 minutes**, depuis une unité disponible, par un gestionnaire : nouveau locataire, caution et détenteur, avance, bail scanné. Test Playwright chronométré à 360 × 800, contre la vraie API et le vrai PowerSync : 9 secondes environ. Le temps d'une saisie humaine reste à confirmer au pilote.
+- [x] **Échéancier juste sur 24 mois**, vérifié par un test de propriété :
+  - 700 baux aléatoires par mode, à graine fixe, sans dépendance ;
+  - comparés à un oracle qui parcourt chaque bail jour par jour ;
+  - contrôlé par deux erreurs injectées volontairement dans le code.
+- [x] **Journal des lots mis à jour**, avec les réponses du porteur aux questions ouvertes.
+- [x] **Écrans vérifiés par Playwright** sur téléphone, tablette et ordinateur, sans débordement, pour le directeur, le gestionnaire et l'agent de terrain.
+
+### Écarts par rapport au prompt
+- **Permissions** :
+  - ajoutées : `tenant.read`, `tenant.read_identity`, `tenant.create`, `tenant.update`, `lease.read`, `deposit.read` (validées par le porteur pour `tenant.*`) ;
+  - remplacée : `lease.manage`, déclarée au lot 03 et jamais utilisée.
+- **Caution convenue** : stockée dans le compte de caution seulement, pas en double dans le bail.
+- **Garantie des factures** : un compte de caution à part (`utilities_guarantee`), comme le prévoit le prompt.
+- **Jour limite de paiement et jour d'échéance** : un seul champ, `due_day` (réponse du porteur).
+- **Types de pièce d'identité du locataire** : la liste du représentant légal (CNIB, passeport, carte consulaire, carte de résident, autre), un peu plus large que « CNIB ou passeport ».
+- **Statut `signed`** : le bail validé dont le début est futur (« signé, à venir »). Il ne dit rien du contrat : son cycle viendra au lot 08 bis (D20).
+- **Bouton « Créer »** : un menu avec un bien et un bail. Le locataire se crée avec son bail, dans l'assistant, pas seul.
+- **Réglage du découpage** : en ligne seulement (directeur), comme les moyens de paiement acceptés.
+- **Vente du bien** : tant qu'un mandat de gestion est actif, le propriétaire du bien ne change pas (lot 07). La règle est tenue sans écran : le bail ne copie pas le propriétaire, il suit l'unité. Une fois le mandat terminé, changer de propriétaire ne touche ni le bail, ni ses échéances, ni sa caution (testé). Le transfert de gestion vient au lot 10 bis.
+- **Annulation** : seuls un brouillon ou un bail signé à venir s'annulent, et leurs échéances sont abandonnées (`waived`), jamais supprimées. Un bail en vigueur se termine au lot 10 bis.
+
+### Dette technique
+- **Avance avant le lot 09** : les mois d'avance sont dus dès la signature. Tant que les encaissements n'existent pas, la tâche de nuit les passe en retard le lendemain s'ils ne sont pas soldés.
+- **Bail à venir sur une unité encore louée** : quand son début arrive alors que le bail précédent est encore en vigueur (préavis pas terminé), la tâche le laisse « signé » et le journalise (`lease.activation_waiting`). La fin du bail précédent et la remise en état viennent au lot 10 bis.
+- **Encours de la liste des locataires** : calculé sur l'appareil à partir de toutes les échéances de l'organisation, sans pagination. Suffisant pour quelques centaines de baux.
+- **Chronologie du bail** : les dates des événements, sans le nom de leur auteur (comme l'historique des mandats au lot 06).
+
+### Questions ouvertes pour le porteur
+1. **Juriste** (`docs/DECISIONS.md`, question ouverte complétée) : plafond de la caution sur le loyer seul ; valeurs par défaut des paramètres du bail ; reconduction pour la même durée face au passage légal à durée indéterminée.
+2. **Avance non payée** : faut-il la laisser passer « en retard » dès le lendemain de la signature, ou attendre le début du bail ? La règle actuelle suit « dues dès la signature » du prompt.
+3. **Locataire sans bail** : faut-il pouvoir enregistrer un locataire seul (prospect, dossier en attente), hors de l'assistant de bail ?

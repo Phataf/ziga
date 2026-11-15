@@ -40,7 +40,7 @@ Journal des décisions structurantes. Une décision ne change que par une nouvel
 
 | Question | Avant le lot | Source à consulter |
 | --- | --- | --- |
-| Lecture des articles 3, 8, 9, 20, 26, 45 et 46 de la loi n° 103-2015/CNT retenue dans `docs/AUDIT.md` ; avertir ou bloquer au-delà de deux mois de caution ; arrêté du 8 avril 2026 sur les démarcheurs (commission demandée au locataire) | 08 | Juriste, texte officiel de la loi et de l'arrêté |
+| Lecture des articles 3, 8, 9, 20, 26, 45 et 46 de la loi n° 103-2015/CNT retenue dans `docs/AUDIT.md` ; avertir ou bloquer au-delà de deux mois de caution (lot 08 : avertissement journalisé, sans blocage, selon le porteur) ; plafond de deux mois calculé sur le loyer seul, hors charges, pour la caution seulement, la garantie des factures n'y entrant pas (choix du porteur au lot 08, à confirmer) ; valeurs par défaut des paramètres du bail retenues au lot 08 (préavis du locataire 2 mois en durée déterminée, 3 mois en durée indéterminée ; préavis du bailleur 3 mois ; restitution sous 30 jours ; passage à durée indéterminée à l'échéance) ; arrêté du 8 avril 2026 sur les démarcheurs (commission demandée au locataire) | 08 | Juriste, texte officiel de la loi et de l'arrêté |
 | Liste des réparations à la charge du locataire (décret prévu à l'article 25) | 10 bis | Juriste, ministère de l'Habitat |
 | Qui détient la caution en pratique (agence ou propriétaire) ; les pilotes légalisent-ils les baux et les transmettent-ils aux impôts ? | 08 | Agences pilotes |
 | Contenu minimal d'un reçu de loyer | 09 | Juriste, pratiques des agences pilotes |
