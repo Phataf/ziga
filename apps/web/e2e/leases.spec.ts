@@ -256,7 +256,10 @@ test.describe('Création d’un bail sur téléphone (critère d’acceptation d
 		await page.getByTestId('valider').click();
 		await expect(page).toHaveURL(`/app/baux/${leaseId}`);
 		await synced(page);
-		await expect(page.getByTestId('statut-bail')).toHaveText('En vigueur', { timeout: 15_000 });
+		// Confirmé par le serveur : plus « en attente », et l'échéancier du serveur remplace l'aperçu de l'appareil.
+		await expect(page.getByTestId('attente-synchro')).toHaveCount(0, { timeout: 20_000 });
+		await expect(page.getByTestId('statut-bail')).toHaveText('En vigueur');
+		await expect(page.getByTestId('echeance').first()).not.toHaveAttribute('data-preview', '1', { timeout: 20_000 });
 		const elapsed = Date.now() - started;
 		expect(elapsed, `${Math.round(elapsed / 1000)} s`).toBeLessThan(3 * 60_000);
 
@@ -334,8 +337,9 @@ test.describe('Deux appareils hors ligne, un bail chacun sur la même unité (r�
 		// Le premier appareil revient : son bail est validé par le serveur, l'aperçu devient l'échéancier du serveur.
 		await one.context.setOffline(false);
 		await synced(one.page, 20_000);
-		await expect(one.page.getByTestId('statut-bail')).toHaveText('En vigueur', { timeout: 15_000 });
-		await expect(one.page.getByTestId('echeance').first()).not.toHaveAttribute('data-preview', '1');
+		await expect(one.page.getByTestId('attente-synchro')).toHaveCount(0, { timeout: 20_000 });
+		await expect(one.page.getByTestId('statut-bail')).toHaveText('En vigueur');
+		await expect(one.page.getByTestId('echeance').first()).not.toHaveAttribute('data-preview', '1', { timeout: 20_000 });
 		await expect(one.page.getByTestId('echeance')).toHaveCount(preview);
 		const server = await get<{ status: string; rentDues: unknown[] }>(request, agency.headers, `/leases/${first}`);
 		expect(server.status).toBe('active');

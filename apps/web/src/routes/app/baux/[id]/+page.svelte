@@ -273,7 +273,7 @@
 		<section class="space-y-3 rounded-2xl border bg-card p-4 md:p-6">
 			<div class="flex flex-wrap items-center gap-2">
 				<Badge variant={tone(lease.status)} data-testid="statut-bail">{t.status[lease.status]}</Badge>
-				{#if pending}<Badge variant="secondary">{t.pendingSync}</Badge>{/if}
+				{#if pending}<Badge variant="secondary" data-testid="attente-synchro">{t.pendingSync}</Badge>{/if}
 				{#if lease.alerts.includes('contract_unsigned')}
 					<Badge variant="warning" data-testid="alerte-contrat"><CircleAlert class="size-4" aria-hidden="true" />{t.contractUnsigned}</Badge
 					>
