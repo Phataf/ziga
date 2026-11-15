@@ -126,6 +126,9 @@ export const paymentMethodsSchema = z.object({
 		.transform((m) => PAYMENT_METHODS.filter((x) => m.includes(x)))
 });
 
+/** Lot 08 : découpage des périodes de loyer, réglage de l'organisation recopié dans chaque bail à sa création. */
+export const rentBillingModeSchema = z.object({ mode: z.enum(['calendar_prorata', 'calendar_full_first', 'anniversary']) });
+
 /** Le directeur ne peut que désactiver, pour son organisation, une fonctionnalité qui lui est ouverte. */
 export const organizationFeatureSettingSchema = z.object({ disabled: z.boolean() });
 
@@ -176,6 +179,8 @@ export interface OrganizationView {
 	logo: LogoView | null;
 	planId: string;
 	acceptedPaymentMethods: PaymentMethod[];
+	/** Lot 08 : découpage des périodes de loyer des nouveaux baux. */
+	rentBillingMode: 'calendar_prorata' | 'calendar_full_first' | 'anniversary';
 	createdAt: string;
 	updatedAt: string;
 }

@@ -232,7 +232,6 @@ describe('schémas du bail', () => {
 			charges: 0,
 			periodicity: 'monthly',
 			dueDay: 5,
-			billingMode: 'calendar_prorata',
 			advanceMonths: 0,
 			noticeTenantFixedTermMonths: 2,
 			noticeTenantOpenEndedMonths: 3,
@@ -248,6 +247,8 @@ describe('schémas du bail', () => {
 			validate: true
 		});
 		expect(LEGAL_LEASE_DEFAULTS.dueDay).toBe(5);
+		// Le découpage absent est recopié par le serveur depuis le réglage de l'organisation.
+		expect(data.billingMode).toBeUndefined();
 	});
 
 	it('une durée donne la date de fin ; une fin incohérente est refusée', () => {

@@ -237,6 +237,8 @@ export function toDocument(r: Row): DocumentView {
 		mandateId: str(r.mandate_id),
 		propertyId: str(r.property_id),
 		unitId: str(r.unit_id),
+		tenantId: str(r.tenant_id),
+		leaseId: str(r.lease_id),
 		version: int(r.version) ?? 1,
 		replacesId: str(r.replaces_id),
 		fileName: String(r.file_name ?? ''),

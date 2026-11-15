@@ -17,14 +17,7 @@ import { ID_DOCUMENT_TYPES } from './organizations.js';
 import type { OrganizationType } from './permissions.js';
 import { phoneSchema } from './phone.js';
 import { isAvailable, occupancyOf, type AvailabilityInput, type Occupancy, type OccupancySignal } from './properties.js';
-import {
-	DEFAULT_RENT_BILLING_MODE,
-	endOnFromDuration,
-	isAnniversaryOf,
-	MONTHS_PER_PERIOD,
-	RENT_BILLING_MODES,
-	RENT_PERIODICITIES
-} from './rent-schedule.js';
+import { endOnFromDuration, isAnniversaryOf, MONTHS_PER_PERIOD, RENT_BILLING_MODES, RENT_PERIODICITIES } from './rent-schedule.js';
 import { patchShape } from './schema-helpers.js';
 
 // ---------------------------------------------------------------- valeurs légales par défaut (D24, D25)
@@ -408,6 +401,23 @@ export const tenantIdentitySchema = z
 export type TenantIdentity = z.output<typeof tenantIdentitySchema>;
 export const updateTenantIdentitySchema = z.object(patchShape(tenantIdentityFields));
 
+/** Création d'un locataire en ligne, avec son état civil (directeur et gestionnaire). */
+export const createTenantWithIdentitySchema = createTenantSchema.extend({
+	identity: tenantIdentitySchema.nullish().transform((v) => v ?? null)
+});
+
+/** Pagination par curseur (CLAUDE.md §6) : identifiant du dernier élément reçu, 50 par page par défaut. */
+export const pageQuerySchema = z.object({
+	cursor: idSchema.nullish().transform((v) => v ?? null),
+	limit: z.coerce.number().int().min(1).max(200).default(50)
+});
+
+/** Montant convenu d'un compte de caution, tant que le bail est un brouillon. */
+export const updateDepositAccountSchema = z.object({
+	agreedAmount: fcfaSchema.min(1, { error: 'Indiquez le montant.' }).optional(),
+	agreedMonths: nullableInt(1, 24, 'Mois').optional()
+});
+
 // ---------------------------------------------------------------- schémas : baux
 
 /** Conditions et paramètres du bail (D24) ; valeurs légales par défaut, modifiables bail par bail. */
@@ -422,10 +432,10 @@ const leaseTermFields = {
 	// Trimestriel prévu dans le modèle de données, pas encore proposé (MVP).
 	periodicity: z
 		.enum(RENT_PERIODICITIES)
-		.refine((p) => p === 'monthly', { error: 'Seule la périodicité mensuelle est proposée.' })
+		.refine((p): boolean => p === 'monthly', { error: 'Seule la périodicité mensuelle est proposée.' })
 		.default('monthly'),
 	dueDay: int(1, 28, 'Jour d’échéance').default(LEGAL_LEASE_DEFAULTS.dueDay),
-	billingMode: z.enum(RENT_BILLING_MODES).default(DEFAULT_RENT_BILLING_MODE),
+	billingMode: z.enum(RENT_BILLING_MODES),
 	advanceMonths: int(0, 24, 'Avance').default(0),
 	lessorType: z.enum(LESSOR_TYPES),
 	paymentTerms: optionalText(500),
@@ -452,7 +462,7 @@ interface LeaseTermsShape {
 	durationMonths: number | null;
 	duesStartOn: string | null;
 	periodicity: (typeof RENT_PERIODICITIES)[number];
-	billingMode: (typeof RENT_BILLING_MODES)[number];
+	billingMode?: (typeof RENT_BILLING_MODES)[number];
 	advanceMonths: number;
 	penaltyRateBp: number | null;
 	penaltyGraceDays: number | null;
@@ -502,7 +512,15 @@ export type LeaseTerms = z.output<typeof leaseTermsSchema>;
  * faux pour un brouillon. Le mode de découpage est recopié du réglage de l'organisation et figé ensuite.
  */
 export const createLeaseSchema = z
-	.object({ id: idSchema, unitId: idSchema, tenantId: idSchema, validate: z.boolean().default(true), ...leaseTermFields })
+	.object({
+		id: idSchema,
+		unitId: idSchema,
+		tenantId: idSchema,
+		validate: z.boolean().default(true),
+		...leaseTermFields,
+		// Absent : le serveur recopie le réglage de l'organisation (rent_billing_mode).
+		billingMode: z.enum(RENT_BILLING_MODES).optional()
+	})
 	.superRefine(checkLeaseTerms)
 	.transform(resolveTerms);
 export type CreateLeaseInput = z.input<typeof createLeaseSchema>;
@@ -558,3 +576,130 @@ export const depositHolderChangeSchema = z.object({
 	reason: z.string().trim().min(3, { error: 'Indiquez le motif.' }).max(500, { error: 'Motif trop long.' })
 });
 export type DepositHolderChangeData = z.output<typeof depositHolderChangeSchema>;
+
+// ---------------------------------------------------------------- vues (API et appareil)
+
+export interface TenantView {
+	id: string;
+	civility: Civility | null;
+	fullName: string;
+	phone: string | null;
+	secondaryPhone: string | null;
+	nationality: string | null;
+	profession: string | null;
+	previousAddress: string | null;
+	emergencyContactName: string | null;
+	emergencyContactPhone: string | null;
+	notes: string | null;
+	status: TenantStatus;
+	archivedAt: string | null;
+	createdAt: string;
+	updatedAt: string;
+}
+
+/** État civil et pièce d'identité : directeur et gestionnaire seulement (`tenant.read_identity`). */
+export type TenantIdentityView = TenantIdentity;
+
+export interface RentDueView {
+	id: string;
+	leaseId: string;
+	periodStart: string;
+	periodEnd: string;
+	dueOn: string;
+	rent: Fcfa;
+	charges: Fcfa;
+	amountDue: Fcfa;
+	amountPaid: Fcfa;
+	balance: Fcfa;
+	status: RentDueStatus;
+	prorated: boolean;
+	isAdvance: boolean;
+	leaseVersion: number;
+}
+
+export interface DepositMovementView {
+	id: string;
+	accountId: string;
+	type: DepositMovementType;
+	amount: Fcfa;
+	previousHolder: DepositHolder | null;
+	newHolder: DepositHolder | null;
+	reason: string | null;
+	occurredOn: string;
+	documentId: string | null;
+	createdBy: string | null;
+	createdAt: string;
+}
+
+export interface DepositAccountView {
+	id: string;
+	leaseId: string;
+	type: DepositType;
+	agreedAmount: Fcfa;
+	agreedMonths: number | null;
+	holder: DepositHolder;
+	status: DepositAccountStatus;
+	balances: DepositBalances;
+	/** Caution au-delà de deux mois de loyer (hors charges) : avertissement, jamais un blocage. */
+	aboveLegalCap: boolean;
+	movements: DepositMovementView[];
+}
+
+export interface LeaseVersionView {
+	version: number;
+	rent: Fcfa;
+	charges: Fcfa;
+	rentEffectiveFrom: string;
+	status: LeaseStatus;
+	changedBy: string | null;
+	recordedAt: string;
+}
+
+export interface LeaseView extends Omit<LeaseTerms, 'billingMode'> {
+	id: string;
+	unitId: string;
+	tenantId: string;
+	billingMode: (typeof RENT_BILLING_MODES)[number];
+	rentEffectiveFrom: string;
+	status: LeaseStatus;
+	activatedOn: string | null;
+	cancelledAt: string | null;
+	cancellationReason: string | null;
+	noticeGivenOn: string | null;
+	exitOn: string | null;
+	version: number;
+	alerts: LeaseAlert[];
+	createdAt: string;
+	updatedAt: string;
+}
+
+export interface LeaseDetailView extends LeaseView {
+	versions: LeaseVersionView[];
+	rentDues: RentDueView[];
+	/** Absent pour l'agent de terrain (`deposit.read`). */
+	deposits: DepositAccountView[] | null;
+	/** Encours exigible du bail (dû ou en retard). */
+	outstanding: Fcfa;
+}
+
+export interface TenantDetailView extends TenantView {
+	/** Absent sans `tenant.read_identity`. */
+	identity: TenantIdentityView | null;
+	leases: LeaseView[];
+	/** Encours exigible, tous baux confondus. */
+	outstanding: Fcfa;
+}
+
+/** Réponse d'une écriture qui peut porter un avertissement (caution au-delà de deux mois de loyer). */
+export interface WithWarnings<T> {
+	data: T;
+	warnings: LeaseWarning[];
+}
+
+export type LeaseWarning = 'DEPOSIT_ABOVE_LEGAL_CAP';
+
+/** Une page de résultats, pagination par curseur (CLAUDE.md §6). */
+export interface Page<T> {
+	items: T[];
+	nextCursor: string | null;
+}

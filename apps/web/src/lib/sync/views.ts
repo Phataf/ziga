@@ -57,6 +57,7 @@ export function toOrganizationView(row: Row, apiBase: string): OrganizationView 
 			: null,
 		planId: String(row.plan_id ?? 'discovery'),
 		acceptedPaymentMethods: jsonArray(row.accepted_payment_methods) as PaymentMethod[],
+		rentBillingMode: (text(row.rent_billing_mode) ?? 'calendar_prorata') as OrganizationView['rentBillingMode'],
 		createdAt: '',
 		updatedAt: String(row.updated_at ?? '')
 	};

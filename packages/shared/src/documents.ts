@@ -32,8 +32,8 @@ export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
 export const DOCUMENT_RESTRICTIONS = ['director_only'] as const;
 export type DocumentRestriction = (typeof DOCUMENT_RESTRICTIONS)[number];
 
-/** Objets auxquels un document se rattache au lot 07 (bail, contrat, locataire : lot 08 bis). */
-export const DOCUMENT_SUBJECTS = ['owner', 'mandate', 'property', 'unit'] as const;
+/** Objets auxquels un document se rattache : lot 07, puis bail et locataire (lot 08) ; contrat au lot 08 bis. */
+export const DOCUMENT_SUBJECTS = ['owner', 'mandate', 'property', 'unit', 'tenant', 'lease'] as const;
 export type DocumentSubject = (typeof DOCUMENT_SUBJECTS)[number];
 
 /** Pièces privées : mêmes limites de taille que les photos ; PDF ou image. */
@@ -115,6 +115,8 @@ export const createDocumentSchema = z
 		mandateId: idSchema.nullish().transform((v) => v ?? null),
 		propertyId: idSchema.nullish().transform((v) => v ?? null),
 		unitId: idSchema.nullish().transform((v) => v ?? null),
+		tenantId: idSchema.nullish().transform((v) => v ?? null),
+		leaseId: idSchema.nullish().transform((v) => v ?? null),
 		replacesId: idSchema.nullish().transform((v) => v ?? null),
 		fileName: z
 			.string()
@@ -132,11 +134,14 @@ export const createDocumentSchema = z
 			.transform((v) => v ?? null)
 	})
 	.superRefine((d, ctx) => {
-		// Le bail et le locataire deviennent des objets liés avec le module leases (lot 08, étape 3).
-		if ((LEASE_DOCUMENT_TYPES as readonly string[]).includes(d.type)) {
-			ctx.addIssue({ code: 'custom', path: ['type'], message: 'Ce document se dépose depuis le bail ou la fiche du locataire.' });
+		// Lot 08 : le bail scanné se rattache à un bail, la pièce d'identité du locataire à un locataire.
+		if (d.type === 'signed_lease_scan' && !d.leaseId) {
+			ctx.addIssue({ code: 'custom', path: ['leaseId'], message: 'Rattachez le bail scanné à son bail.' });
 		}
-		if (!d.ownerId && !d.mandateId && !d.propertyId && !d.unitId) {
+		if (d.type === 'tenant_identity' && !d.tenantId) {
+			ctx.addIssue({ code: 'custom', path: ['tenantId'], message: 'Rattachez la pièce d’identité à son locataire.' });
+		}
+		if (!d.ownerId && !d.mandateId && !d.propertyId && !d.unitId && !d.tenantId && !d.leaseId) {
 			ctx.addIssue({ code: 'custom', path: ['propertyId'], message: 'Rattachez le document à un propriétaire, un mandat ou un bien.' });
 		}
 		if (d.unitId && !d.propertyId) ctx.addIssue({ code: 'custom', path: ['propertyId'], message: 'Indiquez le bien de l’unité.' });
@@ -157,6 +162,8 @@ export interface DocumentView {
 	mandateId: string | null;
 	propertyId: string | null;
 	unitId: string | null;
+	tenantId: string | null;
+	leaseId: string | null;
 	version: number;
 	replacesId: string | null;
 	fileName: string;

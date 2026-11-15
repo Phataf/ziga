@@ -59,7 +59,7 @@ describe('documents du bail (lot 08)', () => {
 		expect(DOCUMENT_ACCESS.tenant_identity).toMatchObject({ owner: 'never', tenant: 'own' });
 	});
 
-	it('ne se déposent pas depuis un bien : ils se rattachent au bail ou au locataire', () => {
+	it('se rattachent au bail ou au locataire, pas seulement à un bien', () => {
 		const base = {
 			id: '019a5e2c-7d1e-7c3a-8b2f-1a2b3c4d5e6f',
 			propertyId: '019a5e2c-7d1e-7c3a-8b2f-1a2b3c4d5e70',
@@ -68,6 +68,10 @@ describe('documents du bail (lot 08)', () => {
 			byteSize: 1000
 		};
 		for (const type of LEASE_DOCUMENT_TYPES) expect(createDocumentSchema.safeParse({ ...base, type }).success).toBe(false);
+		const leaseId = '019a5e2c-7d1e-7c3a-8b2f-1a2b3c4d5e71';
+		const { propertyId: _p, ...noProperty } = base;
+		expect(createDocumentSchema.safeParse({ ...noProperty, type: 'signed_lease_scan', leaseId }).success).toBe(true);
+		expect(createDocumentSchema.safeParse({ ...noProperty, type: 'tenant_identity', tenantId: leaseId }).success).toBe(true);
 		expect(createDocumentSchema.safeParse({ ...base, type: 'title_deed' }).success).toBe(true);
 	});
 });
