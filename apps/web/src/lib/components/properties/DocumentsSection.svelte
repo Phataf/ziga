@@ -7,7 +7,7 @@
 	 */
 	import { ExternalLink, FileUp } from '@lucide/svelte';
 	import { formatDate } from '@ziga/shared/dates';
-	import { DOCUMENT_MIME_TYPES, DOCUMENT_TYPES, type DocumentType, type DocumentView } from '@ziga/shared/documents';
+	import { DOCUMENT_MIME_TYPES, DOCUMENT_TYPES, LEASE_DOCUMENT_TYPES, type DocumentType, type DocumentView } from '@ziga/shared/documents';
 	import { newId } from '@ziga/shared/ids';
 	import { can } from '@ziga/shared/permissions';
 	import { MAX_UPLOAD_BYTES } from '@ziga/shared/properties';
@@ -23,6 +23,8 @@
 	let { propertyId, ownerId, documents }: { propertyId: string; ownerId: string; documents: DocumentView[] } = $props();
 
 	const t = fr.documents;
+	// Le bail scanné et la pièce du locataire se déposent depuis le bail ou la fiche du locataire (lot 08).
+	const PROPERTY_DOCUMENT_TYPES = DOCUMENT_TYPES.filter((d) => !(LEASE_DOCUMENT_TYPES as readonly DocumentType[]).includes(d));
 	const role = $derived(organizations.active?.role);
 	const canUpload = $derived(can(role, 'document.upload'));
 	const canRestrict = $derived(can(role, 'document.restrict'));
@@ -119,7 +121,7 @@
 			<div class="space-y-1">
 				<label for="document-type" class="block font-medium">{t.type}</label>
 				<select id="document-type" bind:value={type} class={select}>
-					{#each DOCUMENT_TYPES as d (d)}<option value={d}>{t.types[d]}</option>{/each}
+					{#each PROPERTY_DOCUMENT_TYPES as d (d)}<option value={d}>{t.types[d]}</option>{/each}
 				</select>
 			</div>
 			<div class="space-y-1">

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { canReadDocument, DOCUMENT_ACCESS, DOCUMENT_RESTRICTIONS, DOCUMENT_TYPES } from './documents.js';
+import {
+	canReadDocument,
+	createDocumentSchema,
+	DOCUMENT_ACCESS,
+	DOCUMENT_RESTRICTIONS,
+	DOCUMENT_TYPES,
+	LEASE_DOCUMENT_TYPES
+} from './documents.js';
 import { ORGANIZATION_ROLES } from './permissions.js';
 
 describe('matrice de confidentialité des documents (D22, docs/UX.md §10)', () => {
@@ -36,5 +43,31 @@ describe('matrice de confidentialité des documents (D22, docs/UX.md §10)', () 
 		}
 		expect(canReadDocument('manager', { type: 'title_deed', restriction: 'director_only' })).toBe(false);
 		expect(canReadDocument('director', { type: 'title_deed', restriction: 'director_only' })).toBe(true);
+	});
+});
+
+describe('documents du bail (lot 08)', () => {
+	it('matrice : bail signé et pièce du locataire, direction et gestion ; jamais l’agent de terrain ni le profil lecture', () => {
+		for (const type of ['signed_lease_scan', 'tenant_identity'] as const) {
+			expect(canReadDocument('director', { type, restriction: null })).toBe(true);
+			expect(canReadDocument('manager', { type, restriction: null })).toBe(true);
+			expect(canReadDocument('field_agent', { type, restriction: null }, { assignedUnit: true })).toBe(false);
+			expect(canReadDocument('viewer', { type, restriction: null })).toBe(false);
+			expect(canReadDocument('manager', { type, restriction: 'director_only' })).toBe(false);
+		}
+		expect(DOCUMENT_ACCESS.signed_lease_scan).toMatchObject({ owner: 'own', tenant: 'own' });
+		expect(DOCUMENT_ACCESS.tenant_identity).toMatchObject({ owner: 'never', tenant: 'own' });
+	});
+
+	it('ne se déposent pas depuis un bien : ils se rattachent au bail ou au locataire', () => {
+		const base = {
+			id: '019a5e2c-7d1e-7c3a-8b2f-1a2b3c4d5e6f',
+			propertyId: '019a5e2c-7d1e-7c3a-8b2f-1a2b3c4d5e70',
+			fileName: 'bail.pdf',
+			mimeType: 'application/pdf',
+			byteSize: 1000
+		};
+		for (const type of LEASE_DOCUMENT_TYPES) expect(createDocumentSchema.safeParse({ ...base, type }).success).toBe(false);
+		expect(createDocumentSchema.safeParse({ ...base, type: 'title_deed' }).success).toBe(true);
 	});
 });

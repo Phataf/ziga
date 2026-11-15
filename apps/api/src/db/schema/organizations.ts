@@ -38,6 +38,10 @@ export const organizations = pgTable('organizations', {
 	suspendedAt: tstz('suspended_at'),
 	suspendedReason: text('suspended_reason'),
 	logoId: uuid('logo_id'),
+	// Lot 08 : découpage des périodes de loyer, recopié dans chaque bail à sa création.
+	rentBillingMode: text('rent_billing_mode', { enum: ['calendar_prorata', 'calendar_full_first', 'anniversary'] })
+		.notNull()
+		.default('calendar_prorata'),
 	createdBy: uuid('created_by').notNull(),
 	createdAt: tstz('created_at').notNull().defaultNow(),
 	updatedAt: tstz('updated_at').notNull().defaultNow()

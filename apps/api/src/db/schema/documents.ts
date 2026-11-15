@@ -11,12 +11,26 @@ export const documents = pgTable('documents', {
 	id: uuid('id').primaryKey(),
 	organizationId: uuid('organization_id').notNull(),
 	type: text('type', {
-		enum: ['title_deed', 'puh', 'allocation_certificate', 'apfr', 'owner_identity', 'mandate', 'document_photo', 'other']
+		enum: [
+			'title_deed',
+			'puh',
+			'allocation_certificate',
+			'apfr',
+			'owner_identity',
+			'mandate',
+			'document_photo',
+			'other',
+			'signed_lease_scan',
+			'tenant_identity'
+		]
 	}).notNull(),
 	ownerId: uuid('owner_id'),
 	mandateId: uuid('mandate_id'),
 	propertyId: uuid('property_id'),
 	unitId: uuid('unit_id'),
+	// Lot 08 : bail scanné (lease_id), pièce d'identité du locataire (tenant_id).
+	tenantId: uuid('tenant_id'),
+	leaseId: uuid('lease_id'),
 	version: integer('version').notNull(),
 	replacesId: uuid('replaces_id'),
 	fileName: text('file_name').notNull(),

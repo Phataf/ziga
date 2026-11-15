@@ -87,6 +87,18 @@ describe('architecture', () => {
 		expect(readFileSync(join(src, 'db/schema/index.ts'), 'utf8')).not.toContain('documents');
 	});
 
+	it('seul le module leases lit et écrit les locataires, les baux, les échéances et les cautions (lot 08)', () => {
+		const tables = /\b(from|join|update|into)\s+(tenants|leases|lease_versions|rent_dues|deposit_accounts|deposit_movements)\b/i;
+		const offenders = all.filter(
+			(f) =>
+				!f.path.startsWith('modules/leases/') &&
+				f.path !== 'db/schema/leases.ts' &&
+				(imports(f.code).some((i) => /schema\/leases(\.js)?$/.test(i)) || tables.test(f.code))
+		);
+		expect(offenders.map((f) => f.path)).toEqual([]);
+		expect(readFileSync(join(src, 'db/schema/index.ts'), 'utf8')).not.toContain('leases');
+	});
+
 	it('seul le module admin utilise la connexion app_admin', () => {
 		const offenders = all.filter((f) => !f.path.startsWith('modules/admin/') && imports(f.code).some((i) => i.includes('admin-database')));
 		expect(offenders.map((f) => f.path)).toEqual([]);

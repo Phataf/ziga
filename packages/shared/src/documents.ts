@@ -17,7 +17,10 @@ export const DOCUMENT_TYPES = [
 	'owner_identity', // pièce d'identité du propriétaire
 	'mandate', // mandat de gestion
 	'document_photo', // photo d'un document
-	'other'
+	'other',
+	// Lot 08 : bail signé scanné (rattaché au bail), pièce d'identité du locataire (rattachée au locataire).
+	'signed_lease_scan',
+	'tenant_identity'
 ] as const;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 
@@ -64,8 +67,14 @@ export const DOCUMENT_ACCESS: Record<DocumentType, DocumentAccessRule> = {
 	mandate: { staff: STAFF, fieldAgent: 'never', owner: 'own', tenant: 'never' },
 	// Hors matrice : traités comme des notes internes, la règle la plus étroite (direction et gestion seulement).
 	document_photo: { staff: STAFF, fieldAgent: 'never', owner: 'never', tenant: 'never' },
-	other: { staff: STAFF, fieldAgent: 'never', owner: 'never', tenant: 'never' }
+	other: { staff: STAFF, fieldAgent: 'never', owner: 'never', tenant: 'never' },
+	// Lot 08 : « Contrat signé » et « Pièce d'identité du locataire » de la matrice.
+	signed_lease_scan: { staff: STAFF, fieldAgent: 'never', owner: 'own', tenant: 'own' },
+	tenant_identity: { staff: STAFF, fieldAgent: 'never', owner: 'never', tenant: 'own' }
 };
+
+/** Documents du bail : rattachés au bail ou au locataire (module leases, lot 08). */
+export const LEASE_DOCUMENT_TYPES = ['signed_lease_scan', 'tenant_identity'] as const satisfies readonly DocumentType[];
 
 export interface DocumentForAccess {
 	type: DocumentType;
@@ -123,6 +132,10 @@ export const createDocumentSchema = z
 			.transform((v) => v ?? null)
 	})
 	.superRefine((d, ctx) => {
+		// Le bail et le locataire deviennent des objets liés avec le module leases (lot 08, étape 3).
+		if ((LEASE_DOCUMENT_TYPES as readonly string[]).includes(d.type)) {
+			ctx.addIssue({ code: 'custom', path: ['type'], message: 'Ce document se dépose depuis le bail ou la fiche du locataire.' });
+		}
 		if (!d.ownerId && !d.mandateId && !d.propertyId && !d.unitId) {
 			ctx.addIssue({ code: 'custom', path: ['propertyId'], message: 'Rattachez le document à un propriétaire, un mandat ou un bien.' });
 		}

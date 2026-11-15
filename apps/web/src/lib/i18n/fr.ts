@@ -806,7 +806,9 @@ export const fr = {
 			owner_identity: 'Pièce d’identité du propriétaire',
 			mandate: 'Mandat de gestion',
 			document_photo: 'Photo d’un document',
-			other: 'Autre'
+			other: 'Autre',
+			signed_lease_scan: 'Bail signé (scan)',
+			tenant_identity: 'Pièce d’identité du locataire'
 		},
 		file: 'Fichier (PDF ou image, 10 Mo au plus)',
 		restricted: 'Réservé à la direction',
