@@ -434,6 +434,7 @@ for (const [name, size, coque] of [
 			await expect(page.getByTestId('dimensions').first()).toContainText('Non publiée');
 			await expectNoHorizontalOverflow(page, `fiche (${name})`);
 			await page.getByTestId('bouton-creer').click();
+			await page.getByTestId('creer-bien').click();
 			await expect(page.getByTestId('assistant')).toHaveAttribute('data-etape', '1');
 			await expectNoHorizontalOverflow(page, `assistant (${name})`);
 		});
