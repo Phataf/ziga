@@ -13,9 +13,13 @@ import { createOrg, sqlError, type Org } from './orgs.js';
 /** Tables synchronisées (lots 05 et 06) : toute nouvelle table passe par docs/SYNC.md et par cette liste. */
 const PUBLISHED = [
 	'communes',
+	'deposit_accounts',
+	'deposit_movements',
 	'documents',
 	'feature_overrides',
 	'features',
+	'lease_versions',
+	'leases',
 	'mandate_scopes',
 	'mandate_versions',
 	'mandates',
@@ -27,6 +31,8 @@ const PUBLISHED = [
 	'owners',
 	'plan_features',
 	'properties',
+	'rent_dues',
+	'tenants',
 	'units'
 ];
 

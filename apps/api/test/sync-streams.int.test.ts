@@ -127,4 +127,35 @@ describe('Sync Streams (lot 05, D30)', () => {
 			.join('\n');
 		expect(queries).not.toMatch(/storage_key/);
 	});
+
+	it('lot 08 : état civil et pièce d’identité du locataire chez le directeur et le gestionnaire seulement', () => {
+		const identities = stream('tenant_identities');
+		expect(identities).toContain("organization_members.role != 'field_agent'");
+		expect(identities).toContain("organization_members.role != 'viewer'");
+		expect(identities).toMatch(/FROM tenants AS tenant_identities WHERE organization_id IN identity_organizations/);
+		// Aucune autre requête ne lit ces colonnes de tenants.
+		const yaml = readFileSync(CONFIG, 'utf8');
+		const others = yaml.replace(identities, '');
+		expect(others).not.toMatch(/\b(birth_date|birth_place|id_number|id_issued_on|id_issued_by|id_type_other)\b/);
+		expect(others).not.toMatch(/\bid_type\b/);
+	});
+
+	it('lot 08 : l’agent de terrain reçoit les baux et échéances de ses unités, leurs locataires sans notes, aucune caution', () => {
+		const agent = stream('assigned_units');
+		expect(agent).toMatch(/FROM leases WHERE unit_id IN my_units/);
+		expect(agent).toMatch(/FROM lease_versions WHERE lease_id IN my_unit_leases/);
+		expect(agent).toMatch(/FROM rent_dues WHERE lease_id IN my_unit_leases/);
+		expect(agent).toMatch(/FROM tenants WHERE id IN my_unit_tenants/);
+		expect(agent).not.toMatch(/\bdeposit_(accounts|movements)\b/);
+		const tenantQuery = agent.split('\n').find((line) => /FROM tenants\b/.test(line))!;
+		expect(tenantQuery).not.toMatch(/\b(notes|nationality|profession|previous_address)\b/);
+		// Les tables du bail ne descendent que par ces deux streams.
+		const yaml = readFileSync(CONFIG, 'utf8');
+		const others = yaml.replace(agent, '').replace(stream('managed_properties'), '').replace(stream('tenant_identities'), '');
+		expect(others).not.toMatch(/FROM (tenants|leases|lease_versions|rent_dues|deposit_accounts|deposit_movements)\b/);
+		// Aucune occupation stockée ni synchronisée, et jamais le compte lié d'un locataire.
+		expect(yaml).not.toMatch(/\boccupancy\b/);
+		const tenants = yaml.split('\n').filter((line) => /FROM tenants\b/.test(line));
+		for (const line of tenants) expect(line).not.toMatch(/\buser_id\b/);
+	});
 });
