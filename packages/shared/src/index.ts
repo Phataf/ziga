@@ -14,3 +14,5 @@ export * from './owners.js';
 export * from './geography.js';
 export * from './properties.js';
 export * from './documents.js';
+export * from './rent-schedule.js';
+export * from './leases.js';

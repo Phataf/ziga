@@ -71,6 +71,14 @@
 		"./documents": {
 			"types": "./dist/documents.d.ts",
 			"default": "./dist/documents.js"
+		},
+		"./rent-schedule": {
+			"types": "./dist/rent-schedule.d.ts",
+			"default": "./dist/rent-schedule.js"
+		},
+		"./leases": {
+			"types": "./dist/leases.d.ts",
+			"default": "./dist/leases.js"
 		}
 	},
 	"files": [

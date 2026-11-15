@@ -50,8 +50,19 @@ export const PERMISSIONS = {
 	'document.withdraw': [D, M],
 	// Restreindre un document à la direction (jamais élargir la matrice, docs/UX.md §10).
 	'document.restrict': [D],
+	// Lot 08 : locataires, baux, échéances et cautions. L'agent de terrain lit les baux et les locataires de ses unités
+	// affectées, sans l'état civil ni la pièce d'identité (stream à part, directeur et gestionnaire) ; le profil lecture
+	// lit sans l'état civil non plus.
+	'tenant.read': [D, M, F, V],
+	'tenant.read_identity': [D, M],
+	'tenant.create': [D, M],
+	'tenant.update': [D, M],
+	'lease.read': [D, M, F, V],
+	'lease.create': [D, M],
+	'lease.update': [D, M],
+	'deposit.read': [D, M, V],
+	'deposit.receive': [D, M],
 	// Déclarées dès le lot 03 pour fixer le partage des rôles ; leurs endpoints viennent avec leur lot.
-	'lease.manage': [D, M],
 	'payment.record': [D, M],
 	// Agent de terrain : espèces « à valider », sur ses unités affectées.
 	'payment.record_cash': [D, M, F],
