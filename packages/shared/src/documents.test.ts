@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	canPartyReadDocument,
 	canReadDocument,
 	createDocumentSchema,
 	DOCUMENT_ACCESS,
@@ -73,5 +74,35 @@ describe('documents du bail (lot 08)', () => {
 		expect(createDocumentSchema.safeParse({ ...noProperty, type: 'signed_lease_scan', leaseId }).success).toBe(true);
 		expect(createDocumentSchema.safeParse({ ...noProperty, type: 'tenant_identity', tenantId: leaseId }).success).toBe(true);
 		expect(createDocumentSchema.safeParse({ ...base, type: 'title_deed' }).success).toBe(true);
+	});
+});
+
+describe('documents vus par les parties (espaces personnels, lot 08 bis puis lot 10 ter)', () => {
+	it('le locataire ne voit pas le mandat, ni les pièces du propriétaire ; le propriétaire ne voit pas la pièce du locataire', () => {
+		for (const type of ['mandate', 'owner_identity', 'title_deed', 'puh', 'allocation_certificate', 'apfr'] as const) {
+			expect(canPartyReadDocument('tenant', { type, restriction: null }, { isParty: true }), type).toBe(false);
+			expect(canPartyReadDocument('owner', { type, restriction: null }, { isParty: true }), type).toBe(true);
+		}
+		expect(canPartyReadDocument('owner', { type: 'tenant_identity', restriction: null }, { isParty: true })).toBe(false);
+		expect(canPartyReadDocument('tenant', { type: 'tenant_identity', restriction: null }, { isParty: true })).toBe(true);
+	});
+
+	it('jamais sans être partie, jamais un document restreint, jamais une note interne', () => {
+		for (const type of DOCUMENT_TYPES) {
+			for (const party of ['owner', 'tenant'] as const) {
+				expect(canPartyReadDocument(party, { type, restriction: null }, { isParty: false }), `${party}/${type}`).toBe(false);
+				expect(canPartyReadDocument(party, { type, restriction: 'director_only' }, { isParty: true }), `${party}/${type}`).toBe(false);
+			}
+		}
+		for (const type of ['document_photo', 'other'] as const) {
+			expect(canPartyReadDocument('owner', { type, restriction: null }, { isParty: true })).toBe(false);
+			expect(canPartyReadDocument('tenant', { type, restriction: null }, { isParty: true })).toBe(false);
+		}
+	});
+
+	it('bail signé : le propriétaire et le locataire qui en sont parties', () => {
+		for (const party of ['owner', 'tenant'] as const) {
+			expect(canPartyReadDocument(party, { type: 'signed_lease_scan', restriction: null }, { isParty: true })).toBe(true);
+		}
 	});
 });

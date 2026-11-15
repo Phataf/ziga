@@ -62,6 +62,14 @@ export const PERMISSIONS = {
 	'lease.update': [D, M],
 	'deposit.read': [D, M, V],
 	'deposit.receive': [D, M],
+	// Lot 08 bis : contrats et avenants, direction et gestion ; l'agent de terrain et le profil lecture n'y ont aucun
+	// accès (ni projet, ni données de contrat). Les modèles se modifient par la direction seule.
+	'contract.read': [D, M],
+	'contract.create': [D, M],
+	'contract.freeze': [D, M],
+	'contract.upload_signed': [D, M],
+	'contract_template.read': [D, M],
+	'contract_template.manage': [D],
 	// Déclarées dès le lot 03 pour fixer le partage des rôles ; leurs endpoints viennent avec leur lot.
 	'payment.record': [D, M],
 	// Agent de terrain : espèces « à valider », sur ses unités affectées.

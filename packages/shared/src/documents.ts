@@ -6,6 +6,7 @@
  */
 import { z } from 'zod';
 import { idSchema } from './ids.js';
+import type { ContractStatus } from './contracts.js';
 import type { OrganizationRole } from './permissions.js';
 import { MAX_UPLOAD_BYTES } from './properties.js';
 
@@ -50,9 +51,12 @@ export interface DocumentAccessRule {
 	staff: readonly StaffRole[];
 	/** Agent de terrain : jamais, ou sur ses unités affectées (état des lieux, lot 10 bis). */
 	fieldAgent: 'never' | 'assigned_units';
-	/** Espaces personnels (lot 10 ter) : le propriétaire voit les siens ; le locataire, les siens. */
+	/**
+	 * Espaces personnels (lot 10 ter) : le propriétaire voit les siens ; le locataire, les siens. `own_from_ready_to_sign` :
+	 * le projet de contrat, seulement à partir de « prêt à signer » (docs/UX.md §10, lot 08 bis).
+	 */
 	owner: 'never' | 'own';
-	tenant: 'never' | 'own';
+	tenant: 'never' | 'own' | 'own_from_ready_to_sign';
 }
 
 const STAFF = ['director', 'manager'] as const;
@@ -98,6 +102,26 @@ export function canReadDocument(
 			: (rule.staff as readonly string[]).includes(role);
 	if (!allowed) return false;
 	if (doc.restriction === 'director_only') return role === 'director';
+	return true;
+}
+
+export type DocumentParty = 'owner' | 'tenant';
+
+/**
+ * Le propriétaire ou le locataire peut-il lire ce document, dans son espace personnel (lot 10 ter) ? Seulement s'il en
+ * est partie (`isParty` : c'est son bail, son bien, sa pièce), selon la matrice du type ; une restriction posée par
+ * l'organisation retire aussi l'accès des parties. Un projet de contrat n'est lu par le locataire qu'à partir de
+ * « prêt à signer ». Une autre organisation n'a jamais accès : ce n'est pas une partie.
+ */
+export function canPartyReadDocument(
+	party: DocumentParty,
+	doc: DocumentForAccess,
+	context: { isParty: boolean; contractStatus?: ContractStatus | null }
+): boolean {
+	if (!context.isParty || doc.restriction) return false;
+	const rule = DOCUMENT_ACCESS[doc.type][party];
+	if (rule === 'never') return false;
+	if (rule === 'own_from_ready_to_sign') return context.contractStatus === 'ready_to_sign' || context.contractStatus === 'signed';
 	return true;
 }
 
