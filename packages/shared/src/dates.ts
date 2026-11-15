@@ -49,3 +49,24 @@ export function addDays(iso: string, days: number): string {
 export function daysBetween(from: string, to: string): number {
 	return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
 }
+
+/** Nombre de jours du mois `month` (1 à 12) de l'année `year`. */
+export function daysInMonth(year: number, month: number): number {
+	return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+/** Date du jour `day` du mois situé `months` mois après (year, month), ramenée au dernier jour d'un mois plus court. */
+export function monthDay(year: number, month: number, months: number, day: number): string {
+	const index = year * 12 + (month - 1) + months;
+	const y = Math.floor(index / 12);
+	const m = index - y * 12 + 1;
+	const d = Math.min(day, daysInMonth(y, m));
+	return `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+/** Ajoute (ou retire) des mois à une date aaaa-mm-jj, au même jour ou au dernier jour d'un mois plus court. */
+export function addMonths(iso: string, months: number): string {
+	if (!isIsoDate(iso)) throw new RangeError(`Date invalide : ${iso}`);
+	const [y, m, d] = iso.split('-').map(Number) as [number, number, number];
+	return monthDay(y, m, months, d);
+}
