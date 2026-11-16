@@ -25,8 +25,23 @@ export function sha256(buffer: Buffer): string {
 	return createHash('sha256').update(buffer).digest('hex');
 }
 
-/** Texte brut d'un Word rempli (tests : ordre des clauses, absence de balise restante). */
-export function docxText(docx: Buffer): string {
-	const doc = new Docxtemplater(new PizZip(docx), { paragraphLoop: true, linebreaks: true, parser: flatParser });
-	return doc.getFullText();
+/**
+ * Texte d'un Word rempli, caractère pour caractère (tests : ordre des clauses, blancs, espaces insécables), lu dans les
+ * nœuds de texte du corps (ou d'une autre partie : `word/footer1.xml`). `getFullText` de docxtemplater remplace les espaces insécables : il n'est pas utilisé.
+ */
+export function docxText(docx: Buffer, part = 'word/document.xml'): string {
+	const xml = new PizZip(docx).file(part)?.asText() ?? '';
+	const decode = (v: string) =>
+		v
+			.replace(/&lt;/g, '<')
+			.replace(/&gt;/g, '>')
+			.replace(/&quot;/g, '"')
+			.replace(/&apos;/g, "'")
+			.replace(/&amp;/g, '&');
+	// Un paragraphe par ligne : le texte versionné des clauses se relit tel quel.
+	return xml
+		.split('</w:p>')
+		.map((p) => [...p.matchAll(/<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g)].map((m) => decode(m[1]!)).join(''))
+		.filter((line) => line.length > 0)
+		.join('\n');
 }

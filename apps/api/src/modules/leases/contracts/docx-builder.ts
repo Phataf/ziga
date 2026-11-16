@@ -19,6 +19,8 @@ export interface DocxRun {
 	checkbox?: boolean | 'checked';
 	/** Saut de ligne dans le paragraphe. */
 	lineBreak?: boolean;
+	/** Champ calculé par le traitement de texte : numéro de la page, ou nombre de pages. */
+	field?: 'PAGE' | 'NUMPAGES';
 }
 
 export interface DocxParagraph {
@@ -41,6 +43,8 @@ export interface DocxTable {
 	rows: DocxParagraph[][];
 	/** Garder le tableau d'un seul tenant (bloc des signatures) : lignes insécables, chacune liée à la suivante. */
 	keepTogether?: boolean;
+	/** La dernière ligne reste aussi liée à ce qui suit (un second tableau de signatures). */
+	keepWithNext?: boolean;
 }
 
 export type DocxBlock = DocxParagraph | DocxTable;
@@ -58,6 +62,8 @@ export interface DocxOptions {
 	extraFiles?: Record<string, string | Uint8Array>;
 	/** Relations supplémentaires de word/document.xml (`<Relationship …/>` complètes). */
 	extraDocumentRelationships?: string[];
+	/** Pied de page de chaque page (référence, « Page X sur Y », paraphes). */
+	footer?: DocxParagraph[];
 	/** Entrées supplémentaires de [Content_Types].xml. */
 	extraContentTypes?: string[];
 	/** Type de contenu de la partie principale (tests : .docm, .dotx). */
@@ -75,6 +81,10 @@ export function escapeXml(text: string): string {
 
 function runXml(input: DocxRun | string): string {
 	const run: DocxRun = typeof input === 'string' ? { text: input } : input;
+	if (run.field) {
+		const size = run.size ? `<w:rPr><w:sz w:val="${run.size * 2}"/></w:rPr>` : '';
+		return `<w:fldSimple w:instr=" ${run.field} \\* MERGEFORMAT "><w:r>${size}<w:t>1</w:t></w:r></w:fldSimple>`;
+	}
 	const props: string[] = [];
 	if (run.font) props.push(`<w:rFonts w:ascii="${escapeXml(run.font)}" w:hAnsi="${escapeXml(run.font)}" w:cs="${escapeXml(run.font)}"/>`);
 	if (run.bold) props.push('<w:b/>');
@@ -107,7 +117,7 @@ function tableXml(t: DocxTable): string {
 	const grid = t.widths.map((w) => `<w:gridCol w:w="${w}"/>`).join('');
 	const rows = t.rows
 		.map((cells, r) => {
-			const keep = !!t.keepTogether && r < t.rows.length - 1;
+			const keep = !!t.keepTogether && (r < t.rows.length - 1 || !!t.keepWithNext);
 			const trPr = t.keepTogether ? '<w:trPr><w:cantSplit/></w:trPr>' : '';
 			return `<w:tr>${trPr}${cells
 				.map(
@@ -122,11 +132,11 @@ function tableXml(t: DocxTable): string {
 const W_NS =
 	'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
 
-function documentXml(blocks: readonly DocxBlock[]): string {
+function documentXml(blocks: readonly DocxBlock[], withFooter: boolean): string {
 	const body = blocks.map((b) => (b.kind === 'table' ? tableXml(b) : paragraphXml(b))).join('');
 	// Page A4, marges de 2 cm.
-	const section =
-		'<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="567" w:footer="567" w:gutter="0"/></w:sectPr>';
+	const footer = withFooter ? '<w:footerReference w:type="default" r:id="rIdFooter"/>' : '';
+	const section = `<w:sectPr>${footer}<w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="567" w:footer="567" w:gutter="0"/></w:sectPr>`;
 	return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:document ${W_NS}><w:body>${body}${section}</w:body></w:document>`;
 }
 
@@ -149,7 +159,7 @@ export function buildDocx(options: DocxOptions): Buffer {
 	add(
 		'[Content_Types].xml',
 		`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="${escapeXml(options.mainContentType ?? DOCX_MAIN_CONTENT_TYPE)}"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>${(options.extraContentTypes ?? []).join('')}</Types>`
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="${escapeXml(options.mainContentType ?? DOCX_MAIN_CONTENT_TYPE)}"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>${options.footer ? '<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>' : ''}<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>${(options.extraContentTypes ?? []).join('')}</Types>`
 	);
 	add(
 		'_rels/.rels',
@@ -159,9 +169,15 @@ export function buildDocx(options: DocxOptions): Buffer {
 	add(
 		'word/_rels/document.xml.rels',
 		`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>${(options.extraDocumentRelationships ?? []).join('')}</Relationships>`
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>${options.footer ? '<Relationship Id="rIdFooter" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>' : ''}${(options.extraDocumentRelationships ?? []).join('')}</Relationships>`
 	);
-	add('word/document.xml', documentXml(options.blocks));
+	add('word/document.xml', documentXml(options.blocks, !!options.footer));
+	if (options.footer) {
+		add(
+			'word/footer1.xml',
+			`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:ftr ${W_NS}>${options.footer.map((p) => paragraphXml(p)).join('')}</w:ftr>`
+		);
+	}
 	add('word/styles.xml', stylesXml(options.defaultFont ?? 'Times New Roman', options.defaultSize ?? 11));
 	add(
 		'docProps/app.xml',

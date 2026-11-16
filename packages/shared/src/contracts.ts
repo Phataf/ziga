@@ -282,8 +282,10 @@ export const CONTRACT_TEMPLATE_LIMITS = {
  * l'organisation par un bandeau (jamais dans le document), et la première signature réelle est reportée.
  */
 export const PLATFORM_TEMPLATES = {
-	lease: { version: 1, legalReview: 'pending' },
-	amendment: { version: 1, legalReview: 'pending' }
+	// Version 2 (étape 4) : corrections du porteur (signatures d'un seul tenant, pied de page, accords, dates en
+	// lettres, premier mois au prorata, détenteur du dépôt, mandat du …). Les contrats déjà générés gardent la leur.
+	lease: { version: 2, legalReview: 'pending' },
+	amendment: { version: 2, legalReview: 'pending' }
 } as const satisfies Record<ContractTemplateKind, { version: number; legalReview: 'pending' | 'approved' }>;
 
 /** Bandeau « modèle par défaut non relu » : seulement pour un contrat ou un réglage qui utilise ce modèle. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { amountInFrenchWords, numberInFrenchWords } from './french-words.js';
+import { amountInFrenchWords, dateInFrenchWords, numberInFrenchWords } from './french-words.js';
 
 describe('numberInFrenchWords (orthographe traditionnelle)', () => {
 	it.each([
@@ -83,5 +83,21 @@ describe('amountInFrenchWords', () => {
 		[2_000_000_000, 'deux milliards de francs CFA']
 	])('%i → %s', (n, words) => {
 		expect(amountInFrenchWords(n)).toBe(words);
+	});
+});
+
+describe('dateInFrenchWords (documents)', () => {
+	it.each([
+		['2027-01-01', '1er janvier 2027'],
+		['2026-12-15', '15 décembre 2026'],
+		['2027-08-31', '31 août 2027'],
+		['2028-02-29', '29 février 2028']
+	])('%s → %s', (iso, words) => {
+		expect(dateInFrenchWords(iso)).toBe(words);
+	});
+
+	it('refuse une date mal formée', () => {
+		expect(() => dateInFrenchWords('15/12/2026')).toThrow(RangeError);
+		expect(() => dateInFrenchWords('2026-13-01')).toThrow(RangeError);
 	});
 });

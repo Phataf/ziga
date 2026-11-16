@@ -1,0 +1,85 @@
+CONTRAT DE BAIL D’HABITATION
+Article 1 – Parties
+Entre les soussignés :
+{#bailleur.est_organisation}{organisation.raison_sociale} (siège : {organisation.siege}){#organisation.rccm}, RCCM {organisation.rccm}{/organisation.rccm}{#organisation.ifu}, IFU {organisation.ifu}{/organisation.ifu}, téléphone {organisation.telephone}, représentée par {representant.nom}, en sa qualité de {representant.qualite},{/bailleur.est_organisation}{#bailleur.est_proprietaire}{proprietaire.nom}, propriétaire du logement{#proprietaire.adresse}, demeurant à {proprietaire.adresse}{/proprietaire.adresse}, représenté par {organisation.raison_sociale} (siège : {organisation.siege}), {bailleur.mandat}, elle-même représentée par {representant.nom}, en sa qualité de {representant.qualite},{/bailleur.est_proprietaire}
+ci-après dénommé « le Bailleur », d’une part ;
+Et {locataire.nom_complet}, {locataire.ne} le {locataire.date_naissance} à {locataire.lieu_naissance}{#locataire.nationalite}, de nationalité {locataire.nationalite}{/locataire.nationalite}{#locataire.profession}, {locataire.profession}{/locataire.profession}, titulaire de la pièce d’identité {locataire.piece}{#locataire.telephone}, téléphone {locataire.telephone}{/locataire.telephone},
+ci-après dénommé « le Locataire », d’autre part.
+Il a été convenu et arrêté ce qui suit, conformément à la loi n° 103-2015/CNT portant bail d’habitation privée au Burkina Faso.
+Article 2 – Désignation du logement
+Le Bailleur donne en location au Locataire, qui accepte, le logement suivant : {logement.type} « {logement.designation} », {logement.bien}. Localisation : {logement.localisation}.
+Destination : {logement.destination}. Le Locataire ne peut en changer l’usage sans l’accord écrit du Bailleur.
+Consistance : {logement.consistance}{#logement.surface}, d’une surface d’environ {logement.surface}{/logement.surface}.{#logement.equipements} Équipements : {logement.equipements}.{/logement.equipements}
+Le logement est loué {logement.meuble}.{#logement.est_meuble} Un inventaire du mobilier, établi contradictoirement, est annexé au présent contrat.{/logement.est_meuble}
+Article 3 – Durée et date d’effet
+{#bail.duree_determinee}Le présent bail est consenti pour une durée de {bail.duree}, à compter du {bail.date_debut} pour se terminer le {bail.date_fin}.{/bail.duree_determinee}{#bail.duree_indeterminee}Le présent bail est consenti pour une durée indéterminée, à compter du {bail.date_debut}.{/bail.duree_indeterminee}
+{#bail.duree_determinee}
+{#reconduction.duree_indeterminee}Si, à son terme, aucune des parties n’a donné congé et que le Locataire reste dans les lieux, le bail se poursuit pour une durée indéterminée, aux mêmes conditions.{/reconduction.duree_indeterminee}{#reconduction.meme_duree}Si, à son terme, aucune des parties n’a donné congé, le bail est reconduit pour une durée égale à la durée initiale, aux mêmes conditions.{/reconduction.meme_duree}
+{/bail.duree_determinee}
+Article 4 – Loyer et modalités de paiement
+Le loyer mensuel est fixé à {loyer.montant} ({loyer.montant_lettres}){#loyer.avec_charges}, auquel s’ajoutent des charges de {loyer.charges} ({loyer.charges_lettres}), soit un total de {loyer.total} par mois{/loyer.avec_charges}.
+Le loyer est payable d’avance, au plus tard le {loyer.jour_limite} de chaque mois{#loyer.modalites}, {loyer.modalites}{/loyer.modalites}. Une quittance est remise au Locataire à chaque paiement.
+{#loyer.premier_mois_prorata}
+Le Locataire entrant en cours de mois, le loyer du {loyer.premier_mois_debut} au {loyer.premier_mois_fin}, calculé au prorata des jours, soit {loyer.premier_mois_montant} ({loyer.premier_mois_lettres}), est dû à la signature{#avance}, en plus de l’avance prévue ci-après{/avance}.
+{/loyer.premier_mois_prorata}
+{#avance}
+À la signature, le Locataire verse une avance de {avance.mois} de loyer, soit {avance.montant} ({avance.montant_lettres}), imputée sur les premiers loyers. Cette avance est distincte du dépôt de garantie.
+{/avance}
+{#penalite}
+Tout loyer qui n’est pas payé {penalite.delai_grace} après la date limite porte intérêt de retard au taux de {penalite.taux} par mois, au profit de {penalite.beneficiaire}.
+{/penalite}
+Le loyer ne peut être révisé que dans les conditions prévues par la réglementation en vigueur.
+Article 5 – Dépôt de garantie
+{#caution}
+Le Locataire verse un dépôt de garantie de {caution.montant} ({caution.montant_lettres}){#caution.mois}, soit {caution.mois} de loyer{/caution.mois}. Conformément à la loi (article 26), il ne peut excéder deux mois de loyer. Il garantit le paiement des loyers et des charges et les réparations locatives. Il est détenu par {caution.detenteur}.
+Le dépôt de garantie est restitué dans un délai de {caution.delai_restitution} après la remise des clés et l’état des lieux de sortie, déduction faite des sommes dues par le Locataire et justifiées par le Bailleur. Il ne peut être imputé sur les derniers loyers qu’avec l’accord écrit et daté des deux parties.
+{/caution}
+{^caution}
+Aucun dépôt de garantie n’est demandé au Locataire.
+{/caution}
+{#garantie_factures}
+Le Locataire verse en outre une garantie de {garantie_factures.montant} ({garantie_factures.montant_lettres}) pour les factures d’eau et d’électricité restées impayées à son départ, restituée dans les mêmes conditions que le dépôt de garantie.
+{/garantie_factures}
+Article 6 – États des lieux
+Un état des lieux d’entrée et un état des lieux de sortie sont établis par écrit, contradictoirement, datés et signés par les deux parties (articles 8 et 9 de la loi). Ils décrivent pièce par pièce l’état du logement et de ses équipements, sans formule générale.
+{#logement.est_meuble}
+L’inventaire du mobilier est vérifié à l’entrée et à la sortie, dans les mêmes formes.
+{/logement.est_meuble}
+Article 7 – Obligations des parties
+Le Bailleur délivre un logement en bon état d’usage et de réparation, en assure la jouissance paisible et effectue les grosses réparations.
+Le Locataire paie le loyer et les charges aux termes convenus, use paisiblement du logement suivant sa destination et prend à sa charge les réparations locatives. Il ne répond ni de l’usure normale ni de la vétusté (article 20 de la loi), ni des dégradations dues à un cas de force majeure ou au fait du Bailleur.
+Le Locataire ne peut transformer les lieux sans l’accord écrit du Bailleur.
+Article 8 – Sous-location et cession
+Le Locataire ne peut ni sous-louer tout ou partie du logement, ni céder le présent bail, sans l’accord écrit du Bailleur.
+Article 9 – Congé et préavis
+Le congé est donné par écrit, par lettre remise contre décharge, par lettre recommandée avec accusé de réception ou par acte d’huissier. Le délai de préavis court à compter de sa réception.
+Le Locataire respecte un préavis de {preavis.locataire_duree_determinee} pour un bail à durée déterminée et de {preavis.locataire_duree_indeterminee} pour un bail à durée indéterminée. Le Bailleur, dans les cas prévus par la loi, respecte un préavis de {preavis.bailleur} (articles 45 et 46 de la loi).
+{#preavis.reduit}
+Par exception, le préavis du Locataire est réduit à {preavis.reduit_duree} dans les cas suivants : {preavis.reduit_cas}.
+{/preavis.reduit}
+{#preavis.indemnite}
+Le Locataire qui quitte les lieux avant le terme sans respecter son préavis verse une indemnité de {preavis.indemnite_duree} de loyer.
+{/preavis.indemnite}
+Article 10 – Résiliation et litiges
+En cas de manquement grave de l’une des parties à ses obligations, notamment le non-paiement du loyer, le bail peut être résilié dans les conditions prévues par la loi.
+Les parties recherchent d’abord un règlement amiable de tout différend relatif au présent bail. À défaut, le litige est porté devant la juridiction compétente du lieu de situation du logement.
+Article 11 – Légalisation et enregistrement
+Le présent contrat est légalisé auprès de la commune du lieu de situation du logement, puis enregistré auprès des services des impôts (articles 5 et 11 de la loi). Les parties s’engagent à accomplir ou à faciliter ces formalités.
+Article 12 – Signatures
+Fait à {signature.lieu}, le {signature.date}, en {signature.exemplaires_texte}.
+Chaque partie fait précéder sa signature de la mention manuscrite « lu et approuvé ».
+Le Bailleur
+Le Locataire
+{#bailleur.est_organisation}Pour {organisation.raison_sociale}, {representant.nom}{/bailleur.est_organisation}{#bailleur.est_proprietaire}Pour {proprietaire.nom}, {organisation.raison_sociale}, représentée par {representant.nom}{/bailleur.est_proprietaire}
+{locataire.nom_complet}
+     
+     
+{#signature.proprietaire_signe}
+Le Propriétaire
+{proprietaire.nom}
+     
+     
+{/signature.proprietaire_signe}
+
+[Pied de page]
+Bail {bail.reference} – Page 1 sur 1  Paraphes : {signature.paraphes}

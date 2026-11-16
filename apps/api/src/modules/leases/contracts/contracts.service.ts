@@ -115,12 +115,14 @@ interface PlaceData {
 /** Conditions du bail et cautions convenues, telles que le contrat les cite (comparées pour savoir s'il est à jour). */
 function termsSnapshot(
 	lease: LeaseRow,
-	deposits: { type: string; agreedAmount: number; agreedMonths: number | null }[]
+	deposits: { type: string; agreedAmount: number; agreedMonths: number | null; holder: 'organization' | 'owner' }[]
 ): Pick<ContractData, 'lease' | 'deposits'> {
 	const security = deposits.find((d) => d.type === 'security_deposit');
 	const utilities = deposits.find((d) => d.type === 'utilities_guarantee');
 	return {
 		lease: {
+			// Référence courte, imprimée en pied de page : la fin de l'identifiant (UUIDv7, aléatoire).
+			reference: `B-${lease.id.replace(/-/g, '').slice(-8).toUpperCase()}`,
 			startsOn: lease.startsOn,
 			endsOn: lease.endsOn,
 			durationMonths: lease.durationMonths,
@@ -142,10 +144,13 @@ function termsSnapshot(
 			earlyTerminationIndemnityMonths: lease.earlyTerminationIndemnityMonths,
 			renewalMode: lease.renewalMode,
 			depositRefundDays: lease.depositRefundDays,
+			billingMode: lease.billingMode,
+			periodicity: lease.periodicity,
+			duesStartOn: lease.duesStartOn,
 			version: lease.version
 		},
 		deposits: {
-			security: security ? { amount: security.agreedAmount, months: security.agreedMonths } : null,
+			security: security ? { amount: security.agreedAmount, months: security.agreedMonths, holder: security.holder } : null,
 			utilities: utilities ? { amount: utilities.agreedAmount } : null
 		}
 	};
@@ -804,6 +809,10 @@ export class ContractsService implements OnModuleInit {
 			baseContractSignedOn = base?.signatureRecordedAt ? (base.tenantSignedOn ?? toIsoDate(base.signatureRecordedAt)) : null;
 		}
 		const rep = org.view.representative;
+		// Mandat de gestion qui couvre l'unité : sa date est citée (propriétaire représenté) ; il décide aussi si le
+		// propriétaire signe lui-même, donc combien de parties gardent un exemplaire.
+		const mandate = await this.owners.managementMandateFor(lease.unitId, lease.startsOn);
+		const signers = expectedSigners({ lessorType: lease.lessorType, mandateCanSignLeases: mandate?.canSignLeases ?? false });
 		const data: ContractData = {
 			organization: {
 				type: org.view.type,
@@ -852,7 +861,14 @@ export class ContractsService implements OnModuleInit {
 			},
 			unit: place.unit,
 			...termsSnapshot(lease, deposits),
-			signing: { place: contract.signingPlace, date: contract.signingDate, copies: contract.copies },
+			signing: {
+				place: contract.signingPlace,
+				date: contract.signingDate,
+				copies: contract.copies,
+				parties: signers.length,
+				ownerSigns: signers.includes('owner')
+			},
+			mandate: mandate ? { startsOn: mandate.startsOn } : null,
 			amendment: amendment
 				? {
 						number: amendment.number,

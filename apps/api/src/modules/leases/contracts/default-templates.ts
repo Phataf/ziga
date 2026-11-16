@@ -9,7 +9,7 @@
  * réelle (question ouverte de docs/DECISIONS.md, écart noté au journal du lot).
  */
 import type { ContractTemplateKind } from '@ziga/shared/contract-fields';
-import { buildDocx, h, p, type DocxBlock, type DocxParagraph } from './docx-builder.js';
+import { buildDocx, h, p, type DocxBlock, type DocxParagraph, type DocxTable } from './docx-builder.js';
 
 /** Titres des douze clauses du bail, dans l'ordre (prompt du lot 08 bis, « Modèle par défaut »). */
 export const DEFAULT_LEASE_CLAUSE_TITLES = [
@@ -33,19 +33,43 @@ const j = (text: string, extra: Omit<DocxParagraph, 'runs'> = {}) => p(text, { a
  * Paragraphes rendus seulement si `tag` est vrai : les balises de section sont seules sur leur ligne, et docxtemplater
  * (paragraphLoop) retire alors ces lignes, sans laisser de paragraphe vide quand la section est fausse.
  */
-const when = (tag: string, ...blocks: DocxParagraph[]): DocxParagraph[] => [p(`{#${tag}}`), ...blocks, p(`{/${tag}}`)];
+const when = <B extends DocxBlock>(tag: string, ...blocks: B[]): (B | DocxParagraph)[] => [p(`{#${tag}}`), ...blocks, p(`{/${tag}}`)];
 const unless = (tag: string, ...blocks: DocxParagraph[]): DocxParagraph[] => [p(`{^${tag}}`), ...blocks, p(`{/${tag}}`)];
+
+/** Case de signature : intitulé, signataire, puis l'espace de la mention manuscrite et de la signature. */
+function signatureTable(left: [string, string], right: [string, string], options: { keepWithNext?: boolean } = {}): DocxTable {
+	const space = () =>
+		p([
+			{ text: ' ', lineBreak: true },
+			{ text: ' ', lineBreak: true },
+			{ text: ' ', lineBreak: true },
+			{ text: ' ', lineBreak: true },
+			' '
+		]);
+	const title = (t: string) => p([{ text: t, bold: true }], { align: 'center' });
+	return {
+		kind: 'table',
+		widths: [4800, 4800],
+		keepTogether: true,
+		...options,
+		rows: [
+			[title(left[0]), title(right[0])],
+			[p(left[1], { align: 'center' }), p(right[1], { align: 'center' })],
+			[space(), space()]
+		]
+	};
+}
 
 const LEASE_CLAUSES: DocxBlock[][] = [
 	// 1. Parties : bailleur désigné (D24), représentant et qualité, locataire et sa pièce.
 	[
 		j('Entre les soussignés :'),
 		j(
-			'{#bailleur.est_organisation}{organisation.raison_sociale} (siège : {organisation.siege}){#organisation.rccm}, RCCM {organisation.rccm}{/organisation.rccm}{#organisation.ifu}, IFU {organisation.ifu}{/organisation.ifu}, téléphone {organisation.telephone}, représentée par {representant.nom}, en sa qualité de {representant.qualite},{/bailleur.est_organisation}{#bailleur.est_proprietaire}{proprietaire.nom}, propriétaire du logement{#proprietaire.adresse}, demeurant à {proprietaire.adresse}{/proprietaire.adresse}, représenté par {organisation.raison_sociale} (siège : {organisation.siege}), elle-même représentée par {representant.nom}, en sa qualité de {representant.qualite}, en vertu d’un mandat de gestion,{/bailleur.est_proprietaire}'
+			'{#bailleur.est_organisation}{organisation.raison_sociale} (siège : {organisation.siege}){#organisation.rccm}, RCCM {organisation.rccm}{/organisation.rccm}{#organisation.ifu}, IFU {organisation.ifu}{/organisation.ifu}, téléphone {organisation.telephone}, représentée par {representant.nom}, en sa qualité de {representant.qualite},{/bailleur.est_organisation}{#bailleur.est_proprietaire}{proprietaire.nom}, propriétaire du logement{#proprietaire.adresse}, demeurant à {proprietaire.adresse}{/proprietaire.adresse}, représenté par {organisation.raison_sociale} (siège : {organisation.siege}), {bailleur.mandat}, elle-même représentée par {representant.nom}, en sa qualité de {representant.qualite},{/bailleur.est_proprietaire}'
 		),
 		j('ci-après dénommé « le Bailleur », d’une part ;'),
 		j(
-			'Et {locataire.nom_complet}, né(e) le {locataire.date_naissance} à {locataire.lieu_naissance}{#locataire.nationalite}, de nationalité {locataire.nationalite}{/locataire.nationalite}{#locataire.profession}, {locataire.profession}{/locataire.profession}, titulaire de la pièce d’identité {locataire.piece}{#locataire.telephone}, téléphone {locataire.telephone}{/locataire.telephone},'
+			'Et {locataire.nom_complet}, {locataire.ne} le {locataire.date_naissance} à {locataire.lieu_naissance}{#locataire.nationalite}, de nationalité {locataire.nationalite}{/locataire.nationalite}{#locataire.profession}, {locataire.profession}{/locataire.profession}, titulaire de la pièce d’identité {locataire.piece}{#locataire.telephone}, téléphone {locataire.telephone}{/locataire.telephone},'
 		),
 		j('ci-après dénommé « le Locataire », d’autre part.'),
 		j('Il a été convenu et arrêté ce qui suit, conformément à la loi n° 103-2015/CNT portant bail d’habitation privée au Burkina Faso.')
@@ -84,6 +108,12 @@ const LEASE_CLAUSES: DocxBlock[][] = [
 			'Le loyer est payable d’avance, au plus tard le {loyer.jour_limite} de chaque mois{#loyer.modalites}, {loyer.modalites}{/loyer.modalites}. Une quittance est remise au Locataire à chaque paiement.'
 		),
 		...when(
+			'loyer.premier_mois_prorata',
+			j(
+				'Le Locataire entrant en cours de mois, le loyer du {loyer.premier_mois_debut} au {loyer.premier_mois_fin}, calculé au prorata des jours, soit {loyer.premier_mois_montant} ({loyer.premier_mois_lettres}), est dû à la signature{#avance}, en plus de l’avance prévue ci-après{/avance}.'
+			)
+		),
+		...when(
 			'avance',
 			j(
 				'À la signature, le Locataire verse une avance de {avance.mois} de loyer, soit {avance.montant} ({avance.montant_lettres}), imputée sur les premiers loyers. Cette avance est distincte du dépôt de garantie.'
@@ -102,7 +132,7 @@ const LEASE_CLAUSES: DocxBlock[][] = [
 		...when(
 			'caution',
 			j(
-				'Le Locataire verse un dépôt de garantie de {caution.montant} ({caution.montant_lettres}){#caution.mois}, soit {caution.mois} de loyer{/caution.mois}. Conformément à la loi (article 26), il ne peut excéder deux mois de loyer. Il garantit le paiement des loyers et des charges et les réparations locatives.'
+				'Le Locataire verse un dépôt de garantie de {caution.montant} ({caution.montant_lettres}){#caution.mois}, soit {caution.mois} de loyer{/caution.mois}. Conformément à la loi (article 26), il ne peut excéder deux mois de loyer. Il garantit le paiement des loyers et des charges et les réparations locatives. Il est détenu par {caution.detenteur}.'
 			),
 			j(
 				'Le dépôt de garantie est restitué dans un délai de {caution.delai_restitution} après la remise des clés et l’état des lieux de sortie, déduction faite des sommes dues par le Locataire et justifiées par le Bailleur. Il ne peut être imputé sur les derniers loyers qu’avec l’accord écrit et daté des deux parties.'
@@ -141,7 +171,7 @@ const LEASE_CLAUSES: DocxBlock[][] = [
 			'Le congé est donné par écrit, par lettre remise contre décharge, par lettre recommandée avec accusé de réception ou par acte d’huissier. Le délai de préavis court à compter de sa réception.'
 		),
 		j(
-			'Le Locataire respecte un préavis de {preavis.locataire_duree_determinee} pour un bail à durée déterminée et de {preavis.locataire_duree_indeterminee} pour un bail à durée indéterminée. Le Bailleur, dans les cas prévus par la loi, respecte un préavis de {preavis.bailleur_duree_determinee} pour un bail à durée déterminée et de {preavis.bailleur_duree_indeterminee} pour un bail à durée indéterminée (articles 45 et 46 de la loi).'
+			'Le Locataire respecte un préavis de {preavis.locataire_duree_determinee} pour un bail à durée déterminée et de {preavis.locataire_duree_indeterminee} pour un bail à durée indéterminée. Le Bailleur, dans les cas prévus par la loi, respecte un préavis de {preavis.bailleur} (articles 45 et 46 de la loi).'
 		),
 		...when(
 			'preavis.reduit',
@@ -166,48 +196,25 @@ const LEASE_CLAUSES: DocxBlock[][] = [
 	// 11. Légalisation à la commune et enregistrement.
 	[
 		j(
-			'Le présent contrat est légalisé auprès de la commune du lieu de situation du logement, puis enregistré auprès des services des impôts (articles 5 et 11 de la loi). Les parties s’engagent à accomplir ou à faciliter ces formalités.'
+			'Le présent contrat est légalisé auprès de la commune du lieu de situation du logement, puis enregistré auprès des services des impôts (articles 5 et 11 de la loi). Les parties s’engagent à accomplir ou à faciliter ces formalités.',
+			// Lié aux signatures : la dernière page porte toujours une clause du contrat, jamais les signatures seules.
+			{ keepNext: true }
 		)
 	],
 	// 12. Lieu, date, nombre d'exemplaires, mention manuscrite « lu et approuvé », signatures.
 	[
-		j(
-			'Fait à {signature.lieu}, le {signature.date}, en {signature.exemplaires_lettres} ({signature.exemplaires}) exemplaires originaux, dont un pour chaque partie.'
-		),
+		j('Fait à {signature.lieu}, le {signature.date}, en {signature.exemplaires_texte}.', { keepNext: true }),
 		j('Chaque partie fait précéder sa signature de la mention manuscrite « lu et approuvé ».', { keepNext: true }),
-		{
-			kind: 'table',
-			widths: [4800, 4800],
-			keepTogether: true,
-			rows: [
-				[p([{ text: 'Le Bailleur', bold: true }], { align: 'center' }), p([{ text: 'Le Locataire', bold: true }], { align: 'center' })],
-				[
-					p(
-						'{#bailleur.est_organisation}Pour {organisation.raison_sociale}, {representant.nom}{/bailleur.est_organisation}{#bailleur.est_proprietaire}Pour {proprietaire.nom}, {organisation.raison_sociale}, représentée par {representant.nom}{/bailleur.est_proprietaire}',
-						{
-							align: 'center'
-						}
-					),
-					p('{locataire.nom_complet}', { align: 'center' })
-				],
-				[
-					p([
-						{ text: ' ', lineBreak: true },
-						{ text: ' ', lineBreak: true },
-						{ text: ' ', lineBreak: true },
-						{ text: ' ', lineBreak: true },
-						' '
-					]),
-					p([
-						{ text: ' ', lineBreak: true },
-						{ text: ' ', lineBreak: true },
-						{ text: ' ', lineBreak: true },
-						{ text: ' ', lineBreak: true },
-						' '
-					])
-				]
-			]
-		}
+		signatureTable(
+			[
+				'Le Bailleur',
+				'{#bailleur.est_organisation}Pour {organisation.raison_sociale}, {representant.nom}{/bailleur.est_organisation}{#bailleur.est_proprietaire}Pour {proprietaire.nom}, {organisation.raison_sociale}, représentée par {representant.nom}{/bailleur.est_proprietaire}'
+			],
+			['Le Locataire', '{locataire.nom_complet}'],
+			{ keepWithNext: true }
+		),
+		// Propriétaire bailleur dont le mandat ne donne pas le pouvoir de signer : il signe lui-même, sur la même page.
+		...when('signature.proprietaire_signe', signatureTable(['Le Propriétaire', '{proprietaire.nom}'], ['', '']))
 	]
 ];
 
@@ -215,7 +222,7 @@ const AMENDMENT_BLOCKS: DocxBlock[] = [
 	p('AVENANT N° {avenant.numero} AU CONTRAT DE BAIL D’HABITATION', { style: 'Title' }),
 	j('Entre les soussignés :'),
 	j(
-		'{bailleur.nom}, {bailleur.qualite}{#bailleur.est_proprietaire}, représenté par {organisation.raison_sociale}{/bailleur.est_proprietaire}, elle-même représentée par {representant.nom}, en sa qualité de {representant.qualite}, ci-après « le Bailleur », d’une part ;'
+		'{#bailleur.est_organisation}{organisation.raison_sociale}, représentée par {representant.nom}, en sa qualité de {representant.qualite},{/bailleur.est_organisation}{#bailleur.est_proprietaire}{proprietaire.nom}, propriétaire du logement, représenté par {organisation.raison_sociale}, {bailleur.mandat}, elle-même représentée par {representant.nom}, en sa qualité de {representant.qualite},{/bailleur.est_proprietaire} ci-après « le Bailleur », d’une part ;'
 	),
 	j('Et {locataire.nom_complet}, titulaire de la pièce d’identité {locataire.piece}, ci-après « le Locataire », d’autre part.'),
 	h('Article 1 – Objet'),
@@ -241,33 +248,18 @@ const AMENDMENT_BLOCKS: DocxBlock[] = [
 		'Toutes les autres clauses du contrat de bail demeurent inchangées. Le présent avenant en fait partie intégrante ; il est légalisé et enregistré dans les mêmes formes.'
 	),
 	j(
-		'Fait à {signature.lieu}, le {signature.date}, en {signature.exemplaires_lettres} ({signature.exemplaires}) exemplaires originaux, chaque partie faisant précéder sa signature de la mention manuscrite « lu et approuvé ».'
+		'Fait à {signature.lieu}, le {signature.date}, en {signature.exemplaires_texte}, chaque partie faisant précéder sa signature de la mention manuscrite « lu et approuvé ».',
+		{ keepNext: true }
 	),
-	{
-		kind: 'table',
-		widths: [4800, 4800],
-		keepTogether: true,
-		rows: [
-			[p([{ text: 'Le Bailleur', bold: true }], { align: 'center' }), p([{ text: 'Le Locataire', bold: true }], { align: 'center' })],
-			[p('{representant.nom}', { align: 'center' }), p('{locataire.nom_complet}', { align: 'center' })],
-			[
-				p([
-					{ text: ' ', lineBreak: true },
-					{ text: ' ', lineBreak: true },
-					{ text: ' ', lineBreak: true },
-					{ text: ' ', lineBreak: true },
-					' '
-				]),
-				p([
-					{ text: ' ', lineBreak: true },
-					{ text: ' ', lineBreak: true },
-					{ text: ' ', lineBreak: true },
-					{ text: ' ', lineBreak: true },
-					' '
-				])
-			]
-		]
-	}
+	signatureTable(
+		[
+			'Le Bailleur',
+			'{#bailleur.est_organisation}Pour {organisation.raison_sociale}, {representant.nom}{/bailleur.est_organisation}{#bailleur.est_proprietaire}Pour {proprietaire.nom}, {organisation.raison_sociale}, représentée par {representant.nom}{/bailleur.est_proprietaire}'
+		],
+		['Le Locataire', '{locataire.nom_complet}'],
+		{ keepWithNext: true }
+	),
+	...when('signature.proprietaire_signe', signatureTable(['Le Propriétaire', '{proprietaire.nom}'], ['', '']))
 ];
 
 function leaseBlocks(): DocxBlock[] {
@@ -275,6 +267,23 @@ function leaseBlocks(): DocxBlock[] {
 	DEFAULT_LEASE_CLAUSE_TITLES.forEach((title, i) => blocks.push(h(title), ...LEASE_CLAUSES[i]!));
 	return blocks;
 }
+
+/**
+ * Pied de page de chaque page (correction b du porteur) : référence du bail, « Page X sur Y » (champs calculés par le
+ * traitement de texte), et une ligne de paraphes pour chaque partie.
+ */
+const FOOTER: DocxParagraph[] = [
+	p(
+		[
+			{ text: 'Bail {bail.reference} – Page ', size: 9 },
+			{ field: 'PAGE', size: 9 },
+			{ text: ' sur ', size: 9 },
+			{ field: 'NUMPAGES', size: 9 },
+			{ text: '\u2003\u2003Paraphes : {signature.paraphes}', size: 9 }
+		],
+		{ align: 'center' }
+	)
+];
 
 const cache = new Map<ContractTemplateKind, Buffer>();
 
@@ -286,6 +295,7 @@ export function defaultTemplate(kind: ContractTemplateKind): Buffer {
 			blocks: kind === 'lease' ? leaseBlocks() : AMENDMENT_BLOCKS,
 			defaultFont: 'Times New Roman',
 			defaultSize: 11,
+			footer: FOOTER,
 			title: kind === 'lease' ? 'Contrat de bail d’habitation' : 'Avenant au contrat de bail'
 		});
 		cache.set(kind, buffer);

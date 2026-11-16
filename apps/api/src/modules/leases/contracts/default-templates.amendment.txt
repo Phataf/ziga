@@ -1,0 +1,34 @@
+AVENANT N° {avenant.numero} AU CONTRAT DE BAIL D’HABITATION
+Entre les soussignés :
+{#bailleur.est_organisation}{organisation.raison_sociale}, représentée par {representant.nom}, en sa qualité de {representant.qualite},{/bailleur.est_organisation}{#bailleur.est_proprietaire}{proprietaire.nom}, propriétaire du logement, représenté par {organisation.raison_sociale}, {bailleur.mandat}, elle-même représentée par {representant.nom}, en sa qualité de {representant.qualite},{/bailleur.est_proprietaire} ci-après « le Bailleur », d’une part ;
+Et {locataire.nom_complet}, titulaire de la pièce d’identité {locataire.piece}, ci-après « le Locataire », d’autre part.
+Article 1 – Objet
+Le présent avenant modifie le contrat de bail du logement {logement.type} « {logement.designation} », {logement.bien} ({logement.localisation}), conclu à compter du {bail.date_debut}{#avenant.contrat_initial_date} et signé le {avenant.contrat_initial_date}{/avenant.contrat_initial_date}. Objet : {avenant.objet}.
+Article 2 – Modification
+{#avenant.est_changement_loyer}
+À compter du {avenant.date_effet}, le loyer mensuel est fixé à {avenant.nouveau_loyer} ({avenant.nouveau_loyer_lettres}), et les charges à {avenant.nouvelles_charges}. Les échéances déjà émises ne sont pas modifiées.
+{/avenant.est_changement_loyer}
+{#avenant.est_renouvellement}
+Le bail est renouvelé à compter du {avenant.date_effet}{#avenant.duree_indeterminee} pour une durée indéterminée{/avenant.duree_indeterminee}{^avenant.duree_indeterminee} jusqu’au {avenant.nouvelle_date_fin}{/avenant.duree_indeterminee}, aux mêmes conditions. Le dépôt de garantie déjà versé reste acquis au bail.
+{/avenant.est_renouvellement}
+{#avenant.est_autre}
+À compter du {avenant.date_effet} : {avenant.description}
+{/avenant.est_autre}
+Article 3 – Autres clauses
+Toutes les autres clauses du contrat de bail demeurent inchangées. Le présent avenant en fait partie intégrante ; il est légalisé et enregistré dans les mêmes formes.
+Fait à {signature.lieu}, le {signature.date}, en {signature.exemplaires_texte}, chaque partie faisant précéder sa signature de la mention manuscrite « lu et approuvé ».
+Le Bailleur
+Le Locataire
+{#bailleur.est_organisation}Pour {organisation.raison_sociale}, {representant.nom}{/bailleur.est_organisation}{#bailleur.est_proprietaire}Pour {proprietaire.nom}, {organisation.raison_sociale}, représentée par {representant.nom}{/bailleur.est_proprietaire}
+{locataire.nom_complet}
+     
+     
+{#signature.proprietaire_signe}
+Le Propriétaire
+{proprietaire.nom}
+     
+     
+{/signature.proprietaire_signe}
+
+[Pied de page]
+Bail {bail.reference} – Page 1 sur 1  Paraphes : {signature.paraphes}

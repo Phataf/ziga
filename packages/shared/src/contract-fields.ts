@@ -13,8 +13,7 @@
  * - Le texte du modèle reste sous la responsabilité de l'organisation : la plateforme ne vérifie que les valeurs
  *   qu'elle y insère.
  */
-import { formatDate } from './dates.js';
-import { amountInFrenchWords, numberInFrenchWords } from './french-words.js';
+import { amountInFrenchWords, dateInFrenchWords, numberInFrenchWords } from './french-words.js';
 import type { Civility, LessorType, PenaltyBeneficiary, RenewalMode } from './leases.js';
 import { formatFcfa, type Fcfa } from './money.js';
 import { ID_DOCUMENT_LABELS, type IdDocumentType } from './organizations.js';
@@ -22,7 +21,7 @@ import { formatRateBp, type OwnerType } from './owners.js';
 import type { OrganizationType } from './permissions.js';
 import { formatPhone } from './phone.js';
 import type { Amenity, UnitType, UnitUsage } from './properties.js';
-import { endOnFromDuration } from './rent-schedule.js';
+import { endOnFromDuration, generateRentSchedule, type RentBillingMode, type RentPeriodicity } from './rent-schedule.js';
 
 // ---------------------------------------------------------------- données copiées à la génération
 
@@ -99,6 +98,8 @@ export interface ContractUnitData {
 }
 
 export interface ContractLeaseData {
+	/** Référence courte du bail, imprimée en pied de page (« B-01A2B3C4 »). */
+	reference: string;
 	startsOn: string;
 	endsOn: string | null;
 	durationMonths: number | null;
@@ -120,13 +121,17 @@ export interface ContractLeaseData {
 	earlyTerminationIndemnityMonths: number | null;
 	renewalMode: RenewalMode;
 	depositRefundDays: number;
+	/** Découpage des périodes, première date facturée, périodicité : le premier mois incomplet (calendar_prorata). */
+	billingMode: RentBillingMode;
+	periodicity: RentPeriodicity;
+	duesStartOn: string;
 	/** Version du bail utilisée (contrôle « bail modifié depuis le figement »). */
 	version: number;
 }
 
 export interface ContractDepositsData {
 	/** Caution (compte `security_deposit`) : montant convenu. */
-	security: { amount: Fcfa; months: number | null } | null;
+	security: { amount: Fcfa; months: number | null; holder: 'organization' | 'owner' } | null;
 	/** Garantie des factures (compte `utilities_guarantee`) : seulement si l'organisation l'a choisie. */
 	utilities: { amount: Fcfa } | null;
 }
@@ -136,6 +141,10 @@ export interface ContractSigningData {
 	place: string | null;
 	date: string | null;
 	copies: number | null;
+	/** Parties qui signent et gardent un exemplaire : organisation (ou bailleur) et locataire, propriétaire s'il signe. */
+	parties: number;
+	/** Le propriétaire, bailleur désigné, signe lui-même (son mandat ne permet pas à l'organisation de signer pour lui). */
+	ownerSigns: boolean;
 }
 
 export const AMENDMENT_TYPES = ['renewal', 'rent_change', 'other'] as const;
@@ -164,6 +173,8 @@ export interface ContractData {
 	lease: ContractLeaseData;
 	deposits: ContractDepositsData;
 	signing: ContractSigningData;
+	/** Mandat de gestion qui couvre l'unité : sa date est citée quand le propriétaire est représenté (D24). */
+	mandate: { startsOn: string } | null;
 	/** Présent seulement pour un avenant. */
 	amendment: ContractAmendmentData | null;
 }
@@ -242,7 +253,7 @@ export function identityLine(doc: ContractIdentityDocument): string | null {
 	if (!doc.type || !doc.number) return null;
 	const kind = doc.type === 'other' ? (doc.typeOther ?? 'Pièce') : ID_DOCUMENT_LABELS[doc.type];
 	let line = `${kind} n°\u00a0${doc.number}`;
-	if (doc.issuedOn) line += `, délivrée le ${formatDate(doc.issuedOn)}`;
+	if (doc.issuedOn) line += `, délivrée le ${dateInFrenchWords(doc.issuedOn)}`;
 	if (doc.issuedBy) line += `${doc.issuedOn ? '' : ', délivrée'} par ${doc.issuedBy}`;
 	return line;
 }
@@ -279,7 +290,8 @@ function locationLine(u: ContractUnitData): string {
 
 const fcfa = (v: Fcfa | null | undefined) => (v === null || v === undefined ? null : formatFcfa(v));
 const words = (v: Fcfa | null | undefined) => (v === null || v === undefined ? null : amountInFrenchWords(v));
-const date = (v: string | null | undefined) => (v ? formatDate(v) : null);
+/** Dates des documents en toutes lettres (« 1er janvier 2027 ») ; les écrans gardent jj/mm/aaaa. */
+const date = (v: string | null | undefined) => (v ? dateInFrenchWords(v) : null);
 const months = (v: number | null | undefined) => (v === null || v === undefined ? null : countInWords(v, 'mois', 'mois'));
 const orNull = (v: string | null | undefined) => (v ? v : null);
 const count = (v: number) => String(v);
@@ -288,6 +300,72 @@ const organizationName = (o: ContractOrganizationData) => o.tradeName ?? o.legal
 const headOffice = (o: ContractOrganizationData) => [o.address, o.commune].filter((v): v is string => !!v).join(', ');
 const representedBy = (o: ContractOrganizationData) =>
 	o.representative.name ? [o.representative.name, o.representative.title].filter(Boolean).join(', ') : null;
+
+/** « en vertu du mandat de gestion du 1er janvier 2024 » (D24), ou sans date si le mandat n'est pas connu. */
+function mandateClause(d: ContractData): string {
+	return d.mandate ? `en vertu du mandat de gestion du ${dateInFrenchWords(d.mandate.startsOn)}` : 'en vertu d’un mandat de gestion';
+}
+
+/** « né » ou « née » selon la civilité ; « né(e) » sans civilité. */
+function bornWord(c: Civility | null): string {
+	return c === 'mr' ? 'né' : c === 'mrs' || c === 'miss' ? 'née' : 'né(e)';
+}
+
+/** Préavis du bailleur : « trois (3) mois dans les deux cas » quand les deux durées sont égales. */
+function lessorNotice(l: ContractLeaseData): string {
+	const fixed = countInWords(l.noticeLessorFixedTermMonths, 'mois', 'mois');
+	if (l.noticeLessorFixedTermMonths === l.noticeLessorOpenEndedMonths) return `${fixed} dans les deux cas`;
+	return `${fixed} pour un bail à durée déterminée et de ${countInWords(l.noticeLessorOpenEndedMonths, 'mois', 'mois')} pour un bail à durée indéterminée`;
+}
+
+/**
+ * « trois (3) exemplaires originaux, dont un pour chaque partie et un pour l’enregistrement » : le texte suit le nombre
+ * choisi (chaque partie, puis l'enregistrement, tant que les exemplaires suffisent).
+ */
+function copiesText(signing: ContractSigningData): string | null {
+	const c = signing.copies;
+	if (!c) return null;
+	const base = c === 1 ? 'un (1) exemplaire original' : `${countInWords(c, 'exemplaire')} originaux`;
+	if (c >= signing.parties + 1) return `${base}, dont un pour chaque partie et un pour l’enregistrement`;
+	if (c >= signing.parties) return `${base}, dont un pour chaque partie`;
+	return base;
+}
+
+/**
+ * Premier mois incomplet en calendar_prorata (entrée en cours de mois) : la même fonction que l'échéancier ; dû à la
+ * signature, en plus de l'avance. `null` dans les autres cas.
+ */
+export function firstPartialMonth(d: Pick<ContractData, 'lease' | 'signing'>): { amount: Fcfa; start: string; end: string } | null {
+	const l = d.lease;
+	if (l.billingMode !== 'calendar_prorata') return null;
+	try {
+		const [first] = generateRentSchedule({
+			billingMode: l.billingMode,
+			periodicity: l.periodicity,
+			startOn: l.startsOn,
+			endOn: l.endsOn,
+			duesStartOn: l.duesStartOn,
+			dueDay: l.dueDay,
+			advanceMonths: l.advanceMonths,
+			activatedOn: d.signing.date ?? l.startsOn,
+			rates: [{ effectiveFrom: l.duesStartOn, rent: l.rent, charges: l.charges, version: l.version }],
+			until: l.duesStartOn
+		});
+		return first && first.prorated && first.dueAtSignature && first.periodStart === l.duesStartOn
+			? { amount: first.amountDue, start: first.periodStart, end: first.periodEnd }
+			: null;
+	} catch {
+		return null;
+	}
+}
+
+/** Détenteur du dépôt de garantie, d'après le compte de caution (D15) : l'organisation, ou le propriétaire. */
+function depositHolder(d: ContractData): string | null {
+	const security = d.deposits.security;
+	if (!security) return null;
+	if (security.holder === 'owner' && d.owner) return `le propriétaire, ${d.owner.name}`;
+	return d.organization.legalName;
+}
 
 // ---------------------------------------------------------------- catalogue
 
@@ -402,8 +480,9 @@ export const CONTRACT_FIELDS: readonly ContractField[] = [
 			? d.organization.type === 'agency'
 				? 'agence immobilière, agissant en son nom'
 				: 'propriétaire'
-			: `propriétaire, représenté par ${d.organization.legalName} en vertu d’un mandat de gestion`
+			: `propriétaire, représenté par ${d.organization.legalName} ${mandateClause(d)}`
 	),
+	F('bailleur.mandat', 'bailleur', 'Mandat de gestion (« en vertu du mandat de gestion du … »)', LEASE, (d) => mandateClause(d)),
 	C('bailleur.est_organisation', 'bailleur', 'Le bailleur est l’organisation', LEASE, (d) => lessorIsOrganization(d)),
 	C('bailleur.est_proprietaire', 'bailleur', 'Le bailleur est le propriétaire représenté', LEASE, (d) => !lessorIsOrganization(d)),
 
@@ -417,6 +496,7 @@ export const CONTRACT_FIELDS: readonly ContractField[] = [
 	F('proprietaire.representant', 'proprietaire', 'Représentant de l’indivision', OWNER, (d) => orNull(d.owner?.representativeName)),
 
 	// Locataire (lot 08) ; état civil et pièce : directeur et gestionnaire seulement.
+	F('locataire.ne', 'locataire', '« né » ou « née » selon la civilité', TENANT, (d) => bornWord(d.tenant.civility)),
 	F('locataire.civilite', 'locataire', 'Civilité (Monsieur, Madame…)', TENANT, (d) =>
 		d.tenant.civility ? CIVILITY_WORDS[d.tenant.civility] : null
 	),
@@ -474,7 +554,8 @@ export const CONTRACT_FIELDS: readonly ContractField[] = [
 	F('logement.commune', 'logement', 'Commune', UNIT, (d) => d.unit.commune),
 
 	// Conditions du bail (lot 08, D24).
-	F('bail.date_debut', 'bail', 'Date d’effet', LEASE, (d) => formatDate(d.lease.startsOn)),
+	F('bail.date_debut', 'bail', 'Date d’effet', LEASE, (d) => dateInFrenchWords(d.lease.startsOn)),
+	F('bail.reference', 'bail', 'Référence du bail (pied de page)', LEASE, (d) => d.lease.reference),
 	F('bail.date_fin', 'bail', 'Date de fin', LEASE, (d) => date(d.lease.endsOn)),
 	F('bail.duree', 'bail', 'Durée (« douze (12) mois »)', LEASE, (d) => months(leaseDurationMonths(d.lease))),
 	F('bail.duree_mois', 'bail', 'Durée en mois (chiffres)', LEASE, (d) => {
@@ -493,6 +574,17 @@ export const CONTRACT_FIELDS: readonly ContractField[] = [
 	F('loyer.total_lettres', 'loyer', 'Loyer et charges en lettres', LEASE, (d) => words(d.lease.rent + d.lease.charges)),
 	F('loyer.jour_limite', 'loyer', 'Jour limite de paiement (« 5 »)', LEASE, (d) => String(d.lease.dueDay)),
 	F('loyer.modalites', 'loyer', 'Modalités de paiement', LEASE, (d) => orNull(d.lease.paymentTerms)),
+	C(
+		'loyer.premier_mois_prorata',
+		'loyer',
+		'Entrée en cours de mois : premier mois au prorata',
+		LEASE,
+		(d) => firstPartialMonth(d) !== null
+	),
+	F('loyer.premier_mois_montant', 'loyer', 'Montant du premier mois incomplet', LEASE, (d) => fcfa(firstPartialMonth(d)?.amount)),
+	F('loyer.premier_mois_lettres', 'loyer', 'Premier mois incomplet en lettres', LEASE, (d) => words(firstPartialMonth(d)?.amount)),
+	F('loyer.premier_mois_debut', 'loyer', 'Début du premier mois incomplet', LEASE, (d) => date(firstPartialMonth(d)?.start)),
+	F('loyer.premier_mois_fin', 'loyer', 'Fin du premier mois incomplet', LEASE, (d) => date(firstPartialMonth(d)?.end)),
 
 	C('avance', 'avance', 'Une avance est versée', LEASE, (d) => d.lease.advanceMonths > 0),
 	F('avance.mois', 'avance', 'Avance en mois (« trois (3) mois »)', LEASE, (d) =>
@@ -509,6 +601,7 @@ export const CONTRACT_FIELDS: readonly ContractField[] = [
 	F('caution.montant', 'caution', 'Montant de la caution', DEPOSIT, (d) => fcfa(d.deposits.security?.amount)),
 	F('caution.montant_lettres', 'caution', 'Caution en lettres', DEPOSIT, (d) => words(d.deposits.security?.amount)),
 	F('caution.mois', 'caution', 'Caution en mois de loyer', DEPOSIT, (d) => months(d.deposits.security?.months)),
+	F('caution.detenteur', 'caution', 'Détenteur du dépôt (organisation ou propriétaire)', DEPOSIT, (d) => depositHolder(d)),
 	F('caution.delai_restitution', 'caution', 'Délai de restitution (« trente (30) jours »)', LEASE, (d) =>
 		countInWords(d.lease.depositRefundDays, 'jour')
 	),
@@ -541,6 +634,7 @@ export const CONTRACT_FIELDS: readonly ContractField[] = [
 	F('preavis.bailleur_duree_determinee', 'preavis', 'Préavis du bailleur, durée déterminée', LEASE, (d) =>
 		months(d.lease.noticeLessorFixedTermMonths)
 	),
+	F('preavis.bailleur', 'preavis', 'Préavis du bailleur (« trois (3) mois dans les deux cas »)', LEASE, (d) => lessorNotice(d.lease)),
 	F('preavis.bailleur_duree_indeterminee', 'preavis', 'Préavis du bailleur, durée indéterminée', LEASE, (d) =>
 		months(d.lease.noticeLessorOpenEndedMonths)
 	),
@@ -572,6 +666,19 @@ export const CONTRACT_FIELDS: readonly ContractField[] = [
 	F('signature.date', 'signature', 'Date de signature', SIGNING, (d) => date(d.signing.date)),
 	F('signature.exemplaires', 'signature', 'Nombre d’exemplaires (chiffres)', SIGNING, (d) =>
 		d.signing.copies ? String(d.signing.copies) : null
+	),
+	C(
+		'signature.proprietaire_signe',
+		'signature',
+		'Le propriétaire signe lui-même (sans pouvoir de signature au mandat)',
+		SIGNING,
+		(d) => d.signing.ownerSigns
+	),
+	F('signature.exemplaires_texte', 'signature', 'Exemplaires (« trois (3) exemplaires originaux, dont un pour… »)', SIGNING, (d) =>
+		copiesText(d.signing)
+	),
+	F('signature.paraphes', 'signature', 'Cases de paraphe en pied de page, une par partie', SIGNING, (d) =>
+		Array.from({ length: Math.max(d.signing.parties, 2) }, () => '______').join(' ')
 	),
 	F('signature.exemplaires_lettres', 'signature', 'Nombre d’exemplaires en lettres', SIGNING, (d) =>
 		d.signing.copies ? numberInFrenchWords(d.signing.copies) : null
@@ -745,6 +852,7 @@ export const EXAMPLE_CONTRACT_DATA: ContractData = {
 		commune: 'Ouagadougou'
 	},
 	lease: {
+		reference: 'B-EXEMPLE1',
 		startsOn: '2027-01-01',
 		endsOn: '2027-12-31',
 		durationMonths: 12,
@@ -766,9 +874,13 @@ export const EXAMPLE_CONTRACT_DATA: ContractData = {
 		earlyTerminationIndemnityMonths: null,
 		renewalMode: 'open_ended',
 		depositRefundDays: 30,
+		billingMode: 'calendar_prorata',
+		periodicity: 'monthly',
+		duesStartOn: '2027-01-01',
 		version: 1
 	},
-	deposits: { security: { amount: 150_000, months: 2 }, utilities: null },
-	signing: { place: 'Ouagadougou', date: '2026-12-15', copies: 3 },
+	deposits: { security: { amount: 150_000, months: 2, holder: 'organization' }, utilities: null },
+	signing: { place: 'Ouagadougou', date: '2026-12-15', copies: 3, parties: 2, ownerSigns: false },
+	mandate: { startsOn: '2024-01-01' },
 	amendment: null
 };

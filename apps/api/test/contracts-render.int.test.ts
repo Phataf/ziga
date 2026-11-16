@@ -52,7 +52,7 @@ const pilotData: ContractData = {
 		earlyTerminationIndemnityMonths: 1,
 		renewalMode: 'same_duration'
 	},
-	deposits: { security: { amount: 150_000, months: 2 }, utilities: { amount: 25_000 } }
+	deposits: { security: { amount: 150_000, months: 2, holder: 'organization' }, utilities: { amount: 25_000 } }
 };
 
 describe('rendu PDF par le service de conversion', () => {

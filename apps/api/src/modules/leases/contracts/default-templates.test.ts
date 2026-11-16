@@ -5,6 +5,7 @@
  */
 import { blankFields, EXAMPLE_CONTRACT_DATA, resolveContractFields, type ContractData } from '@ziga/shared/contract-fields';
 import { describe, expect, it } from 'vitest';
+import PizZip from 'pizzip';
 import { docxText, fillTemplate } from './contract-renderer.js';
 import { DEFAULT_LEASE_CLAUSE_TITLES, defaultTemplate } from './default-templates.js';
 import { inspectTemplate } from './template-inspection.js';
@@ -37,7 +38,7 @@ const withOptions: ContractData = {
 		reducedNoticeCases: 'premier emploi, mutation',
 		earlyTerminationIndemnityMonths: 1
 	},
-	deposits: { security: { amount: 150_000, months: 2 }, utilities: { amount: 25_000 } }
+	deposits: { security: { amount: 150_000, months: 2, holder: 'organization' }, utilities: { amount: 25_000 } }
 };
 
 function generated(data: ContractData, kind: 'lease' | 'amendment' = 'lease'): { text: string; blanks: string[] } {
@@ -83,7 +84,10 @@ describe('modèle de bail par défaut (D25)', () => {
 	it('bailleur : l’organisation en son nom, ou le propriétaire représenté en vertu d’un mandat (D24)', () => {
 		expect(generated(EXAMPLE_CONTRACT_DATA).text).toContain('Agence Exemple SARL (siège : Avenue de l’Exemple, secteur 0, Ouagadougou)');
 		expect(generated(ownerLessor).text).toContain('Propriétaire Exemple, propriétaire du logement');
-		expect(generated(ownerLessor).text).toContain('en vertu d’un mandat de gestion');
+		// i. Le mandat est cité par sa date.
+		expect(generated(ownerLessor).text).toContain(
+			'représenté par Agence Exemple SARL (siège : Avenue de l’Exemple, secteur 0, Ouagadougou), en vertu du mandat de gestion du 1er\u00a0janvier 2024, elle-même représentée par Prénom Nom'
+		);
 	});
 
 	it('pénalité, garantie des factures, préavis réduit : absents par défaut, présents si le bail les prévoit', () => {
@@ -96,7 +100,7 @@ describe('modèle de bail par défaut (D25)', () => {
 		expect(full).toContain('au taux de 0,75');
 		expect(full).toContain('vingt-cinq mille francs CFA');
 		expect(full).toContain('réduit à un (1) mois dans les cas suivants : premier emploi, mutation');
-		expect(full).toContain('pour une durée indéterminée, à compter du 01/01/2027');
+		expect(full).toContain('pour une durée indéterminée, à compter du 1er\u00a0janvier 2027');
 		expect(full).toContain('inventaire du mobilier');
 	});
 
@@ -110,6 +114,62 @@ describe('modèle de bail par défaut (D25)', () => {
 
 	it('mêmes entrées, mêmes octets', () => {
 		expect(defaultTemplate('lease').equals(defaultTemplate('lease'))).toBe(true);
+	});
+});
+
+describe('corrections du porteur, dans le texte (étape 4)', () => {
+	const mid: ContractData = {
+		...EXAMPLE_CONTRACT_DATA,
+		tenant: { ...EXAMPLE_CONTRACT_DATA.tenant, civility: 'mrs', fullName: 'Locataire Exemple' },
+		lease: { ...EXAMPLE_CONTRACT_DATA.lease, startsOn: '2027-01-15', endsOn: '2028-01-14', duesStartOn: '2027-01-15' },
+		deposits: { security: { amount: 150_000, months: 2, holder: 'owner' }, utilities: null }
+	};
+
+	it('c, d, e, f, g, h : accord, préavis du bailleur, exemplaires, dates en lettres, premier mois, détenteur', () => {
+		const { text, blanks } = generated(mid);
+		expect(blanks).toEqual([]);
+		expect(text).toContain('Madame Locataire Exemple, née le 1er\u00a0juin 1990');
+		expect(text).toContain('respecte un préavis de trois (3) mois dans les deux cas');
+		expect(text).toContain('en trois (3) exemplaires originaux, dont un pour chaque partie et un pour l’enregistrement.');
+		expect(text).toContain('Fait à Ouagadougou, le 15\u00a0décembre 2026');
+		expect(text).toContain(
+			'le loyer du 15\u00a0janvier 2027 au 31\u00a0janvier 2027, calculé au prorata des jours, soit 41\u202f129\u00a0FCFA (quarante et un mille cent vingt-neuf francs CFA), est dû à la signature, en plus de l’avance prévue ci-après.'
+		);
+		expect(text).toContain('Il est détenu par le propriétaire, Propriétaire Exemple.');
+		expect(text).not.toMatch(/\d{2}\/\d{2}\/\d{4}/);
+		// Entrée le 1er du mois : pas de premier mois au prorata.
+		expect(generated(EXAMPLE_CONTRACT_DATA).text).not.toContain('au prorata des jours');
+	});
+
+	it('b : pied de page sur chaque page, avec la référence du bail, « Page X sur Y » et les paraphes', () => {
+		const filled = fillTemplate(defaultTemplate('lease'), resolveContractFields(EXAMPLE_CONTRACT_DATA));
+		const footer = new PizZip(filled).file('word/footer1.xml')!.asText();
+		expect(footer).toContain('Bail B-EXEMPLE1 – Page ');
+		expect(footer).toContain('w:instr=" PAGE \\* MERGEFORMAT "');
+		expect(footer).toContain('w:instr=" NUMPAGES \\* MERGEFORMAT "');
+		expect(footer).toContain('Paraphes : ______ ______');
+		expect(new PizZip(defaultTemplate('lease')).file('word/document.xml')!.asText()).toContain('<w:footerReference w:type="default"');
+	});
+
+	it('a : articles 11 et 12, « Fait à… », la mention et le tableau des signatures se suivent sur une même page', () => {
+		const xml = new PizZip(defaultTemplate('lease')).file('word/document.xml')!.asText();
+		// L'article 11 est lié aux signatures : jamais une page de signatures seules.
+		const from = xml.indexOf('Article 11');
+		const signature = xml.slice(xml.lastIndexOf('<w:p>', from), xml.indexOf('</w:tbl>', from));
+		// Titre (style à « garder avec le suivant »), puis chaque paragraphe lié au suivant, lignes du tableau insécables.
+		const paragraphs = signature.split('<w:tbl>')[0]!.split('<w:p>').slice(2);
+		for (const para of paragraphs) expect(para.includes('<w:keepNext/>') || para.includes('<w:pStyle w:val="Heading1"/>'), para).toBe(true);
+		// Les titres d'article (style Titre 1) sont liés au paragraphe suivant par leur style.
+		const styles = new PizZip(defaultTemplate('lease')).file('word/styles.xml')!.asText();
+		expect(styles.slice(styles.indexOf('w:styleId="Heading1"'))).toMatch(/^[^]*?<w:keepNext\/>[^]*?<\/w:style>/);
+		expect(signature).toContain('<w:cantSplit/>');
+	});
+
+	it('texte des clauses : identique à la version relue (fichier versionné, à mettre à jour avec le texte)', async () => {
+		const withFooter = (docx: Buffer) => `${docxText(docx)}\n\n[Pied de page]\n${docxText(docx, 'word/footer1.xml')}`;
+		await expect(withFooter(defaultTemplate('lease'))).toMatchFileSnapshot('./default-templates.lease.txt');
+		const amendment = withFooter(defaultTemplate('amendment'));
+		await expect(amendment).toMatchFileSnapshot('./default-templates.amendment.txt');
 	});
 });
 
@@ -139,12 +199,50 @@ describe('modèle d’avenant par défaut', () => {
 			'amendment'
 		);
 		expect(renewal.blanks).toEqual([]);
-		expect(renewal.text).toContain('jusqu’au 31/12/2028');
+		expect(renewal.text).toContain('jusqu’au 31\u00a0décembre 2028');
+		expect(renewal.text).toContain('Agence Exemple SARL, représentée par Prénom Nom, en sa qualité de gérant, ci-après « le Bailleur »');
 		const open = generated(amendment({ type: 'renewal', newRent: null, newCharges: null, newEndsOn: null }), 'amendment');
 		expect(open.text).toContain('pour une durée indéterminée');
 		const other = generated(amendment({ type: 'other', newRent: null, newCharges: null, description: 'Ajout d’un garage.' }), 'amendment');
 		expect(other.blanks).toEqual([]);
 		expect(other.text).toContain('Ajout d’un garage.');
 		expect(other.text).not.toMatch(/[{}]/);
+	});
+});
+
+describe('propriétaire signataire (mandat sans pouvoir de signer)', () => {
+	const owner: ContractData = {
+		...EXAMPLE_CONTRACT_DATA,
+		lease: { ...EXAMPLE_CONTRACT_DATA.lease, lessorType: 'owner' },
+		signing: { ...EXAMPLE_CONTRACT_DATA.signing, parties: 3, ownerSigns: true }
+	};
+
+	it('une case « Le Propriétaire » s’ajoute au bail et à l’avenant ; absente sinon', () => {
+		for (const kind of ['lease', 'amendment'] as const) {
+			const data: ContractData =
+				kind === 'lease'
+					? owner
+					: {
+							...owner,
+							amendment: {
+								number: 1,
+								type: 'other',
+								effectiveFrom: '2027-07-01',
+								description: 'Ajout d’un garage.',
+								newRent: null,
+								newCharges: null,
+								newEndsOn: null,
+								baseContractSignedOn: '2026-12-15'
+							}
+						};
+			const { text, blanks } = generated(data, kind);
+			expect(blanks, kind).toEqual([]);
+			expect(text, kind).toContain('Le Propriétaire\nPropriétaire Exemple');
+			expect(text, kind).not.toMatch(/[{}]/);
+			// Une case de paraphe par partie.
+			const footer = new PizZip(fillTemplate(defaultTemplate(kind), resolveContractFields(data, kind))).file('word/footer1.xml')!.asText();
+			expect(footer, kind).toContain('Paraphes : ______ ______ ______<');
+		}
+		expect(generated(ownerLessor).text).not.toContain('Le Propriétaire\n');
 	});
 });

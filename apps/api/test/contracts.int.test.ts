@@ -282,7 +282,7 @@ describe('génération (tâche de fond) avec le modèle par défaut', () => {
 			status: 'draft',
 			currentVersion: 1,
 			templateSource: 'platform',
-			templateVersion: 1,
+			templateVersion: 2,
 			defaultTemplateNotice: true
 		});
 		const [v] = c.versions;

@@ -560,7 +560,7 @@ export class OwnersService {
 	async managementMandateFor(
 		unitId: string,
 		from: string
-	): Promise<{ mandateId: string; canCollectFunds: boolean; canSignLeases: boolean } | null> {
+	): Promise<{ mandateId: string; startsOn: string; canCollectFunds: boolean; canSignLeases: boolean } | null> {
 		const { tx, organizationId } = this.context();
 		const today = toIsoDate();
 		const rows = await tx
@@ -582,7 +582,7 @@ export class OwnersService {
 		const m = rows.find(
 			(r) => isManagementMandate(r.type) && r.status === 'active' && r.startsOn <= limit && (r.endsOn === null || r.endsOn >= today)
 		);
-		return m ? { mandateId: m.id, canCollectFunds: m.canCollectFunds, canSignLeases: m.canSignLeases } : null;
+		return m ? { mandateId: m.id, startsOn: m.startsOn, canCollectFunds: m.canCollectFunds, canSignLeases: m.canSignLeases } : null;
 	}
 
 	/**
