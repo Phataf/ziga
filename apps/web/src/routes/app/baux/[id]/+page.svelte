@@ -31,6 +31,7 @@
 	import type { UnitView } from '@ziga/shared/properties';
 	import FormAlert from '#lib/components/auth/FormAlert.svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
+	import LeaseContractSection from '#lib/components/contracts/LeaseContractSection.svelte';
 	import DocumentsSection from '#lib/components/properties/DocumentsSection.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.ts';
 	import { Button } from '#lib/components/ui/button/index.ts';
@@ -420,6 +421,8 @@
 				{/if}
 			{/if}
 		</section>
+
+		{#if can(role, 'contract.read')}<LeaseContractSection {lease} disabled={pending || sync.pending > 0} />{/if}
 
 		<section class="space-y-3 rounded-2xl border bg-card p-4 md:p-6" data-testid="echeancier">
 			<div class="flex flex-wrap items-center justify-between gap-2">

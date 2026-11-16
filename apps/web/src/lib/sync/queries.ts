@@ -74,6 +74,34 @@ export const LOCAL_QUERIES = {
 	leaseDocuments: `SELECT * FROM documents WHERE organization_id = ? AND (lease_id = ? OR tenant_id = ?) ORDER BY type, version DESC, id`,
 	/** Baux qui ont un bail signé scanné en vigueur (alerte « Contrat non signé »). */
 	signedScans: `SELECT DISTINCT lease_id FROM documents WHERE organization_id = ? AND type = 'signed_lease_scan' AND status = 'active'`,
+	/**
+	 * Lot 08 bis (direction et gestion seulement : les autres rôles ne reçoivent aucune ligne de contrat). Baux de la
+	 * liste des contrats, avec l'unité et le locataire, lus dans la même organisation.
+	 */
+	contractLeases: `SELECT l.*, u.label AS unit_label, t.full_name AS tenant_name FROM leases l
+		LEFT JOIN units u ON u.organization_id = l.organization_id AND u.id = l.unit_id
+		LEFT JOIN tenants t ON t.organization_id = l.organization_id AND t.id = l.tenant_id
+		WHERE l.organization_id = ? ORDER BY l.starts_on DESC, l.id DESC`,
+	/** Contrats de l'organisation, avec la version du bail de leur version figée (« à régénérer »). */
+	contracts: `SELECT c.*, v.lease_version AS frozen_lease_version FROM lease_contracts c
+		LEFT JOIN contract_versions v ON v.organization_id = c.organization_id AND v.contract_id = c.id AND v.number = c.frozen_version
+		WHERE c.organization_id = ? ORDER BY c.created_at DESC, c.id DESC`,
+	contract: `SELECT c.*, v.lease_version AS frozen_lease_version FROM lease_contracts c
+		LEFT JOIN contract_versions v ON v.organization_id = c.organization_id AND v.contract_id = c.id AND v.number = c.frozen_version
+		WHERE c.organization_id = ? AND c.id = ?`,
+	leaseContracts: `SELECT c.*, v.lease_version AS frozen_lease_version FROM lease_contracts c
+		LEFT JOIN contract_versions v ON v.organization_id = c.organization_id AND v.contract_id = c.id AND v.number = c.frozen_version
+		WHERE c.organization_id = ? AND c.lease_id = ? ORDER BY c.created_at DESC, c.id DESC`,
+	/** Versions d'un contrat, la plus récente d'abord (ajout seul : jamais réécrites). */
+	contractVersions: `SELECT * FROM contract_versions WHERE organization_id = ? AND contract_id = ? ORDER BY number DESC`,
+	leaseAmendments: `SELECT * FROM lease_amendments WHERE organization_id = ? AND lease_id = ? ORDER BY number DESC`,
+	amendment: `SELECT * FROM lease_amendments WHERE organization_id = ? AND id = ?`,
+	/** Modèles Word de l'organisation (direction et gestion ; la direction seule les gère). */
+	contractTemplates: `SELECT * FROM contract_templates WHERE organization_id = ? ORDER BY kind, version DESC, id`,
+	/** Documents d'un contrat : scan signé, preuves de légalisation et d'enregistrement, versions générées. */
+	contractDocuments: `SELECT * FROM documents WHERE organization_id = ? AND lease_contract_id = ? ORDER BY created_at DESC, id`,
+	/** Aperçus des modèles (documents « projet de contrat » rattachés à un modèle). */
+	templateDocuments: `SELECT * FROM documents WHERE organization_id = ? AND contract_template_id IS NOT NULL ORDER BY created_at DESC, id`,
 	/** Modifications refusées par le serveur (table locale de l'appareil), de l'organisation, les plus récentes d'abord. */
 	rejections: `SELECT * FROM sync_rejections WHERE organization_id = ? ORDER BY rejected_at DESC, id DESC`,
 	rejectionCount: `SELECT count(*) AS n FROM sync_rejections WHERE organization_id = ?`

@@ -20,7 +20,8 @@
 	},
 	"dependencies": {
 		"@powersync/web": "2.6.0",
-		"@ziga/shared": "workspace:*"
+		"@ziga/shared": "workspace:*",
+		"pdf-lib": "1.17.1"
 	},
 	"devDependencies": {
 		"@lucide/svelte": "1.70.0",

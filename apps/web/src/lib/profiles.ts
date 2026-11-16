@@ -9,6 +9,7 @@ import {
 	CalendarClock,
 	ClipboardCheck,
 	Ellipsis,
+	FilePenLine,
 	FileText,
 	HandCoins,
 	History,
@@ -88,7 +89,7 @@ function organizationItems(opts: { team: boolean; settings: boolean }, section: 
 	];
 }
 
-function agencyNav(opts: { team: boolean; settings: boolean }): NavItem[] {
+function agencyNav(opts: { team: boolean; settings: boolean; contracts: boolean }): NavItem[] {
 	return [
 		item({ path: 'app', label: n.dashboard, short: n.home, icon: LayoutDashboard, section: s.steering, tab: true, lot: '09' }),
 		item({ path: 'app/biens', label: n.propertiesLong, short: n.properties, icon: Building2, section: s.management, tab: true }),
@@ -96,6 +97,8 @@ function agencyNav(opts: { team: boolean; settings: boolean }): NavItem[] {
 		item({ path: 'app/impayes', label: n.arrears, icon: TriangleAlert, section: s.management, lot: '10' }),
 		item({ path: 'app/proprietaires', label: n.owners, icon: Users, section: s.management }),
 		item({ path: 'app/locataires', label: n.tenants, icon: KeyRound, section: s.management }),
+		// Lot 08 bis : contrats, direction et gestion seulement (le profil lecture n'en reçoit aucune donnée).
+		...(opts.contracts ? [item({ path: 'app/contrats', label: n.contracts, icon: FilePenLine, section: s.management })] : []),
 		item({ path: 'app/a-valider', label: n.toValidate, icon: ClipboardCheck, section: s.control, lot: '09' }),
 		...organizationItems(opts, s.agency),
 		plus('app')
@@ -103,10 +106,28 @@ function agencyNav(opts: { team: boolean; settings: boolean }): NavItem[] {
 }
 
 export const profiles: Record<ProfileId, Profile> = {
-	director: { id: 'director', label: fr.profiles.director, space: 'agency', home: 'app', nav: agencyNav({ team: true, settings: true }) },
+	director: {
+		id: 'director',
+		label: fr.profiles.director,
+		space: 'agency',
+		home: 'app',
+		nav: agencyNav({ team: true, settings: true, contracts: true })
+	},
 	// Le gestionnaire voit l'équipe en lecture (affectation des agents au lot 07).
-	manager: { id: 'manager', label: fr.profiles.manager, space: 'agency', home: 'app', nav: agencyNav({ team: true, settings: false }) },
-	viewer: { id: 'viewer', label: fr.profiles.viewer, space: 'agency', home: 'app', nav: agencyNav({ team: false, settings: false }) },
+	manager: {
+		id: 'manager',
+		label: fr.profiles.manager,
+		space: 'agency',
+		home: 'app',
+		nav: agencyNav({ team: true, settings: false, contracts: true })
+	},
+	viewer: {
+		id: 'viewer',
+		label: fr.profiles.viewer,
+		space: 'agency',
+		home: 'app',
+		nav: agencyNav({ team: false, settings: false, contracts: false })
+	},
 	field_agent: {
 		id: 'field_agent',
 		label: fr.profiles.field_agent,
@@ -129,6 +150,7 @@ export const profiles: Record<ProfileId, Profile> = {
 			item({ path: 'app', label: n.home, icon: LayoutDashboard, section: s.myHomes, tab: true, lot: '09' }),
 			item({ path: 'app/biens', label: n.myHomes, short: n.homes, icon: House, section: s.myHomes, tab: true }),
 			item({ path: 'app/locataires', label: n.tenants, icon: KeyRound, section: s.myHomes }),
+			item({ path: 'app/contrats', label: n.contracts, icon: FilePenLine, section: s.myHomes }),
 			item({ path: 'app/encaissements', label: n.rentsReceived, short: n.rents, icon: Wallet, section: s.myHomes, tab: true, lot: '09' }),
 			item({ path: 'app/impayes', label: n.late, icon: TriangleAlert, section: s.myHomes, lot: '10' }),
 			// Le bailleur est directeur de son organisation : ses paramètres (logo des reçus) et son journal.

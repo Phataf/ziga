@@ -38,6 +38,33 @@ describe('version de production sans PUBLIC_E2E', () => {
 		expect(leaks).toEqual([]);
 	});
 
+	it('pdf-lib (lot 08 bis) n’est jamais chargé par la vitrine : seulement à la demande, dans l’application', () => {
+		// Construite par le test précédent : manifeste des fichiers du navigateur et nœuds des routes générés par SvelteKit.
+		const manifest = JSON.parse(readFileSync(join(web, '.svelte-kit/output/client/.vite/manifest.json'), 'utf8')) as Record<
+			string,
+			{ file: string; src?: string; imports?: string[]; dynamicImports?: string[] }
+		>;
+		const pdfLib = Object.keys(manifest).filter((k) => /node_modules\/.*pdf-lib/.test(k) || /pdf-lib/.test(manifest[k]!.file));
+		expect(pdfLib.length, 'pdf-lib construit en morceau à part').toBeGreaterThan(0);
+		// Nœuds de la vitrine : la mise en page racine et les pages publiques (routes/(public)).
+		const nodes = Object.keys(manifest).filter((k) => /client-optimized\/nodes\/\d+\.js$/.test(k));
+		const vitrine = nodes.filter((k) => {
+			const source = readFileSync(join(web, k), 'utf8');
+			return source.includes('src/routes/(public)/') || /src\/routes\/\+layout\.svelte/.test(source);
+		});
+		expect(vitrine.length).toBeGreaterThan(1);
+		// Tout ce qu'un nœud de la vitrine charge d'emblée (importations statiques, de proche en proche).
+		const reached = new Set<string>();
+		const visit = (k: string) => {
+			if (reached.has(k)) return;
+			reached.add(k);
+			for (const i of manifest[k]?.imports ?? []) visit(i);
+		};
+		vitrine.forEach(visit);
+		expect([...reached].filter((k) => pdfLib.includes(k))).toEqual([]);
+		for (const k of reached) expect(readFileSync(join(out, 'client', manifest[k]!.file), 'utf8'), k).not.toContain('Hopding/pdf-lib');
+	});
+
 	it('garde-fou : le nom recherché est bien celui que pose l’accès', () => {
 		expect(readFileSync(join(import.meta.dirname, 'e2e-hook.ts'), 'utf8')).toContain('[E2E_HOOK_NAME] = async');
 		expect(E2E_HOOK_NAME).toBe('__zigaLocalCounts');

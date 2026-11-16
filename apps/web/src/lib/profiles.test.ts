@@ -41,7 +41,20 @@ describe('navigation par profil (docs/UX.md §2)', () => {
 
 	it('« Plus » n’apparaît que sur téléphone et rassemble les entrées sans onglet', () => {
 		expect(menuOf(profiles.manager).some((i) => i.phoneOnly)).toBe(false);
-		expect(moreOf(profiles.manager).map((i) => i.label)).toEqual(['Impayés', 'Propriétaires', 'Locataires', 'À valider', 'Équipe']);
+		expect(moreOf(profiles.manager).map((i) => i.label)).toEqual([
+			'Impayés',
+			'Propriétaires',
+			'Locataires',
+			'Contrats',
+			'À valider',
+			'Équipe'
+		]);
+	});
+
+	it('lot 08 bis : « Contrats » pour la direction, la gestion et le bailleur ; ni pour le profil lecture ni pour l’agent', () => {
+		const has = (id: keyof typeof profiles) => profiles[id].nav.some((i) => i.href === '/app/contrats');
+		expect([has('director'), has('manager'), has('landlord')]).toEqual([true, true, true]);
+		expect([has('viewer'), has('field_agent')]).toEqual([false, false]);
 	});
 
 	it('trouve l’entrée active par le plus long préfixe', () => {

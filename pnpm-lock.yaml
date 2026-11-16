@@ -168,6 +168,9 @@ importers:
       '@ziga/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      pdf-lib:
+        specifier: 1.17.1
+        version: 1.17.1
     devDependencies:
       '@lucide/svelte':
         specifier: 1.70.0

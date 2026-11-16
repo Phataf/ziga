@@ -170,6 +170,9 @@ class Sync {
 		// Photos en attente d'envoi (lot 07) : elles aussi quittent l'appareil.
 		const { photoQueue } = await import('../properties/photo-queue.svelte');
 		await photoQueue.clear();
+		// Scans signés en attente (lot 08 bis) : de même.
+		const { scanQueue } = await import('../contracts/scan-queue.svelte');
+		await scanQueue.clear();
 	}
 }
 
