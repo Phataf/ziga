@@ -66,6 +66,9 @@ describe('affichage et pays', () => {
 		expect(formatPhone('+33612345678')).toBe(join('+33', '6', '12', '34', '56', '78'));
 		expect(formatPhone('+2250708091011')).toBe(join('+225', '07', '08', '09', '10', '11'));
 		expect(formatPhone('+15145550123')).toBe(join('+1', '514', '555', '0123'));
+		// Règle 2 et consigne du porteur : U+00A0 entre les groupes, jamais une espace ordinaire.
+		expect(formatPhone('+22670123456')).toBe('+226\u00a070\u00a012\u00a034\u00a056');
+		expect(formatPhone('+22670123456')).not.toContain(' ');
 	});
 	it('rend une saisie non reconnue telle quelle', () => {
 		expect(formatPhone('inconnu')).toBe('inconnu');

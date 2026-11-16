@@ -57,7 +57,7 @@ export function invitationOrganization(token: string): string | null {
 /** « +226 70 •• •• 56 » : l'invitation montre à qui elle s'adresse sans afficher tout le numéro. */
 export function maskPhone(phone: string): string {
 	const parts = formatPhone(phone).split(/[\s\u00a0\u202f]+/u);
-	return parts.map((p, i) => (i === 0 || i === 1 || i === parts.length - 1 ? p : '••')).join(' ');
+	return parts.map((p, i) => (i === 0 || i === 1 || i === parts.length - 1 ? p : '••')).join('\u00a0');
 }
 
 function representativeOf(o: OrganizationRow): Representative {

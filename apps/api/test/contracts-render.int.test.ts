@@ -12,6 +12,8 @@ import { PDFDict, PDFDocument, PDFName } from 'pdf-lib';
 import { describe, expect, it } from 'vitest';
 import { docxText, fillTemplate } from '../src/modules/leases/contracts/contract-renderer.js';
 import { defaultTemplate } from '../src/modules/leases/contracts/default-templates.js';
+import { formatFcfa } from '@ziga/shared/money';
+import { buildDocx, p } from '../src/modules/leases/contracts/docx-builder.js';
 import { createPdfConverter, GotenbergConverter, pdfPageCount } from '../src/modules/leases/contracts/pdf-converter.js';
 import { inspectTemplate } from '../src/modules/leases/contracts/template-inspection.js';
 import { EXPECTED_PDF_FONTS, pilotLikeTemplate } from './fixtures/pilot-like-template.js';
@@ -83,6 +85,21 @@ describe('rendu PDF par le service de conversion', () => {
 		const pdf = await converter.convertDocx(fillTemplate(template, values), 'contrat.docx');
 		expect(await pdfPageCount(pdf)).toBeGreaterThanOrEqual(2);
 		expect((await pdfFonts(pdf)).some((f) => f.startsWith('LiberationSerif'))).toBe(true);
+	}, 120_000);
+
+	it('règle 2 : espace fine insécable U+202F dans les quatre familles, sans police de secours ni carré vide', async () => {
+		// Caladea (Cambria) n'a pas le glyphe U+202F : LibreOffice la traite comme une espace, sans emprunter de police.
+		const families: [string, string][] = [
+			['Calibri', 'Carlito'],
+			['Cambria', 'Caladea'],
+			['Times New Roman', 'LiberationSerif'],
+			['Arial', 'LiberationSans']
+		];
+		for (const [font, expected] of families) {
+			const docx = buildDocx({ blocks: [p([{ text: `Loyer : ${formatFcfa(1_250_000)}`, font }])], defaultFont: font });
+			const pdf = await converter.convertDocx(docx, 'espaces.docx');
+			expect(await pdfFonts(pdf), font).toEqual([expect.stringMatching(new RegExp(`^${expected}`))]);
+		}
 	}, 120_000);
 
 	it('sans identifiants, le service de conversion refuse', async () => {

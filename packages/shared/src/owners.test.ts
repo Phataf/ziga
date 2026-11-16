@@ -123,10 +123,10 @@ describe('mandats : commission (règle 2)', () => {
 	});
 
 	it('affichage du taux', () => {
-		expect(formatRateBp(1000)).toBe('10 %');
-		expect(formatRateBp(250)).toBe('2,5 %');
-		expect(formatRateBp(1234)).toBe('12,34 %');
-		expect(formatRateBp(0)).toBe('0 %');
+		expect(formatRateBp(1000)).toBe('10\u00a0%');
+		expect(formatRateBp(250)).toBe('2,5\u00a0%');
+		expect(formatRateBp(1234)).toBe('12,34\u00a0%');
+		expect(formatRateBp(0)).toBe('0\u00a0%');
 		expect(() => formatRateBp(10.5)).toThrow();
 	});
 });

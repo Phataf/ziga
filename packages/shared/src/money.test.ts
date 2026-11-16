@@ -1,7 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { assertFcfa, fcfaSchema, formatFcfa, InvalidAmountError, MAX_FCFA, NBSP, parseFcfa, THIN_NBSP } from './money.js';
+import { assertFcfa, fcfaSchema, formatFcfa, formatFcfaForPdf, InvalidAmountError, MAX_FCFA, NBSP, parseFcfa, THIN_NBSP } from './money.js';
 
 describe('formatFcfa', () => {
+	it('règle 2 : espace fine insécable U+202F entre les milliers, espace insécable U+00A0 avant « FCFA », aucune espace ordinaire', () => {
+		expect(THIN_NBSP).toBe('\u202f');
+		expect(NBSP).toBe('\u00a0');
+		expect(formatFcfa(75_000)).toBe('75\u202f000\u00a0FCFA');
+		expect(formatFcfa(1_250_000)).toBe('1\u202f250\u202f000\u00a0FCFA');
+		for (const amount of [0, 999, 75_000, 1_250_000, MAX_FCFA]) expect(formatFcfa(amount)).not.toContain(' ');
+	});
+
+	it('documents dessinés par pdf-lib (polices standard, sans U+202F) : U+00A0 partout', () => {
+		expect(formatFcfaForPdf(75_000)).toBe('75\u00a0000\u00a0FCFA');
+		expect(formatFcfaForPdf(1_250_000)).toBe('1\u00a0250\u00a0000\u00a0FCFA');
+		expect(formatFcfaForPdf(999)).toBe('999\u00a0FCFA');
+	});
+
 	it('sépare les milliers par une espace fine insécable et ajoute FCFA après une espace insécable', () => {
 		expect(formatFcfa(75000)).toBe(`75${THIN_NBSP}000${NBSP}FCFA`);
 		expect(formatFcfa(0)).toBe(`0${NBSP}FCFA`);
@@ -33,6 +47,8 @@ describe('parseFcfa', () => {
 		expect(parseFcfa('75000')).toBe(75000);
 		expect(parseFcfa('75 000')).toBe(75000);
 		expect(parseFcfa(`75${THIN_NBSP}000${NBSP}FCFA`)).toBe(75000);
+		expect(parseFcfa('75\u202f000\u00a0FCFA')).toBe(75000);
+		expect(parseFcfa('75\u00a0000')).toBe(75000);
 		expect(parseFcfa('75.000')).toBe(75000);
 		expect(parseFcfa('10 000 000 000')).toBe(10_000_000_000);
 	});

@@ -8,9 +8,9 @@ import { z } from 'zod';
 export type Fcfa = number;
 
 /** Espace fine insécable (U+202F), séparateur des milliers. */
-export const THIN_NBSP = ' ';
+export const THIN_NBSP = '\u202f';
 /** Espace insécable (U+00A0), entre le nombre et l'unité. */
-export const NBSP = ' ';
+export const NBSP = '\u00a0';
 
 /** Plus grand montant représentable exactement : 9 007 199 254 740 991 FCFA. */
 export const MAX_FCFA = Number.MAX_SAFE_INTEGER;
@@ -46,9 +46,18 @@ export function formatFcfaNumber(amount: Fcfa): string {
 		.replace(/\B(?=(\d{3})+(?!\d))/g, THIN_NBSP);
 }
 
-/** 75000 → « 75 000 FCFA ». */
+/** 75000 → « 75 000 FCFA » : espace fine insécable entre les milliers, espace insécable avant l'unité. */
 export function formatFcfa(amount: Fcfa): string {
 	return `${formatFcfaNumber(amount)}${NBSP}FCFA`;
+}
+
+/**
+ * Montant pour un PDF dessiné par pdf-lib avec ses polices standard (encodage WinAnsi, reçus et relevés) : ces polices
+ * n'ont pas l'espace fine insécable (U+202F) et pdf-lib la refuse ; l'espace insécable (U+00A0) la remplace, dans ces
+ * documents seulement. Les écrans et les contrats (LibreOffice) gardent U+202F, vérifié par les tests de rendu.
+ */
+export function formatFcfaForPdf(amount: Fcfa): string {
+	return formatFcfa(amount).replaceAll(THIN_NBSP, NBSP);
 }
 
 /**
@@ -58,7 +67,7 @@ export function formatFcfa(amount: Fcfa): string {
 export function parseFcfa(input: string): Fcfa | null {
 	const cleaned = input
 		.replace(/fcfa|f\s*cfa|xof/gi, '')
-		.replace(/[\s  .]/g, '')
+		.replace(/[\s.]/g, '')
 		.trim();
 	if (!/^\d{1,16}$/.test(cleaned)) return null;
 	const value = Number.parseInt(cleaned, 10);

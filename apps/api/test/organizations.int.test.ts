@@ -463,7 +463,7 @@ describe('invitations', () => {
 			organizationName: 'Agence invitante',
 			organizationType: 'agency',
 			role: 'manager',
-			phone: '+226 70 •• •• 56'
+			phone: '+226\u00a070\u00a0••\u00a0••\u00a056'
 		});
 	});
 
