@@ -46,9 +46,11 @@ const expected: Record<OrganizationRole, Action[]> = {
 		'contract.freeze',
 		'contract.upload_signed',
 		'contract_template.read',
+		'payment.read',
 		'payment.record',
 		'payment.record_cash',
 		'payment.validate',
+		'receipt.share',
 		'reminder.send',
 		'listing.publish',
 		'lead.manage',
@@ -65,14 +67,26 @@ const expected: Record<OrganizationRole, Action[]> = {
 		'unit.status',
 		'tenant.read',
 		'lease.read',
+		'payment.read',
 		'payment.record_cash',
+		'receipt.share',
 		'lead.manage',
 		'visit.manage',
 		'photo.upload'
 	],
 	// Lot 07 : biens et unités en lecture, aucun document privé.
-	// Lot 08 : locataires (sans état civil), baux et cautions en lecture.
-	viewer: ['organization.read', 'owner.read', 'mandate.read', 'property.read', 'tenant.read', 'lease.read', 'deposit.read', 'export.csv']
+	// Lot 08 : locataires (sans état civil), baux et cautions en lecture. Lot 09 : encaissements et reçus en lecture.
+	viewer: [
+		'organization.read',
+		'owner.read',
+		'mandate.read',
+		'property.read',
+		'tenant.read',
+		'lease.read',
+		'deposit.read',
+		'payment.read',
+		'export.csv'
+	]
 };
 
 describe('matrice de permissions', () => {
@@ -82,8 +96,20 @@ describe('matrice de permissions', () => {
 		});
 	}
 
+	it('seul le directeur annule un encaissement et règle la numérotation des reçus ; l’agent de terrain n’encaisse que des espèces', () => {
+		for (const role of ORGANIZATION_ROLES) {
+			expect(can(role, 'payment.cancel')).toBe(role === 'director');
+			expect(can(role, 'receipt.settings')).toBe(role === 'director');
+		}
+		expect(can('field_agent', 'payment.record_cash')).toBe(true);
+		expect(can('field_agent', 'payment.record')).toBe(false);
+		expect(can('field_agent', 'payment.validate')).toBe(false);
+		expect(can('viewer', 'payment.record_cash')).toBe(false);
+		expect((ACTIONS as string[]).includes('receipt.cancel')).toBe(false);
+	});
+
 	it('le gestionnaire n’annule pas un reçu, n’exporte pas et ne gère pas les collaborateurs', () => {
-		for (const action of ['receipt.cancel', 'export.csv', 'member.invite', 'member.change_role', 'member.remove'] as const) {
+		for (const action of ['payment.cancel', 'export.csv', 'member.invite', 'member.change_role', 'member.remove'] as const) {
 			expect(can('manager', action)).toBe(false);
 		}
 	});

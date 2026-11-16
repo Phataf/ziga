@@ -70,12 +70,18 @@ export const PERMISSIONS = {
 	'contract.upload_signed': [D, M],
 	'contract_template.read': [D, M],
 	'contract_template.manage': [D],
-	// Déclarées dès le lot 03 pour fixer le partage des rôles ; leurs endpoints viennent avec leur lot.
+	// Lot 09 : encaissements et reçus (déclarées dès le lot 03). Tout le monde lit ; l'agent de terrain n'encaisse que
+	// des espèces, « à valider », sur ses unités affectées ; la direction et la gestion valident et rapprochent ;
+	// seul le directeur annule (contre-écriture motivée) et règle la numérotation des reçus. `payment.cancel`
+	// remplace `receipt.cancel` du lot 03, jamais utilisée (validé par le porteur).
+	'payment.read': [D, M, F, V],
 	'payment.record': [D, M],
-	// Agent de terrain : espèces « à valider », sur ses unités affectées.
 	'payment.record_cash': [D, M, F],
 	'payment.validate': [D, M],
-	'receipt.cancel': [D],
+	'payment.cancel': [D],
+	'receipt.share': [D, M, F],
+	'receipt.settings': [D],
+	// Déclarées dès le lot 03 pour fixer le partage des rôles ; leurs endpoints viennent avec leur lot.
 	'reminder.send': [D, M],
 	'listing.publish': [D, M],
 	'lead.manage': [D, M, F],
