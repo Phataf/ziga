@@ -91,6 +91,18 @@
 		"./contracts": {
 			"types": "./dist/contracts.d.ts",
 			"default": "./dist/contracts.js"
+		},
+		"./payments": {
+			"types": "./dist/payments.d.ts",
+			"default": "./dist/payments.js"
+		},
+		"./allocation": {
+			"types": "./dist/allocation.d.ts",
+			"default": "./dist/allocation.js"
+		},
+		"./receipts": {
+			"types": "./dist/receipts.d.ts",
+			"default": "./dist/receipts.js"
 		}
 	},
 	"files": [

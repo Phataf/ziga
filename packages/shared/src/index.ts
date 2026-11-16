@@ -19,3 +19,6 @@ export * from './leases.js';
 export * from './french-words.js';
 export * from './contract-fields.js';
 export * from './contracts.js';
+export * from './payments.js';
+export * from './allocation.js';
+export * from './receipts.js';

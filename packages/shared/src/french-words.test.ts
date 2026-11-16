@@ -86,6 +86,18 @@ describe('amountInFrenchWords', () => {
 	});
 });
 
+describe('montant en lettres des reçus (lot 09)', () => {
+	it.each([
+		[0, 'zéro franc CFA'],
+		[1, 'un franc CFA'],
+		[80_000, 'quatre-vingt mille francs CFA'],
+		[1_250_000, 'un million deux cent cinquante mille francs CFA'],
+		[21_000_000, 'vingt et un millions de francs CFA']
+	])('%i → %s', (n, words) => {
+		expect(amountInFrenchWords(n)).toBe(words);
+	});
+});
+
 describe('dateInFrenchWords (documents)', () => {
 	it.each([
 		['2027-01-01', '1er janvier 2027'],
