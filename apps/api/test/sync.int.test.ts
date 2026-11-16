@@ -33,8 +33,11 @@ const PUBLISHED = [
 	'organization_members',
 	'organizations',
 	'owners',
+	'payment_allocations',
+	'payments',
 	'plan_features',
 	'properties',
+	'receipts',
 	'rent_dues',
 	'tenants',
 	'units'

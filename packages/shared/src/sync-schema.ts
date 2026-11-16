@@ -26,6 +26,9 @@ export const SYNCED_TABLES = {
 		accepted_payment_methods: 'text',
 		logo_id: 'text',
 		rent_billing_mode: 'text',
+		receipt_prefix: 'text',
+		receipt_ticket_width: 'integer',
+		receipt_numbering_started_at: 'text',
 		updated_at: 'text'
 	},
 	organization_members: {
@@ -491,6 +494,68 @@ export const SYNCED_TABLES = {
 		created_by: 'text',
 		created_at: 'text',
 		updated_at: 'text'
+	},
+	/**
+	 * Lot 09 : encaissements (et contre-écritures), ajout seul ; statut, montant et numéro décidés par le serveur.
+	 * Agent de terrain : les loyers de ses unités seulement.
+	 */
+	payments: {
+		organization_id: 'text',
+		kind: 'text',
+		reverses_payment_id: 'text',
+		lease_id: 'text',
+		tenant_id: 'text',
+		purpose: 'text',
+		deposit_account_id: 'text',
+		amount: 'integer',
+		method: 'text',
+		operator: 'text',
+		transaction_reference: 'text',
+		paid_on: 'text',
+		status: 'text',
+		provider: 'text',
+		provider_reference: 'text',
+		note: 'text',
+		recorded_by: 'text',
+		confirmed_at: 'text',
+		confirmed_by: 'text',
+		cancellation_reason: 'text',
+		cancelled_at: 'text',
+		cancelled_by: 'text',
+		created_at: 'text',
+		updated_at: 'text'
+	},
+	/** Lot 09 : imputations, écrites par le serveur seul (ajout seul). */
+	payment_allocations: {
+		organization_id: 'text',
+		payment_id: 'text',
+		lease_id: 'text',
+		target: 'text',
+		rent_due_id: 'text',
+		deposit_account_id: 'text',
+		direction: 'text',
+		amount: 'integer',
+		created_by: 'text',
+		created_at: 'text'
+	},
+	/** Lot 09 : reçus ; numéro attribué par le serveur ; copie figée en JSON ; ni jetons ni clés des PDF. */
+	receipts: {
+		organization_id: 'text',
+		payment_id: 'text',
+		lease_id: 'text',
+		purpose: 'text',
+		provisional_number: 'text',
+		number: 'text',
+		year: 'integer',
+		sequence: 'integer',
+		status: 'text',
+		issued_on: 'text',
+		issued_at: 'text',
+		snapshot: 'text',
+		logo_id: 'text',
+		cancelled_at: 'text',
+		created_at: 'text',
+		updated_at: 'text'
 	}
 } as const satisfies Record<string, Record<string, LocalColumnType>>;
 
@@ -518,5 +583,8 @@ export const ORGANIZATION_SCOPED_TABLES = [
 	'contract_templates',
 	'lease_contracts',
 	'contract_versions',
-	'lease_amendments'
+	'lease_amendments',
+	'payments',
+	'payment_allocations',
+	'receipts'
 ] as const satisfies readonly SyncedTable[];

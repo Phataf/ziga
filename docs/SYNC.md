@@ -71,6 +71,10 @@ Dans l'ordre, dans le lot qui crée la table :
 | `lease_contracts` | 08 bis | contrats du bail et des avenants : cycle, figement, signataires, signature manuscrite déposée, légalisation et enregistrement ; direction et gestion seulement, jamais l'agent de terrain ni le profil lecture | jamais (génération et figement en ligne ; le scan se prépare hors ligne puis s'envoie) |
 | `contract_versions` | 08 bis | versions en ajout seul, **sans** la copie des données ni les valeurs résolues (état civil compris), lues en ligne ; fichiers par URL signée | jamais |
 | `lease_amendments` | 08 bis | avenants (renouvellement, loyer, autre) et leur application au bail | jamais (en ligne) |
+| `organizations` (colonnes du lot 09) | 09 | préfixe des reçus, largeur du ticket, date du premier reçu (qui fige le préfixe et le premier numéro) | non (réglages du directeur, en ligne) |
+| `payments` | 09 | encaissements et contre-écritures, ajout seul ; statut et locataire décidés par le serveur ; agent de terrain : les loyers de ses unités, jamais une caution | création seule (étape 3) ; jamais le statut, le montant d'un encaissement enregistré ni le numéro ; validation, rapprochement et annulation en ligne |
+| `payment_allocations` | 09 | imputations, écrites par le serveur seul à la confirmation (ajout seul) ; agent de terrain : sans les imputations de caution | jamais |
+| `receipts` | 09 | reçus : numéro provisoire, puis numéro attribué par la base à la validation ; copie figée (D29) ; **ni** les jetons (empreintes, serveur seul) **ni** les clés des PDF ; agent de terrain : les reçus des loyers de ses unités | jamais (créé avec l'encaissement, étape 3) |
 
 ## 4. Lire dans la base locale (écrans)
 
