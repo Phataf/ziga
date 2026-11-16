@@ -37,6 +37,7 @@ const cases: Case[] = [
 			'Impayés',
 			'Propriétaires',
 			'Locataires',
+			'Contrats',
 			'À valider',
 			'Équipe',
 			'Paramètres de l’organisation',
@@ -49,7 +50,17 @@ const cases: Case[] = [
 		account: 'managerB',
 		path: '/app',
 		tabs: ['Accueil', 'Biens', 'Encaissements', 'Plus'],
-		menu: ['Tableau de bord', 'Biens et unités', 'Encaissements', 'Impayés', 'Propriétaires', 'Locataires', 'À valider', 'Équipe'],
+		menu: [
+			'Tableau de bord',
+			'Biens et unités',
+			'Encaissements',
+			'Impayés',
+			'Propriétaires',
+			'Locataires',
+			'Contrats',
+			'À valider',
+			'Équipe'
+		],
 		sections: ['Pilotage', 'Gestion', 'Contrôle', 'Agence']
 	},
 	{
@@ -74,7 +85,7 @@ const cases: Case[] = [
 		org: 'Mes logements',
 		path: '/app',
 		tabs: ['Accueil', 'Logements', 'Loyers', 'Plus'],
-		menu: ['Accueil', 'Mes logements', 'Locataires', 'Loyers reçus', 'Retards', 'Paramètres de l’organisation', 'Journal'],
+		menu: ['Accueil', 'Mes logements', 'Locataires', 'Contrats', 'Loyers reçus', 'Retards', 'Paramètres de l’organisation', 'Journal'],
 		sections: ['Mes logements']
 	},
 	{
@@ -146,6 +157,7 @@ test.describe('Téléphone (360 × 800)', () => {
 			'Impayés',
 			'Propriétaires',
 			'Locataires',
+			'Contrats',
 			'À valider',
 			'Équipe',
 			'Paramètres de l’organisation',
