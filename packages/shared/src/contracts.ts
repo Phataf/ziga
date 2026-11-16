@@ -17,7 +17,12 @@
  */
 import { z } from 'zod';
 import { addDays, addMonths, daysBetween, formatDate, isIsoDate } from './dates.js';
-import { AMENDMENT_TYPES, leaseDurationMonths, type ContractTemplateKind } from './contract-fields.js';
+import {
+	AMENDMENT_TYPES,
+	CONTRACT_TEMPLATE_KINDS as CONTRACT_TEMPLATE_KINDS_LIST,
+	leaseDurationMonths,
+	type ContractTemplateKind
+} from './contract-fields.js';
 import { idSchema } from './ids.js';
 import { depositAboveLegalCap, isLeaseInForce, type LeaseStatus, type LessorType } from './leases.js';
 import { fcfaSchema, type Fcfa } from './money.js';
@@ -454,4 +459,170 @@ export function automaticRenewalEnd(lease: {
 	const months = leaseDurationMonths(lease);
 	if (months) return addDays(addMonths(next, months), -1);
 	return addDays(lease.endsOn, daysBetween(lease.startsOn, lease.endsOn) + 1);
+}
+
+// ---------------------------------------------------------------- dépôts et vues (API et appareil)
+
+/** Dépôt d'un fichier du contrat (modèle Word, scan signé, preuve) : la fiche naît en attente, l'URL signe le fichier. */
+export const contractFileSchema = z.object({
+	id: idSchema,
+	fileName: z
+		.string()
+		.trim()
+		.min(1, { error: 'Nom du fichier manquant.' })
+		.max(200, { error: 'Nom du fichier trop long.' })
+		.refine((v) => !v.includes('/') && !v.includes('\\') && ![...v].some((c) => c.charCodeAt(0) < 32), {
+			error: 'Nom du fichier invalide.'
+		}),
+	byteSize: z.number().int().min(1, { error: 'Fichier vide.' })
+});
+
+/** Modèle Word : un .docx de 5 Mo au plus. */
+export const createTemplateSchema = contractFileSchema.extend({
+	documentId: idSchema,
+	kind: z.enum(CONTRACT_TEMPLATE_KINDS_LIST),
+	name: z.string().trim().min(2, { error: 'Indiquez le nom du modèle.' }).max(120, { error: 'Nom trop long.' }),
+	byteSize: z
+		.number()
+		.int()
+		.min(1, { error: 'Fichier vide.' })
+		.max(CONTRACT_TEMPLATE_LIMITS.maxBytes, { error: 'Modèle trop lourd : 5 Mo au plus.' }),
+	fileName: contractFileSchema.shape.fileName.refine((v) => v.toLowerCase().endsWith('.docx'), {
+		error: 'Seul un document Word .docx est accepté.'
+	})
+});
+export type CreateTemplateData = z.output<typeof createTemplateSchema>;
+
+/** Scan signé (PDF ou images assemblées en PDF sur l'appareil), preuve de légalisation ou d'enregistrement. */
+export const CONTRACT_PROOF_KINDS = ['signed_scan', 'legalization', 'registration'] as const;
+export const contractUploadSchema = contractFileSchema.extend({
+	kind: z.enum(CONTRACT_PROOF_KINDS),
+	mimeType: z.enum(['application/pdf', 'image/jpeg', 'image/png'], { error: 'Format refusé : PDF, JPEG ou PNG.' }),
+	byteSize: z
+		.number()
+		.int()
+		.min(1, { error: 'Fichier vide.' })
+		.max(10 * 1024 * 1024, { error: 'Fichier trop lourd : 10 Mo au plus.' })
+});
+export type ContractUploadData = z.output<typeof contractUploadSchema>;
+
+export interface ContractTemplateView {
+	id: string;
+	kind: ContractTemplateKind;
+	name: string;
+	version: number;
+	replacesId: string | null;
+	documentId: string;
+	status: ContractTemplateStatus;
+	inspectedAt: string | null;
+	inspectionError: string | null;
+	detectedFields: string[];
+	unknownFields: string[];
+	unmatchedFonts: string[];
+	pageCount: number | null;
+	/** Dernier aperçu PDF généré avec les données d'exemple (document du registre). */
+	previewDocumentId: string | null;
+	activatedAt: string | null;
+	retiredAt: string | null;
+	createdAt: string;
+}
+
+/** Modèle utilisé pour un type : celui de l'organisation s'il est actif, sinon celui de la plateforme (D25). */
+export interface TemplatesOverview {
+	templates: ContractTemplateView[];
+	inUse: Record<
+		ContractTemplateKind,
+		{ source: ContractTemplateSource; templateId: string | null; version: number; legalReviewPending: boolean }
+	>;
+}
+
+export interface ContractVersionView {
+	id: string;
+	number: number;
+	leaseVersion: number;
+	templateSource: ContractTemplateSource;
+	templateId: string | null;
+	templateVersion: number;
+	blankFields: string[];
+	warnings: string[];
+	docxDocumentId: string;
+	pdfDocumentId: string;
+	docxSha256: string;
+	pdfSha256: string;
+	pageCount: number | null;
+	createdBy: string | null;
+	createdAt: string;
+}
+
+export interface AmendmentView {
+	id: string;
+	leaseId: string;
+	number: number;
+	type: (typeof AMENDMENT_TYPES)[number];
+	effectiveFrom: string;
+	newRent: Fcfa | null;
+	newCharges: Fcfa | null;
+	newEndsOn: string | null;
+	openEnded: boolean;
+	description: string | null;
+	expectedLeaseVersion: number;
+	status: AmendmentStatus;
+	appliedAt: string | null;
+	appliedLeaseVersion: number | null;
+	cancelledAt: string | null;
+	cancellationReason: string | null;
+	contractId: string | null;
+	createdAt: string;
+}
+
+export interface ContractView {
+	id: string;
+	leaseId: string;
+	amendmentId: string | null;
+	origin: ContractOrigin;
+	templateSource: ContractTemplateSource | null;
+	templateId: string | null;
+	templateVersion: number | null;
+	status: ContractStatus;
+	currentVersion: number;
+	frozenVersion: number | null;
+	frozenAt: string | null;
+	generationStatus: 'idle' | 'pending' | 'failed';
+	generationError: string | null;
+	signingPlace: string | null;
+	signingDate: string | null;
+	copies: number | null;
+	expectedSigners: ContractParty[] | null;
+	signedOn: Record<ContractParty, string | null>;
+	signatureMode: SignatureMode | null;
+	signedDocumentId: string | null;
+	/** « Signature manuscrite, scan déposé par … le … » ; jamais « signé électroniquement » (D21). */
+	signatureLabel: string | null;
+	legalizedOn: string | null;
+	legalizationCommune: string | null;
+	legalizationReference: string | null;
+	legalizationDocumentId: string | null;
+	registeredOn: string | null;
+	registrationReference: string | null;
+	registrationDocumentId: string | null;
+	legalizationReminder: boolean;
+	/** Le bail a changé depuis la version figée : à régénérer avant la signature. */
+	outdated: boolean;
+	alerts: ContractAlert[];
+	/** Modèle par défaut non encore relu par un juriste (D25) : bandeau dans l'application, jamais dans le document. */
+	defaultTemplateNotice: boolean;
+	createdAt: string;
+	updatedAt: string;
+}
+
+export interface ContractDetailView extends ContractView {
+	versions: ContractVersionView[];
+	amendment: AmendmentView | null;
+}
+
+/** Valeurs résolues d'une version (lues en ligne : elles contiennent l'état civil). */
+export interface ContractVersionFields {
+	number: number;
+	fields: Record<string, string | boolean | null>;
+	blankFields: string[];
 }
