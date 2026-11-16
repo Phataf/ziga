@@ -12,7 +12,7 @@
 import { expect, test, type APIRequestContext, type Browser, type Page } from '@playwright/test';
 import { addDays, toIsoDate } from '@ziga/shared/dates';
 import { newId } from '@ziga/shared/ids';
-import { addMember, freshAgency, get, login, post, received, type Agency, type Person } from './agency';
+import { addMember, freshAgency, get, login, post, receivedOwn, receivedWhen, type Agency, type Person, type SyncedRow } from './agency';
 import { accounts, API_URL, expectNoHorizontalOverflow, signInWith, synced } from './support';
 
 const phone = { viewport: { width: 360, height: 800 }, isMobile: true, hasTouch: true };
@@ -263,8 +263,13 @@ test.describe('Flux PowerSync : état civil du locataire et cloisonnement', () =
 		const { tenantId, leaseId } = await leaseViaApi(request, agency, unitId);
 		const other = await freshAgency(request, `Agence B flux ${newId().slice(-6)}`);
 
-		const director = await received(request, await login(request, agency.director.phone, agency.director.password));
-		const asManager = await received(request, await login(request, manager.phone, manager.password));
+		// Chaque flux est lu une fois arrivées les lignes que cette personne doit recevoir ; les absences vérifiées
+		// ensuite portent sur la même lecture.
+		const complete = (rows: SyncedRow[]) =>
+			rows.some((r) => r.table === 'tenant_identities' && r.data.id === tenantId) &&
+			rows.some((r) => r.table === 'deposit_accounts' && r.data.lease_id === leaseId);
+		const director = await receivedWhen(request, await login(request, agency.director.phone, agency.director.password), complete);
+		const asManager = await receivedWhen(request, await login(request, manager.phone, manager.password), complete);
 		for (const rows of [director, asManager]) {
 			expect(rows.find((r) => r.table === 'tenant_identities' && r.data.id === tenantId)?.data).toMatchObject({
 				id_number: 'B12345678',
@@ -272,7 +277,14 @@ test.describe('Flux PowerSync : état civil du locataire et cloisonnement', () =
 			});
 			expect(rows.some((r) => r.table === 'deposit_accounts')).toBe(true);
 		}
-		const asAgent = await received(request, await login(request, agent.phone, agent.password));
+		const asAgent = await receivedWhen(
+			request,
+			await login(request, agent.phone, agent.password),
+			(rows) =>
+				rows.some((r) => r.table === 'tenants' && r.data.id === tenantId) &&
+				rows.some((r) => r.table === 'leases' && r.data.id === leaseId) &&
+				rows.some((r) => r.table === 'rent_dues' && r.data.lease_id === leaseId)
+		);
 		expect(asAgent.some((r) => r.table === 'tenant_identities')).toBe(false);
 		const tenantRow = asAgent.find((r) => r.table === 'tenants' && r.data.id === tenantId);
 		expect(tenantRow?.data).toMatchObject({ full_name: 'Awa Ouédraogo' });
@@ -287,7 +299,7 @@ test.describe('Flux PowerSync : état civil du locataire et cloisonnement', () =
 			expect(r.data).not.toHaveProperty('user_id');
 		}
 
-		const b = await received(request, await login(request, other.director.phone, other.director.password));
+		const b = await receivedOwn(request, await login(request, other.director.phone, other.director.password), other.id);
 		for (const table of [
 			'tenants',
 			'tenant_identities',

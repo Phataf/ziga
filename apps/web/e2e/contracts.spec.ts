@@ -14,7 +14,7 @@ import { expect, test, type APIRequestContext, type Browser, type Page } from '@
 import { addDays, addMonths, toIsoDate } from '@ziga/shared/dates';
 import { newId } from '@ziga/shared/ids';
 import { PDFDocument } from 'pdf-lib';
-import { addMember, freshAgency, get, login, post, received, type Agency, type Member } from './agency';
+import { addMember, freshAgency, get, login, post, receivedOwn, receivedWhen, type Agency, type Member } from './agency';
 import { accounts, API_URL, expectNoHorizontalOverflow, signInWith, synced } from './support';
 
 const phone = { viewport: { width: 360, height: 800 }, isMobile: true, hasTouch: true };
@@ -342,22 +342,33 @@ test.describe('Flux PowerSync des contrats', () => {
 		const other = await freshAgency(request, `Agence B flux contrats ${newId().slice(-6)}`);
 		const tables = ['lease_contracts', 'contract_versions', 'lease_amendments', 'contract_templates'];
 
+		// Direction et gestion : le contrat et sa version générée, attendus ensemble. Les autres flux sont lus ensuite,
+		// une fois la réplication de ces écritures faite.
 		for (const who of [agency.director, manager]) {
-			const rows = await received(request, await login(request, who.phone, who.password));
+			const rows = await receivedWhen(
+				request,
+				await login(request, who.phone, who.password),
+				(all) =>
+					all.some((r) => r.table === 'lease_contracts' && r.data.id === created.id) &&
+					all.some((r) => r.table === 'contract_versions' && r.data.contract_id === created.id)
+			);
 			expect(rows.some((r) => r.table === 'lease_contracts' && r.data.id === created.id)).toBe(true);
 			expect(rows.some((r) => r.table === 'contract_versions')).toBe(true);
 			// Jamais la copie des données (état civil) dans le flux : elle se lit en ligne.
 			for (const r of rows.filter((x) => x.table === 'contract_versions')) expect(r.data).not.toHaveProperty('data');
 		}
 		for (const who of [agent, viewer]) {
-			const rows = await received(request, await login(request, who.phone, who.password));
+			// Le bail, que l'un et l'autre reçoivent, est arrivé : la lecture est à jour.
+			const rows = await receivedWhen(request, await login(request, who.phone, who.password), (all) =>
+				all.some((r) => r.table === 'leases' && r.data.id === leaseId)
+			);
 			expect(
 				rows.filter((r) => tables.includes(r.table)),
 				who.phone
 			).toEqual([]);
 			expect(rows.some((r) => r.table === 'documents' && String(r.data.type).startsWith('contract'))).toBe(false);
 		}
-		const b = await received(request, await login(request, other.director.phone, other.director.password));
+		const b = await receivedOwn(request, await login(request, other.director.phone, other.director.password), other.id);
 		for (const table of [...tables, 'documents']) {
 			expect(
 				b.filter((r) => r.table === table && r.data.organization_id === agency.id),

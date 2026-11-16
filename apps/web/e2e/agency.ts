@@ -123,3 +123,36 @@ export async function received(request: APIRequestContext, accessToken: string):
 	}
 	return [...rows.values()];
 }
+
+/**
+ * Le flux de cette personne, relu jusqu'à ce que `ready` soit vrai (la réplication prend un instant après une
+ * écriture), dans la limite de `timeout` ; renvoie la lecture qui l'a satisfait. Les assertions portent ensuite sur
+ * cette lecture : l'attente ne remplace aucune assertion (comme dans sync.spec.ts).
+ */
+export async function receivedWhen(
+	request: APIRequestContext,
+	accessToken: string,
+	ready: (rows: SyncedRow[]) => boolean,
+	timeout = 15_000
+): Promise<SyncedRow[]> {
+	let rows: SyncedRow[] = [];
+	await expect
+		.poll(
+			async () => {
+				rows = await received(request, accessToken);
+				return ready(rows);
+			},
+			{ timeout, message: 'le flux PowerSync n’a pas reçu les lignes attendues à temps' }
+		)
+		.toBe(true);
+	return rows;
+}
+
+/**
+ * Le flux d'une autre organisation, lu une fois que sa propre fiche y est arrivée : créée après les écritures de A,
+ * elle prouve que la réplication les a dépassées (le journal de PostgreSQL est rejoué dans l'ordre). Les absences
+ * vérifiées ensuite portent donc sur des lignes de A qui existent bien.
+ */
+export function receivedOwn(request: APIRequestContext, accessToken: string, organizationId: string): Promise<SyncedRow[]> {
+	return receivedWhen(request, accessToken, (rows) => rows.some((r) => r.table === 'organizations' && r.data.id === organizationId));
+}
