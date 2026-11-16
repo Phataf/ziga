@@ -833,7 +833,12 @@ export const fr = {
 			document_photo: 'Photo d’un document',
 			other: 'Autre',
 			signed_lease_scan: 'Bail signé (scan)',
-			tenant_identity: 'Pièce d’identité du locataire'
+			tenant_identity: 'Pièce d’identité du locataire',
+			contract_template: 'Modèle de contrat',
+			contract_draft: 'Projet de contrat',
+			signed_amendment_scan: 'Avenant signé (scan)',
+			contract_legalization: 'Preuve de légalisation',
+			contract_registration: 'Preuve d’enregistrement'
 		},
 		file: 'Fichier (PDF ou image, 10 Mo au plus)',
 		restricted: 'Réservé à la direction',

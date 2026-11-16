@@ -21,9 +21,25 @@ export const DOCUMENT_TYPES = [
 	'other',
 	// Lot 08 : bail signé scanné (rattaché au bail), pièce d'identité du locataire (rattachée au locataire).
 	'signed_lease_scan',
-	'tenant_identity'
+	'tenant_identity',
+	// Lot 08 bis : modèle Word de l'organisation, projets de contrat (Word et PDF générés par le serveur), avenant signé
+	// scanné, preuves de légalisation et d'enregistrement (rattachés au contrat et au bail).
+	'contract_template',
+	'contract_draft',
+	'signed_amendment_scan',
+	'contract_legalization',
+	'contract_registration'
 ] as const;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
+
+/** Documents du contrat (lot 08 bis) : déposés ou générés par les routes du contrat, jamais par la route générique. */
+export const CONTRACT_DOCUMENT_TYPES = [
+	'contract_template',
+	'contract_draft',
+	'signed_amendment_scan',
+	'contract_legalization',
+	'contract_registration'
+] as const satisfies readonly DocumentType[];
 
 /** `pending` : fiche créée, fichier pas encore reçu et vérifié ; `rejected` : fichier refusé (taille, type). */
 export const DOCUMENT_STATUSES = ['pending', 'active', 'replaced', 'withdrawn', 'rejected'] as const;
@@ -33,12 +49,28 @@ export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
 export const DOCUMENT_RESTRICTIONS = ['director_only'] as const;
 export type DocumentRestriction = (typeof DOCUMENT_RESTRICTIONS)[number];
 
-/** Objets auxquels un document se rattache : lot 07, puis bail et locataire (lot 08) ; contrat au lot 08 bis. */
-export const DOCUMENT_SUBJECTS = ['owner', 'mandate', 'property', 'unit', 'tenant', 'lease'] as const;
+/** Objets auxquels un document se rattache : lot 07, puis bail et locataire (lot 08), contrat et modèle (lot 08 bis). */
+export const DOCUMENT_SUBJECTS = [
+	'owner',
+	'mandate',
+	'property',
+	'unit',
+	'tenant',
+	'lease',
+	'lease_contract',
+	'contract_template'
+] as const;
 export type DocumentSubject = (typeof DOCUMENT_SUBJECTS)[number];
 
-/** Pièces privées : mêmes limites de taille que les photos ; PDF ou image. */
-export const DOCUMENT_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'] as const;
+/** Pièces déposées par la route générique : mêmes limites de taille que les photos ; PDF ou image. */
+export const UPLOAD_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'] as const;
+export type UploadMimeType = (typeof UPLOAD_MIME_TYPES)[number];
+
+/** Formats enregistrés : ceux du dépôt, plus le Word d'un modèle ou d'un projet de contrat (lot 08 bis). */
+export const DOCUMENT_MIME_TYPES = [
+	...UPLOAD_MIME_TYPES,
+	'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+] as const;
 export type DocumentMimeType = (typeof DOCUMENT_MIME_TYPES)[number];
 
 /** Durée d'une URL signée de lecture d'un document (prompt du lot 07). */
@@ -74,7 +106,16 @@ export const DOCUMENT_ACCESS: Record<DocumentType, DocumentAccessRule> = {
 	other: { staff: STAFF, fieldAgent: 'never', owner: 'never', tenant: 'never' },
 	// Lot 08 : « Contrat signé » et « Pièce d'identité du locataire » de la matrice.
 	signed_lease_scan: { staff: STAFF, fieldAgent: 'never', owner: 'own', tenant: 'own' },
-	tenant_identity: { staff: STAFF, fieldAgent: 'never', owner: 'never', tenant: 'own' }
+	tenant_identity: { staff: STAFF, fieldAgent: 'never', owner: 'never', tenant: 'own' },
+	// Lot 08 bis. « Modèle de contrat » : l'organisation seule (la direction le modifie, permission à part).
+	contract_template: { staff: STAFF, fieldAgent: 'never', owner: 'never', tenant: 'never' },
+	// « Projet de contrat » : le locataire à partir de « prêt à signer » ; le propriétaire si son accord est requis, ce
+	// qui viendra en P2 (validation par le propriétaire) : jamais d'ici là.
+	contract_draft: { staff: STAFF, fieldAgent: 'never', owner: 'never', tenant: 'own_from_ready_to_sign' },
+	// « Contrat signé, annexes, avenants » : comme le bail signé.
+	signed_amendment_scan: { staff: STAFF, fieldAgent: 'never', owner: 'own', tenant: 'own' },
+	contract_legalization: { staff: STAFF, fieldAgent: 'never', owner: 'own', tenant: 'own' },
+	contract_registration: { staff: STAFF, fieldAgent: 'never', owner: 'own', tenant: 'own' }
 };
 
 /** Documents du bail : rattachés au bail ou au locataire (module leases, lot 08). */
@@ -134,7 +175,10 @@ export function canPartyReadDocument(
 export const createDocumentSchema = z
 	.object({
 		id: idSchema,
-		type: z.enum(DOCUMENT_TYPES),
+		// Les documents du contrat passent par les routes du contrat (lot 08 bis), jamais par celle-ci.
+		type: z.enum(DOCUMENT_TYPES).refine((t) => !(CONTRACT_DOCUMENT_TYPES as readonly string[]).includes(t), {
+			error: 'Ce document se dépose depuis le contrat.'
+		}),
 		ownerId: idSchema.nullish().transform((v) => v ?? null),
 		mandateId: idSchema.nullish().transform((v) => v ?? null),
 		propertyId: idSchema.nullish().transform((v) => v ?? null),
@@ -150,7 +194,7 @@ export const createDocumentSchema = z
 			.refine((v) => !v.includes('/') && !v.includes('\\') && ![...v].some((c) => c.charCodeAt(0) < 32), {
 				error: 'Nom du fichier invalide.'
 			}),
-		mimeType: z.enum(DOCUMENT_MIME_TYPES, { error: 'Format refusé : PDF, JPEG, PNG, WebP ou HEIC.' }),
+		mimeType: z.enum(UPLOAD_MIME_TYPES, { error: 'Format refusé : PDF, JPEG, PNG, WebP ou HEIC.' }),
 		byteSize: z.number().int().min(1, { error: 'Fichier vide.' }).max(MAX_UPLOAD_BYTES, { error: 'Document trop lourd : 10 Mo au plus.' }),
 		restriction: z
 			.enum(DOCUMENT_RESTRICTIONS)
@@ -188,6 +232,8 @@ export interface DocumentView {
 	unitId: string | null;
 	tenantId: string | null;
 	leaseId: string | null;
+	leaseContractId: string | null;
+	contractTemplateId: string | null;
 	version: number;
 	replacesId: string | null;
 	fileName: string;

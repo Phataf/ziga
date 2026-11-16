@@ -240,6 +240,8 @@ export function toDocument(r: Row): DocumentView {
 		unitId: str(r.unit_id),
 		tenantId: str(r.tenant_id),
 		leaseId: str(r.lease_id),
+		leaseContractId: str(r.lease_contract_id),
+		contractTemplateId: str(r.contract_template_id),
 		version: int(r.version) ?? 1,
 		replacesId: str(r.replaces_id),
 		fileName: String(r.file_name ?? ''),

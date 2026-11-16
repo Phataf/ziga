@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	canPartyReadDocument,
+	CONTRACT_DOCUMENT_TYPES,
 	canReadDocument,
 	createDocumentSchema,
 	DOCUMENT_ACCESS,
@@ -104,5 +105,46 @@ describe('documents vus par les parties (espaces personnels, lot 08 bis puis lot
 		for (const party of ['owner', 'tenant'] as const) {
 			expect(canPartyReadDocument(party, { type: 'signed_lease_scan', restriction: null }, { isParty: true })).toBe(true);
 		}
+	});
+});
+
+describe('documents du contrat (lot 08 bis, docs/UX.md §10)', () => {
+	it('projet de contrat : direction et gestion ; jamais l’agent de terrain ni le profil lecture', () => {
+		const draft = { type: 'contract_draft' as const, restriction: null };
+		expect(canReadDocument('director', draft)).toBe(true);
+		expect(canReadDocument('manager', draft)).toBe(true);
+		expect(canReadDocument('field_agent', draft, { assignedUnit: true })).toBe(false);
+		expect(canReadDocument('viewer', draft)).toBe(false);
+	});
+
+	it('projet de contrat : le locataire à partir de « prêt à signer » seulement ; le propriétaire, pas avant la P2', () => {
+		const draft = { type: 'contract_draft' as const, restriction: null };
+		expect(canPartyReadDocument('tenant', draft, { isParty: true, contractStatus: 'draft' })).toBe(false);
+		expect(canPartyReadDocument('tenant', draft, { isParty: true, contractStatus: 'in_review' })).toBe(false);
+		expect(canPartyReadDocument('tenant', draft, { isParty: true, contractStatus: 'ready_to_sign' })).toBe(true);
+		expect(canPartyReadDocument('tenant', draft, { isParty: true, contractStatus: 'signed' })).toBe(true);
+		expect(canPartyReadDocument('tenant', draft, { isParty: true })).toBe(false);
+		expect(canPartyReadDocument('owner', draft, { isParty: true, contractStatus: 'signed' })).toBe(false);
+	});
+
+	it('modèle de contrat : l’organisation seule ; avenant signé et preuves : comme le contrat signé', () => {
+		expect(DOCUMENT_ACCESS.contract_template).toMatchObject({ owner: 'never', tenant: 'never', fieldAgent: 'never' });
+		for (const type of ['signed_amendment_scan', 'contract_legalization', 'contract_registration'] as const) {
+			expect(DOCUMENT_ACCESS[type]).toEqual(DOCUMENT_ACCESS.signed_lease_scan);
+		}
+	});
+
+	it('la route générique refuse les documents du contrat et le Word', () => {
+		const base = {
+			id: '019a5e2c-7d1e-7c3a-8b2f-1a2b3c4d5e6f',
+			leaseId: '019a5e2c-7d1e-7c3a-8b2f-1a2b3c4d5e71',
+			fileName: 'contrat.pdf',
+			mimeType: 'application/pdf',
+			byteSize: 1000
+		};
+		for (const type of CONTRACT_DOCUMENT_TYPES) expect(createDocumentSchema.safeParse({ ...base, type }).success, type).toBe(false);
+		const docx = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+		expect(createDocumentSchema.safeParse({ ...base, type: 'signed_lease_scan', mimeType: docx }).success).toBe(false);
+		expect(createDocumentSchema.safeParse({ ...base, type: 'signed_lease_scan' }).success).toBe(true);
 	});
 });
