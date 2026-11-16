@@ -42,6 +42,10 @@ export const organizations = pgTable('organizations', {
 	rentBillingMode: text('rent_billing_mode', { enum: ['calendar_prorata', 'calendar_full_first', 'anniversary'] })
 		.notNull()
 		.default('calendar_prorata'),
+	// Lot 09 : préfixe des reçus (figé après le premier reçu, par la base), largeur du ticket, date du premier reçu.
+	receiptPrefix: text('receipt_prefix'),
+	receiptTicketWidth: integer('receipt_ticket_width').$type<58 | 80>().notNull().default(80),
+	receiptNumberingStartedAt: tstz('receipt_numbering_started_at'),
 	createdBy: uuid('created_by').notNull(),
 	createdAt: tstz('created_at').notNull().defaultNow(),
 	updatedAt: tstz('updated_at').notNull().defaultNow()
