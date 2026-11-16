@@ -31,6 +31,7 @@ import {
 	leaseTermsSchema,
 	outstandingBalance,
 	rentDueBalance,
+	rentDueOverdueFrom,
 	tenantIdentitySchema,
 	tenantSchema,
 	unitOccupancy,
@@ -63,7 +64,7 @@ import { can } from '@ziga/shared/permissions';
 import { generateRentSchedule, rentChangeBlocker, rentDueUpdates, scheduleUntil } from '@ziga/shared/rent-schedule';
 import { and, asc, desc, eq, gt, inArray, isNull, ne } from 'drizzle-orm';
 import { AppError } from '../../common/app-error.js';
-import { RequestContext } from '../../common/request-context.js';
+import { RequestContext, type AuditOrigin } from '../../common/request-context.js';
 import type { Tx } from '../../db/database.js';
 import { depositAccounts, depositMovements, leaseContracts, leases, leaseVersions, rentDues, tenants } from '../../db/schema/leases.js';
 import { AuditService, diff, type AuditActor } from '../audit/audit.service.js';
@@ -71,9 +72,11 @@ import { DocumentsService } from '../documents/documents.service.js';
 import { OrganizationsService } from '../organizations/organizations.service.js';
 import { OwnersService } from '../owners/owners.service.js';
 import { PropertiesService } from '../properties/properties.service.js';
+import { RentDueEvents } from './rent-due-events.js';
 import {
 	generateDues,
 	refreshDueStatuses,
+	refreshStatusesOf,
 	renewLease,
 	scheduleInput,
 	VALIDATED_STATUSES,
@@ -267,6 +270,38 @@ interface Context {
 	actor: AuditActor;
 }
 
+/** Lot 09 : ce qu'un encaissement doit savoir de son bail (module payments). */
+export interface PaymentTarget {
+	leaseId: string;
+	tenantId: string;
+	tenantName: string;
+	unitId: string;
+	status: LeaseRow['status'];
+	startsOn: string;
+	deposits: {
+		id: string;
+		type: AccountRow['type'];
+		holder: AccountRow['holder'];
+		status: AccountRow['status'];
+		agreedAmount: number;
+		received: number;
+		remainingDue: number;
+	}[];
+}
+
+/** Lot 09 : une échéance vue par l'imputation (packages/shared, DueForAllocation et RentDueForStatus). */
+export interface DueForPayment {
+	id: string;
+	dueOn: string;
+	periodStart: string;
+	periodEnd: string;
+	amountDue: number;
+	amountPaid: number;
+	waived: boolean;
+	isAdvance: boolean;
+	overdueFrom: string;
+}
+
 @Injectable()
 export class LeasesService {
 	constructor(
@@ -274,7 +309,8 @@ export class LeasesService {
 		private readonly properties: PropertiesService,
 		private readonly owners: OwnersService,
 		private readonly documents: DocumentsService,
-		private readonly organizations: OrganizationsService
+		private readonly organizations: OrganizationsService,
+		private readonly events: RentDueEvents
 	) {}
 
 	private context(): Context {
@@ -726,7 +762,7 @@ export class LeasesService {
 			before: { status: 'draft' },
 			after: { status, activatedOn: today, version: updated!.version }
 		});
-		await generateDues(c.tx, this.audit, updated!, today, c.actor);
+		await generateDues(c.tx, this.audit, updated!, today, c.actor, undefined, this.events);
 	}
 
 	/**
@@ -858,7 +894,7 @@ export class LeasesService {
 				withoutAmendment: source === null
 			}
 		});
-		await generateDues(c.tx, this.audit, updated!, today, c.actor);
+		await generateDues(c.tx, this.audit, updated!, today, c.actor, undefined, this.events);
 		return this.getLease(id);
 	}
 
@@ -910,7 +946,9 @@ export class LeasesService {
 			row,
 			{ newEndsOn: change.newEndsOn, renewedOn: change.renewedOn, automatic: false, amendmentId: change.amendmentId },
 			toIsoDate(),
-			c.actor
+			c.actor,
+			undefined,
+			this.events
 		);
 		return updated.version;
 	}
@@ -1166,5 +1204,79 @@ export class LeasesService {
 		const exists = await c.tx.select({ id: depositMovements.id }).from(depositMovements).where(eq(depositMovements.id, m.id)).limit(1);
 		if (exists.length) throw new AppError('CONFLICT', 'Ce mouvement existe déjà.', 409);
 		await c.tx.insert(depositMovements).values({ ...m, organizationId: c.organizationId, createdBy: c.userId });
+	}
+
+	// ---------------------------------------------------------------- lot 09 : encaissements (module payments)
+
+	/**
+	 * Ce qu'un encaissement doit savoir de son bail : statut, locataire, unité, comptes de caution. L'agent de terrain
+	 * n'atteint que les baux de ses unités affectées (même règle que la lecture des baux).
+	 */
+	async paymentTarget(leaseId: string): Promise<PaymentTarget> {
+		const c = this.context();
+		const lease = await this.leaseRow(c, leaseId);
+		const tenant = await this.tenantRow(c, lease.tenantId);
+		const accounts = await this.accountViews(c, lease);
+		return {
+			leaseId: lease.id,
+			tenantId: tenant.id,
+			tenantName: tenant.fullName,
+			unitId: lease.unitId,
+			status: lease.status,
+			startsOn: lease.startsOn,
+			deposits: accounts.map((a) => ({
+				id: a.id,
+				type: a.type,
+				holder: a.holder,
+				status: a.status,
+				agreedAmount: a.agreedAmount,
+				received: a.balances.received,
+				remainingDue: a.balances.remainingDue
+			}))
+		};
+	}
+
+	/**
+	 * Échéances d'un bail pour l'imputation, verrouillées : deux confirmations simultanées sur le même bail s'imputent
+	 * l'une après l'autre. `overdueFrom` suit la règle de l'avance (rentDueOverdueFrom). Transaction donnée : la tâche de
+	 * nuit (crédit imputé sur une échéance émise) n'a pas de requête.
+	 */
+	async duesForAllocation(leaseId: string, tx: Tx = RequestContext.tx()): Promise<DueForPayment[]> {
+		const [lease] = await tx.select({ startsOn: leases.startsOn }).from(leases).where(eq(leases.id, leaseId)).limit(1);
+		if (!lease) throw LEASE_NOT_FOUND();
+		const rows = await tx
+			.select()
+			.from(rentDues)
+			.where(eq(rentDues.leaseId, leaseId))
+			.orderBy(asc(rentDues.dueOn), asc(rentDues.periodStart), asc(rentDues.id))
+			.for('update');
+		return rows.map((r) => ({
+			id: r.id,
+			dueOn: r.dueOn,
+			periodStart: r.periodStart,
+			periodEnd: r.periodEnd,
+			amountDue: r.amountDue,
+			amountPaid: r.amountPaid,
+			waived: r.status === 'waived',
+			isAdvance: r.isAdvance,
+			overdueFrom: rentDueOverdueFrom(r, lease.startsOn)
+		}));
+	}
+
+	/** Statut des échéances touchées par une imputation ou une contre-écriture, recalculé et journalisé. */
+	async refreshDueStatusesAfterPayment(
+		dueIds: readonly string[],
+		today: string,
+		actor: AuditActor,
+		tx: Tx = RequestContext.tx(),
+		origin?: AuditOrigin
+	): Promise<void> {
+		await refreshStatusesOf(tx, this.audit, dueIds, today, actor, origin);
+	}
+
+	/** Reste exigible d'un bail (échéances dues ou en retard), après les imputations. */
+	async outstandingOf(leaseId: string, today: string, tx: Tx = RequestContext.tx()): Promise<number> {
+		const dues = await this.duesForAllocation(leaseId, tx);
+		return outstandingBalance(dues, today);
 	}
 }

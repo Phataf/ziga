@@ -18,6 +18,7 @@ import type { AuditOrigin } from '../../common/request-context.js';
 import type { Tx } from '../../db/database.js';
 import { leases, leaseVersions, rentDues } from '../../db/schema/leases.js';
 import type { AuditActor, AuditService } from '../audit/audit.service.js';
+import type { RentDueEvents } from './rent-due-events.js';
 
 export type LeaseRow = typeof leases.$inferSelect;
 export type RentDueRow = typeof rentDues.$inferSelect;
@@ -111,7 +112,8 @@ export async function generateDues(
 	lease: LeaseRow,
 	today: string,
 	actor: AuditActor,
-	origin?: AuditOrigin
+	origin?: AuditOrigin,
+	events?: RentDueEvents
 ): Promise<GenerationResult> {
 	const result = await insertMissingDues(tx, lease, today);
 	if (result.inserted > 0) {
@@ -124,6 +126,8 @@ export async function generateDues(
 			after: { ...result, leaseVersion: lease.version },
 			...(origin ? { origin } : {})
 		});
+		// Lot 09 : le crédit du bail (trop-perçu) s'impute sur les nouvelles échéances (module payments).
+		await events?.issued({ tx, organizationId: lease.organizationId, leaseId: lease.id, today, actor, ...(origin ? { origin } : {}) });
 	}
 	return result;
 }
@@ -159,27 +163,67 @@ export async function refreshDueStatuses(
 	let changed = 0;
 	for (const { due: row, leaseStartsOn } of rows) {
 		const next = rentDueStatus({ ...row, overdueFrom: rentDueOverdueFrom(row, leaseStartsOn) }, today);
-		if (next === row.status) continue;
-		await tx
-			.update(rentDues)
-			.set({ status: next, updatedAt: new Date() })
-			.where(and(eq(rentDues.organizationId, organizationId), eq(rentDues.id, row.id)));
-		await audit.record(tx, {
-			actor,
-			organizationId,
-			action: 'rent_due.status',
-			objectType: 'rent_due',
-			objectId: row.id,
-			before: { status: row.status },
-			after: { status: next, leaseId: row.leaseId, periodStart: row.periodStart, dueOn: row.dueOn },
-			...(origin ? { origin } : {})
-		});
-		changed += 1;
+		if (await applyDueStatus(tx, audit, row, next, actor, origin)) changed += 1;
 	}
 	return changed;
 }
 
-/** Lecteur d'occupation inscrit auprès du module properties : signaux des baux de chaque unité (règle 13). */
+async function applyDueStatus(
+	tx: Tx,
+	audit: AuditService,
+	row: RentDueRow,
+	next: RentDueRow['status'],
+	actor: AuditActor,
+	origin?: AuditOrigin
+): Promise<boolean> {
+	if (next === row.status) return false;
+	await tx
+		.update(rentDues)
+		.set({ status: next, updatedAt: new Date() })
+		.where(and(eq(rentDues.organizationId, row.organizationId), eq(rentDues.id, row.id)));
+	await audit.record(tx, {
+		actor,
+		organizationId: row.organizationId,
+		action: 'rent_due.status',
+		objectType: 'rent_due',
+		objectId: row.id,
+		before: { status: row.status },
+		after: { status: next, leaseId: row.leaseId, periodStart: row.periodStart, dueOn: row.dueOn },
+		...(origin ? { origin } : {})
+	});
+	return true;
+}
+
+/**
+ * Lot 09 : statut d'échéances précises recalculé après une imputation ou sa contre-écriture (payée, en partie, due, en
+ * retard ; une échéance payée qui perd son paiement redevient due ou en retard). Le montant payé, lui, est tenu par la
+ * base à partir des imputations.
+ */
+export async function refreshStatusesOf(
+	tx: Tx,
+	audit: AuditService,
+	dueIds: readonly string[],
+	today: string,
+	actor: AuditActor,
+	origin?: AuditOrigin
+): Promise<number> {
+	if (!dueIds.length) return 0;
+	const rows = await tx
+		.select({ due: rentDues, leaseStartsOn: leases.startsOn })
+		.from(rentDues)
+		.innerJoin(leases, and(eq(leases.organizationId, rentDues.organizationId), eq(leases.id, rentDues.leaseId)))
+		.where(inArray(rentDues.id, [...dueIds]))
+		.orderBy(asc(rentDues.id))
+		.for('update', { of: rentDues });
+	let changed = 0;
+	for (const { due: row, leaseStartsOn } of rows) {
+		if (row.status === 'waived') continue;
+		const next = rentDueStatus({ ...row, overdueFrom: rentDueOverdueFrom(row, leaseStartsOn) }, today);
+		if (await applyDueStatus(tx, audit, row, next, actor, origin)) changed += 1;
+	}
+	return changed;
+}
+
 export async function occupancySignals(
 	tx: Tx,
 	organizationId: string,
@@ -214,7 +258,8 @@ export async function renewLease(
 	change: { newEndsOn: string | null; renewedOn: string; automatic: boolean; amendmentId?: string | null },
 	today: string,
 	actor: AuditActor,
-	origin?: AuditOrigin
+	origin?: AuditOrigin,
+	events?: RentDueEvents
 ): Promise<LeaseRow> {
 	const [updated] = await tx
 		.update(leases)
@@ -244,6 +289,6 @@ export async function renewLease(
 		},
 		origin
 	});
-	await generateDues(tx, audit, updated!, today, actor, origin);
+	await generateDues(tx, audit, updated!, today, actor, origin, events);
 	return updated!;
 }

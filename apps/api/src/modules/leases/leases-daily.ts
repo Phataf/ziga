@@ -14,6 +14,7 @@ import type { DatabaseService } from '../../db/database.module.js';
 import type { Tx } from '../../db/database.js';
 import { leases } from '../../db/schema/leases.js';
 import type { AuditActor, AuditService } from '../audit/audit.service.js';
+import type { RentDueEvents } from './rent-due-events.js';
 import { generateDues, refreshDueStatuses, renewLease } from './rent-dues.js';
 
 const SYSTEM: AuditActor = { type: 'system' };
@@ -36,7 +37,13 @@ function isUniqueViolation(error: unknown): boolean {
 	return false;
 }
 
-export async function leasesDailyFor(tx: Tx, audit: AuditService, organizationId: string, today: string): Promise<LeasesDailyResult> {
+export async function leasesDailyFor(
+	tx: Tx,
+	audit: AuditService,
+	organizationId: string,
+	today: string,
+	events?: RentDueEvents
+): Promise<LeasesDailyResult> {
 	const result: LeasesDailyResult = { activated: 0, waiting: 0, generated: 0, statuses: 0, renewed: 0 };
 	const starting = await tx
 		.select()
@@ -97,7 +104,16 @@ export async function leasesDailyFor(tx: Tx, audit: AuditService, organizationId
 	for (let lease of ended) {
 		while (lease.endsOn && lease.endsOn < today) {
 			const newEndsOn = automaticRenewalEnd({ ...lease, endsOn: lease.endsOn });
-			lease = await renewLease(tx, audit, lease, { newEndsOn, renewedOn: addDays(lease.endsOn, 1), automatic: true }, today, SYSTEM, 'job');
+			lease = await renewLease(
+				tx,
+				audit,
+				lease,
+				{ newEndsOn, renewedOn: addDays(lease.endsOn, 1), automatic: true },
+				today,
+				SYSTEM,
+				'job',
+				events
+			);
 		}
 		result.renewed += 1;
 	}
@@ -106,7 +122,7 @@ export async function leasesDailyFor(tx: Tx, audit: AuditService, organizationId
 		.from(leases)
 		.where(and(eq(leases.organizationId, organizationId), inArray(leases.status, ['signed', 'active', 'notice']), isNull(leases.endsOn)))
 		.orderBy(asc(leases.id));
-	for (const lease of openEnded) result.generated += (await generateDues(tx, audit, lease, today, SYSTEM, 'job')).inserted;
+	for (const lease of openEnded) result.generated += (await generateDues(tx, audit, lease, today, SYSTEM, 'job', events)).inserted;
 	result.statuses = await refreshDueStatuses(tx, audit, organizationId, today, SYSTEM, 'job');
 	return result;
 }
@@ -115,7 +131,8 @@ export async function leasesDailyFor(tx: Tx, audit: AuditService, organizationId
 export async function runLeasesDaily(
 	database: DatabaseService,
 	audit: AuditService,
-	today: string
+	today: string,
+	events?: RentDueEvents
 ): Promise<LeasesDailyResult & { organizations: number }> {
 	const r = await database.db.execute<{ id: string }>(sql`select due_lease_organizations(${today}::date) as id`);
 	const total: LeasesDailyResult & { organizations: number } = {
@@ -127,7 +144,7 @@ export async function runLeasesDaily(
 		renewed: 0
 	};
 	for (const { id } of r.rows) {
-		const one = await database.withOrganization(id, (tx) => leasesDailyFor(tx, audit, id, today));
+		const one = await database.withOrganization(id, (tx) => leasesDailyFor(tx, audit, id, today, events));
 		total.activated += one.activated;
 		total.waiting += one.waiting;
 		total.generated += one.generated;
