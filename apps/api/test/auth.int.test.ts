@@ -465,6 +465,10 @@ describe('garde global', () => {
 			// signé suffit, comme une URL présignée de S3).
 			'GET /media/v/:key/:file',
 			'PUT /storage/local/:token',
+			// Lot 09 : pages publiques des reçus (jeton de 256 bits, empreinte seule en base, limite de débit par adresse IP).
+			'GET /public/receipts/verify/:token',
+			'GET /public/receipts/shared/:token',
+			'GET /public/receipts/shared/:token/pdf',
 			'GET /storage/local/:token'
 		]);
 		const listed = new Set(routes.map((r) => `${r.method} ${r.path}`));

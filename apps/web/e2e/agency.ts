@@ -3,6 +3,7 @@
  * (formule Pro), membres invités, appels à l'API, et ce que le flux PowerSync envoie réellement à une personne.
  */
 import { expect, type APIRequestContext } from '@playwright/test';
+import { addDays, toIsoDate } from '@ziga/shared/dates';
 import { newId } from '@ziga/shared/ids';
 import { accounts, API_URL, registerViaApi } from './support';
 
@@ -155,4 +156,82 @@ export async function receivedWhen(
  */
 export function receivedOwn(request: APIRequestContext, accessToken: string, organizationId: string): Promise<SyncedRow[]> {
 	return receivedWhen(request, accessToken, (rows) => rows.some((r) => r.table === 'organizations' && r.data.id === organizationId));
+}
+
+// ---------------------------------------------------------------- lots 08 et 09 : unité et bail par l'API
+
+const today = toIsoDate();
+
+/** Un bien actif, couvert par un mandat de gestion, avec une unité active, prête, à 75 000 FCFA. */
+export async function availableUnit(request: APIRequestContext, agency: Agency, opts: { agentId?: string } = {}) {
+	const ownerId = newId();
+	const mandateId = newId();
+	await post(request, agency.headers, '/owners', { id: ownerId, type: 'person', name: 'Mariam Zongo', phone: '+22670900003' });
+	await post(request, agency.headers, '/mandates', {
+		id: mandateId,
+		ownerId,
+		type: 'rental_management',
+		startsOn: addDays(today, -30),
+		commission: { basis: 'percent_of_collected', rateBp: 1000 },
+		canCollectFunds: true,
+		canTakePhotos: true
+	});
+	const admin = await login(request, accounts.admin.phone, accounts.admin.password);
+	const geo = (await (await request.get(`${API_URL}/admin/geography`, { headers: { Authorization: `Bearer ${admin}` } })).json()) as {
+		neighborhoods: { id: string; name: string }[];
+	};
+	const propertyId = newId();
+	await post(request, agency.headers, '/properties', {
+		id: propertyId,
+		ownerId,
+		type: 'apartment_building',
+		name: `Immeuble ${propertyId.slice(-4)}`,
+		communeId: 'ouagadougou',
+		neighborhoodId: geo.neighborhoods.find((n) => n.name === 'Tampouy')!.id
+	});
+	await post(request, agency.headers, `/properties/${propertyId}/status`, { status: 'active' });
+	await post(request, agency.headers, `/mandates/${mandateId}/scopes`, { id: newId(), propertyId });
+	const unitId = newId();
+	await post(request, agency.headers, '/units', {
+		id: unitId,
+		propertyId,
+		type: 'apartment',
+		label: `A${unitId.slice(-3)}`,
+		rent: 75000,
+		charges: 5000,
+		depositAmount: 150000,
+		advanceMonths: 1
+	});
+	await post(request, agency.headers, `/units/${unitId}/status`, { status: 'active' });
+	if (opts.agentId) await post(request, agency.headers, `/units/${unitId}/assign`, { agentId: opts.agentId });
+	return { propertyId, unitId };
+}
+
+/** Un bail validé, créé par l'API, avec un locataire dont l'état civil est saisi. */
+export async function leaseViaApi(request: APIRequestContext, agency: Agency, unitId: string) {
+	const tenantId = newId();
+	await post(request, agency.headers, '/tenants', {
+		id: tenantId,
+		fullName: 'Awa Ouédraogo',
+		phone: '+22670445566',
+		identity: { birthDate: '1990-04-12', birthPlace: 'Koudougou', idType: 'cnib', idNumber: 'B12345678' }
+	});
+	const leaseId = newId();
+	await post(request, agency.headers, '/leases', {
+		id: leaseId,
+		unitId,
+		tenantId,
+		startsOn: today,
+		rent: 75000,
+		charges: 5000,
+		lessorType: 'owner'
+	});
+	await post(request, agency.headers, '/deposit-accounts', {
+		id: newId(),
+		leaseId,
+		type: 'security_deposit',
+		agreedAmount: 150000,
+		holder: 'organization'
+	});
+	return { tenantId, leaseId };
 }
