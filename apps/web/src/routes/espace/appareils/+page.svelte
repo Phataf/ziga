@@ -72,7 +72,7 @@
 	{#if current}
 		<section class="space-y-2" aria-labelledby="titre-cet-appareil">
 			<h2 id="titre-cet-appareil" class="text-lg font-semibold">{t.current}</h2>
-			<div class="space-y-2 rounded-xl border bg-card p-4" data-testid="appareil-courant">
+			<div class="space-y-2 rounded-xl border bg-card p-4" data-testid="appareil-courant" data-session-id={current.id}>
 				<p class="flex items-center gap-2 font-semibold">
 					{#if isPhone(current.deviceLabel)}<Smartphone class="size-5" aria-hidden="true" />{:else}<Laptop
 							class="size-5"
@@ -91,7 +91,11 @@
 			<h2 id="titre-autres-appareils" class="text-lg font-semibold">{fr.auth.devices.short}</h2>
 			<ul class="space-y-2">
 				{#each others as s (s.id)}
-					<li class="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4" data-testid="appareil">
+					<li
+						class="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4"
+						data-testid="appareil"
+						data-session-id={s.id}
+					>
 						<div class="min-w-0">
 							<p class="flex items-center gap-2 font-semibold">
 								{#if isPhone(s.deviceLabel)}<Smartphone class="size-5 shrink-0" aria-hidden="true" />{:else}<Laptop

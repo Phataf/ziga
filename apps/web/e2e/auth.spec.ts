@@ -3,7 +3,7 @@
  * hors connexion (correction b), appareils, mot de passe oublié, gardes des espaces, trois appareils.
  */
 import { expect, test, type Page } from '@playwright/test';
-import { accounts, API_URL, expectNoHorizontalOverflow, lastCode, newNational, registerViaApi, signIn } from './support';
+import { accounts, API_URL, expectNoHorizontalOverflow, lastCode, newNational, registerViaApi, signIn, signInWith } from './support';
 
 const phone = { viewport: { width: 360, height: 800 }, isMobile: true, hasTouch: true };
 const tablet = { viewport: { width: 820, height: 1180 }, isMobile: true, hasTouch: true };
@@ -182,21 +182,34 @@ test.describe('Téléphone : parcours complet', () => {
 test.describe('Mes appareils', () => {
 	test.use(desktop);
 
-	test('liste des appareils et déconnexion d’un autre appareil', async ({ page, browser }) => {
+	test('liste des appareils et déconnexion d’un autre appareil', async ({ page, browser, request }) => {
+		// Son propre compte : déconnecter un appareil ne touche jamais la session d'un autre test.
+		const own = await registerViaApi(request, 'Personne aux deux appareils');
 		const other = await browser.newContext({ ...phone, userAgent: 'Mozilla/5.0 (Linux; Android 14) Chrome/140.0 Mobile Safari/537.36' });
 		const otherPage = await other.newPage();
-		await signIn(otherPage, 'admin', '/admin');
+		await signInWith(otherPage, own, '/espace/appareils');
+		// L'appareil à déconnecter est identifié par sa propre session, lue sur lui-même.
+		const otherSession = await otherPage.getByTestId('appareil-courant').getAttribute('data-session-id');
+		expect(otherSession).toMatch(/^[0-9a-f-]{36}$/);
 
-		await signIn(page, 'admin', '/espace/appareils');
-		await expect(page.getByTestId('appareil-courant')).toBeVisible();
-		const device = page.getByTestId('appareil').filter({ hasText: 'Android' }).first();
-		await expect(device).toBeVisible();
+		await signInWith(page, own, '/espace/appareils');
+		const current = page.getByTestId('appareil-courant');
+		await expect(current).toBeVisible();
+		const mine = await current.getAttribute('data-session-id');
+		expect(mine).toMatch(/^[0-9a-f-]{36}$/);
+		expect(mine).not.toBe(otherSession);
+		const device = page.locator(`[data-testid="appareil"][data-session-id="${otherSession}"]`);
+		await expect(device).toHaveCount(1);
+		await expect(device).toContainText('Android');
 		await device.getByRole('button', { name: 'Déconnecter' }).click();
 		await expect(page.getByText('Appareil déconnecté.')).toBeVisible();
+		await expect(device).toHaveCount(0);
 
-		// L'appareil déconnecté est renvoyé vers la connexion à son prochain rafraîchissement.
+		// L'appareil déconnecté est renvoyé vers la connexion à son prochain rafraîchissement ; celui-ci reste connecté.
 		await otherPage.reload();
-		await expect(otherPage).toHaveURL('/connexion?retour=%2Fadmin');
+		await expect(otherPage).toHaveURL('/connexion?retour=%2Fespace%2Fappareils');
+		await page.reload();
+		await expect(page.getByTestId('appareil-courant')).toHaveAttribute('data-session-id', mine!);
 		await other.close();
 	});
 });
