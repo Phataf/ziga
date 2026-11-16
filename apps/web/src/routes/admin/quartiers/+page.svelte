@@ -116,7 +116,7 @@
 	</div>
 	<p class="text-base text-muted-foreground">{t.count(shown.length)}</p>
 	{#if device.isDesktop}
-		<div class="overflow-x-auto rounded-xl border bg-card">
+		<div class="relative overflow-x-auto rounded-xl border bg-card">
 			<table class="w-full text-left text-base">
 				<thead class="border-b text-muted-foreground">
 					<tr>

@@ -91,7 +91,7 @@
 			{/each}
 		</ul>
 	{:else}
-		<div class="overflow-x-auto rounded-xl border bg-card">
+		<div class="relative overflow-x-auto rounded-xl border bg-card">
 			<table class="w-full text-left text-base" data-testid="journal-plateforme">
 				<thead class="border-b text-muted-foreground">
 					<tr>

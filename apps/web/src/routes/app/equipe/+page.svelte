@@ -238,14 +238,15 @@
 				{/each}
 			</ul>
 		{:else}
-			<div class="overflow-x-auto rounded-xl border bg-card">
+			<div class="relative overflow-x-auto rounded-xl border bg-card">
 				<table class="w-full text-left text-base" data-testid="membres">
 					<thead class="border-b text-muted-foreground">
 						<tr>
 							<th scope="col" class="px-4 py-3 font-medium">{t.member}</th>
 							<th scope="col" class="px-4 py-3 font-medium">{t.phone}</th>
 							<th scope="col" class="px-4 py-3 font-medium">{t.role}</th>
-							<th scope="col" class="px-4 py-3 font-medium">{fr.fields.status}</th>
+							<!-- Tablette : tableau simplifié (docs/UX.md §3) ; la date d'arrivée sur ordinateur. -->
+							{#if device.isDesktop}<th scope="col" class="px-4 py-3 font-medium">{fr.fields.status}</th>{/if}
 							{#if manage && !landlord}<th scope="col" class="px-4 py-3"><span class="sr-only">{fr.app.actions}</span></th>{/if}
 						</tr>
 					</thead>
@@ -255,9 +256,9 @@
 								<td class="px-4 py-3 font-semibold"
 									>{m.name}{#if m.current}<span class="font-normal text-muted-foreground"> · {t.you}</span>{/if}</td
 								>
-								<td class="px-4 py-3 tabular-nums" data-testid="telephone-membre">{phoneOfMember(m)}</td>
+								<td class="px-4 py-3 whitespace-nowrap tabular-nums" data-testid="telephone-membre">{phoneOfMember(m)}</td>
 								<td class="px-4 py-3">{ROLE_LABELS[m.role]}</td>
-								<td class="px-4 py-3 text-muted-foreground">{t.since(formatDate(m.joinedAt))}</td>
+								{#if device.isDesktop}<td class="px-4 py-3 text-muted-foreground">{t.since(formatDate(m.joinedAt))}</td>{/if}
 								{#if manage && !landlord}<td class="px-2 py-1 text-right"
 										><ActionMenu actions={actionsOf(m)} label={`${fr.app.actions} : ${m.name}`} /></td
 									>{/if}

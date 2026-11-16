@@ -222,8 +222,9 @@
 			{#if canCreate}<Button onclick={openNew}><Plus aria-hidden="true" />{t.newSubscription}</Button>{/if}
 		</div>
 		<p class="text-base text-muted-foreground">{t.notRent} {t.tiers}</p>
-		{#if !device.isPhone}
-			<div class="overflow-x-auto rounded-xl border bg-card">
+		<!-- Tableau sur ordinateur ; cartes sur téléphone et tablette (six colonnes, montant et bouton ne tiennent pas). -->
+		{#if device.isDesktop}
+			<div class="relative overflow-x-auto rounded-xl border bg-card">
 				<table class="w-full text-left text-base">
 					<thead class="border-b text-muted-foreground">
 						<tr>

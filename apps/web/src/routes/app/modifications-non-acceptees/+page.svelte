@@ -55,7 +55,7 @@
 	{#if !rows.length}
 		<p class="rounded-xl border bg-card p-4 text-base text-muted-foreground" data-testid="refus-vide">{t.empty}</p>
 	{:else if device.isDesktop}
-		<div class="overflow-x-auto rounded-xl border bg-card">
+		<div class="relative overflow-x-auto rounded-xl border bg-card">
 			<table class="w-full text-left text-base" data-testid="refus-liste">
 				<thead class="border-b text-muted-foreground">
 					<tr>

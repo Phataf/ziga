@@ -435,7 +435,7 @@
 			{#if !list.length}
 				<p class="text-base text-muted-foreground">{t.noDues}</p>
 			{:else if device.isDesktop}
-				<div class="overflow-x-auto rounded-xl border">
+				<div class="relative overflow-x-auto rounded-xl border">
 					<table class="w-full text-left text-base">
 						<thead class="border-b text-muted-foreground">
 							<tr>

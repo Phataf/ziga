@@ -82,15 +82,16 @@
 	<FormAlert {message} />
 
 	{#if !device.isPhone}
-		<div class="overflow-x-auto rounded-xl border bg-card">
+		<div class="relative overflow-x-auto rounded-xl border bg-card">
 			<table class="w-full text-left text-base">
 				<thead class="border-b text-muted-foreground">
 					<tr>
 						<th class="px-4 py-3 font-medium">{fr.fields.name}</th>
 						<th class="px-4 py-3 font-medium">{fr.fields.phone}</th>
-						<th class="px-4 py-3 font-medium">{t.role}</th>
+						<!-- Tablette : tableau simplifié (docs/UX.md §3) ; rôle et inscription sur ordinateur et dans la fiche. -->
+						{#if device.isDesktop}<th class="px-4 py-3 font-medium">{t.role}</th>{/if}
 						<th class="px-4 py-3 font-medium">{t.status}</th>
-						<th class="px-4 py-3 font-medium">{t.createdAt}</th>
+						{#if device.isDesktop}<th class="px-4 py-3 font-medium">{t.createdAt}</th>{/if}
 						<th class="px-4 py-3"><span class="sr-only">{fr.admin.open}</span></th>
 					</tr>
 				</thead>
@@ -98,14 +99,14 @@
 					{#each rows as p (p.id)}
 						<tr data-testid="personne">
 							<td class="px-4 py-2 font-medium">{p.name}</td>
-							<td class="px-4 py-2 tabular-nums">{formatPhone(p.phone)}</td>
-							<td class="px-4 py-2">{roleLabel(p.platformRole)}</td>
+							<td class="px-4 py-2 whitespace-nowrap tabular-nums">{formatPhone(p.phone)}</td>
+							{#if device.isDesktop}<td class="px-4 py-2">{roleLabel(p.platformRole)}</td>{/if}
 							<td class="px-4 py-2">{statusLabel(p.status)}</td>
-							<td class="px-4 py-2">{formatDate(p.createdAt)}</td>
+							{#if device.isDesktop}<td class="px-4 py-2 whitespace-nowrap">{formatDate(p.createdAt)}</td>{/if}
 							<td class="px-4 py-2 text-right"><Button variant="outline" onclick={() => show(p.id)}>{fr.admin.open}</Button></td>
 						</tr>
 					{:else}
-						<tr><td colspan="6" class="px-4 py-3 text-muted-foreground">{fr.admin.none}</td></tr>
+						<tr><td colspan={device.isDesktop ? 6 : 4} class="px-4 py-3 text-muted-foreground">{fr.admin.none}</td></tr>
 					{/each}
 				</tbody>
 			</table>
