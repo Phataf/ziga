@@ -60,17 +60,25 @@ import {
 } from '@ziga/shared/leases';
 import { can } from '@ziga/shared/permissions';
 import { generateRentSchedule, rentChangeBlocker, rentDueUpdates, scheduleUntil } from '@ziga/shared/rent-schedule';
-import { and, asc, desc, eq, gt, inArray, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNull, ne } from 'drizzle-orm';
 import { AppError } from '../../common/app-error.js';
 import { RequestContext } from '../../common/request-context.js';
 import type { Tx } from '../../db/database.js';
-import { depositAccounts, depositMovements, leases, leaseVersions, rentDues, tenants } from '../../db/schema/leases.js';
+import { depositAccounts, depositMovements, leaseContracts, leases, leaseVersions, rentDues, tenants } from '../../db/schema/leases.js';
 import { AuditService, diff, type AuditActor } from '../audit/audit.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { OrganizationsService } from '../organizations/organizations.service.js';
 import { OwnersService } from '../owners/owners.service.js';
 import { PropertiesService } from '../properties/properties.service.js';
-import { generateDues, refreshDueStatuses, scheduleInput, VALIDATED_STATUSES, type LeaseRow, type RentDueRow } from './rent-dues.js';
+import {
+	generateDues,
+	refreshDueStatuses,
+	renewLease,
+	scheduleInput,
+	VALIDATED_STATUSES,
+	type LeaseRow,
+	type RentDueRow
+} from './rent-dues.js';
 
 type TenantRow = typeof tenants.$inferSelect;
 type AccountRow = typeof depositAccounts.$inferSelect;
@@ -485,8 +493,31 @@ export class LeasesService {
 		return row;
 	}
 
+	/**
+	 * « Contrat signé » (D20, lot 08 bis) : le contrat du bail est signé, qu'il ait été généré puis signé à la main, ou
+	 * déposé signé (bail scanné du lot 08, repris par la migration 0014). Une seule source : les contrats.
+	 */
+	private async signedContracts(c: Context, leaseIds: readonly string[]): Promise<Set<string>> {
+		if (!leaseIds.length) return new Set();
+		const rows = await c.tx
+			.select({ leaseId: leaseContracts.leaseId })
+			.from(leaseContracts)
+			.where(
+				and(
+					eq(leaseContracts.organizationId, c.organizationId),
+					inArray(leaseContracts.leaseId, [...leaseIds]),
+					isNull(leaseContracts.amendmentId),
+					eq(leaseContracts.status, 'signed')
+				)
+			);
+		return new Set(rows.map((r) => r.leaseId));
+	}
+
 	private async leaseViews(rows: LeaseRow[]): Promise<LeaseView[]> {
-		const signed = await this.documents.leasesWithSignedScan(rows.map((r) => r.id));
+		const signed = await this.signedContracts(
+			this.context(),
+			rows.map((r) => r.id)
+		);
 		return rows.map((r) => leaseView(r, signed.has(r.id)));
 	}
 
@@ -750,7 +781,7 @@ export class LeasesService {
 	 * écriture gagnante » sur un montant). La date d'effet est un début de période sans échéance émise ; les échéances
 	 * émises ne changent jamais, les suivantes sont recalculées et les manquantes créées.
 	 */
-	async changeRent(id: string, input: RentChangeData): Promise<LeaseDetailView> {
+	async changeRent(id: string, input: RentChangeData, source: { amendmentId: string } | null = null): Promise<LeaseDetailView> {
 		const c = this.context();
 		const today = toIsoDate();
 		const row = await this.leaseRow(c, id, true);
@@ -820,11 +851,79 @@ export class LeasesService {
 				charges: input.charges,
 				rentEffectiveFrom: input.effectiveFrom,
 				version: nextVersion,
-				recalculatedDues: updates.map((u) => u.periodStart)
+				recalculatedDues: updates.map((u) => u.periodStart),
+				// Lot 08 bis : par l'avenant signé, ou directement (corrections et imports), « sans avenant ».
+				amendmentId: source?.amendmentId ?? null,
+				withoutAmendment: source === null
 			}
 		});
 		await generateDues(c.tx, this.audit, updated!, today, c.actor);
 		return this.getLease(id);
+	}
+
+	// ---------------------------------------------------------------- lot 08 bis : contrat et avenants
+
+	/**
+	 * Dépôt du contrat signé d'un bail en brouillon : il le valide par la même fonction que la route de validation
+	 * (mêmes garde-fous, statut décidé par le serveur, échéances) ; un refus annule tout le dépôt. Sans effet pour un
+	 * bail déjà validé.
+	 */
+	async validateDraftForContract(id: string): Promise<LeaseRow['status']> {
+		const c = this.context();
+		const row = await this.leaseRow(c, id, true);
+		if (row.status !== 'draft') return row.status;
+		await this.validateRow(c, row);
+		return (await this.leaseRow(c, id)).status;
+	}
+
+	/** Le changement de loyer serait-il accepté à cette date ? (contrôle à blanc d'un avenant, avant sa signature). */
+	async rentChangeBlockerFor(id: string, effectiveFrom: string): Promise<string | null> {
+		const c = this.context();
+		const today = toIsoDate();
+		const row = await this.leaseRow(c, id);
+		if (!(VALIDATED_STATUSES as readonly string[]).includes(row.status)) return 'LEASE_NOT_VALIDATED';
+		const existing = await c.tx
+			.select()
+			.from(rentDues)
+			.where(and(eq(rentDues.organizationId, c.organizationId), eq(rentDues.leaseId, id)));
+		const current = await scheduleInput(c.tx, row, scheduleUntil({ endOn: row.endsOn, duesStartOn: row.duesStartOn }, today));
+		return rentChangeBlocker(current, effectiveFrom, existing);
+	}
+
+	/** Renouvellement par un avenant signé : même chemin que la reconduction au terme (renewLease), version attendue. */
+	async renewByAmendment(
+		id: string,
+		change: { newEndsOn: string | null; renewedOn: string; expectedVersion: number; amendmentId: string }
+	): Promise<number> {
+		const c = this.context();
+		const row = await this.leaseRow(c, id, true);
+		if (change.expectedVersion !== row.version) {
+			throw new AppError('VERSION_CONFLICT', 'Le bail a changé entre-temps : régénérez l’avenant.', 409, {
+				expected: change.expectedVersion,
+				current: row.version
+			});
+		}
+		const updated = await renewLease(
+			c.tx,
+			this.audit,
+			row,
+			{ newEndsOn: change.newEndsOn, renewedOn: change.renewedOn, automatic: false, amendmentId: change.amendmentId },
+			toIsoDate(),
+			c.actor
+		);
+		return updated.version;
+	}
+
+	/** Ce que le contrat cite du bail (module leases) : le bail, son locataire avec l'état civil, ses comptes de caution. */
+	async contractInputs(id: string): Promise<{ lease: LeaseRow; tenant: TenantRow; deposits: AccountRow[] }> {
+		const c = this.context();
+		const lease = await this.leaseRow(c, id);
+		const tenant = await this.tenantRow(c, lease.tenantId);
+		const deposits = await c.tx
+			.select()
+			.from(depositAccounts)
+			.where(and(eq(depositAccounts.organizationId, c.organizationId), eq(depositAccounts.leaseId, id)));
+		return { lease, tenant, deposits };
 	}
 
 	/** Version courante d'un bail (synchronisation : version attendue d'un changement de loyer). */

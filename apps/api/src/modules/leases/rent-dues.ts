@@ -12,7 +12,7 @@
 import { newId } from '@ziga/shared/ids';
 import { leaseOccupancySignal, rentDueStatus, type LeaseStatus } from '@ziga/shared/leases';
 import type { OccupancySignal } from '@ziga/shared/properties';
-import { generateRentSchedule, scheduleUntil, type RentDueDraft, type RentScheduleInput } from '@ziga/shared/rent-schedule';
+import { generateRentSchedule, scheduleUntil, type RentDueDraft, type RentRate, type RentScheduleInput } from '@ziga/shared/rent-schedule';
 import { and, asc, eq, inArray, lte } from 'drizzle-orm';
 import type { AuditOrigin } from '../../common/request-context.js';
 import type { Tx } from '../../db/database.js';
@@ -46,7 +46,14 @@ export async function scheduleInput(tx: Tx, lease: LeaseRow, until: string): Pro
 		dueDay: lease.dueDay,
 		advanceMonths: lease.advanceMonths,
 		activatedOn: lease.activatedOn!,
-		rates: versions.map((v) => ({ effectiveFrom: v.rentEffectiveFrom, rent: v.rent, charges: v.charges, version: v.version })),
+		// Un renouvellement (lot 08 bis) crée une version sans changer le loyer : même date d'effet que la précédente. On
+		// garde, pour chaque date d'effet, la dernière version (tarifs strictement croissants pour l'échéancier).
+		rates: versions.reduce<RentRate[]>((out, v) => {
+			const rate = { effectiveFrom: v.rentEffectiveFrom, rent: v.rent, charges: v.charges, version: v.version };
+			if (out.length && out[out.length - 1]!.effectiveFrom === v.rentEffectiveFrom) out[out.length - 1] = rate;
+			else out.push(rate);
+			return out;
+		}, []),
 		until
 	};
 }
@@ -188,4 +195,51 @@ export async function occupancySignals(
 		out.set(r.unitId, [...(out.get(r.unitId) ?? []), signal]);
 	}
 	return out;
+}
+
+/**
+ * Renouvellement du bail (lot 08 bis) : sa version suivante, avec la nouvelle fin (ou durée indéterminée) et la date du
+ * renouvellement ; même compte de caution, même historique ; les échéances manquantes sont créées. Un seul chemin pour
+ * l'avenant de renouvellement signé et pour la reconduction au terme sans congé (tâche de nuit). La base vérifie la
+ * version et la fin postérieure (leases_rules).
+ */
+export async function renewLease(
+	tx: Tx,
+	audit: AuditService,
+	lease: LeaseRow,
+	change: { newEndsOn: string | null; renewedOn: string; automatic: boolean; amendmentId?: string | null },
+	today: string,
+	actor: AuditActor,
+	origin?: AuditOrigin
+): Promise<LeaseRow> {
+	const [updated] = await tx
+		.update(leases)
+		.set({
+			endsOn: change.newEndsOn,
+			lastRenewedOn: change.renewedOn,
+			lastRenewalAutomatic: change.automatic,
+			version: lease.version + 1,
+			updatedBy: actor.type === 'user' ? actor.userId : null,
+			updatedAt: new Date()
+		})
+		.where(and(eq(leases.organizationId, lease.organizationId), eq(leases.id, lease.id)))
+		.returning();
+	await audit.record(tx, {
+		actor,
+		organizationId: lease.organizationId,
+		action: change.automatic ? 'lease.renew_automatic' : 'lease.renew',
+		objectType: 'lease',
+		objectId: lease.id,
+		before: { endsOn: lease.endsOn, version: lease.version },
+		after: {
+			endsOn: change.newEndsOn,
+			renewedOn: change.renewedOn,
+			version: lease.version + 1,
+			renewalMode: lease.renewalMode,
+			amendmentId: change.amendmentId ?? null
+		},
+		origin
+	});
+	await generateDues(tx, audit, updated!, today, actor, origin);
+	return updated!;
 }

@@ -7,12 +7,14 @@
  * Idempotente : relancée le même jour, elle ne change rien.
  * Les organisations viennent de due_lease_organizations (SECURITY DEFINER, seulement des identifiants).
  */
-import { and, asc, eq, inArray, isNull, lte, sql } from 'drizzle-orm';
+import { automaticRenewalEnd } from '@ziga/shared/contracts';
+import { addDays } from '@ziga/shared/dates';
+import { and, asc, eq, inArray, isNotNull, isNull, lt, lte, sql } from 'drizzle-orm';
 import type { DatabaseService } from '../../db/database.module.js';
 import type { Tx } from '../../db/database.js';
 import { leases } from '../../db/schema/leases.js';
 import type { AuditActor, AuditService } from '../audit/audit.service.js';
-import { generateDues, refreshDueStatuses } from './rent-dues.js';
+import { generateDues, refreshDueStatuses, renewLease } from './rent-dues.js';
 
 const SYSTEM: AuditActor = { type: 'system' };
 
@@ -21,6 +23,8 @@ export interface LeasesDailyResult {
 	waiting: number;
 	generated: number;
 	statuses: number;
+	/** Lot 08 bis : baux arrivés à leur terme sans congé, reconduits selon leur paramètre (D24). */
+	renewed: number;
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -33,7 +37,7 @@ function isUniqueViolation(error: unknown): boolean {
 }
 
 export async function leasesDailyFor(tx: Tx, audit: AuditService, organizationId: string, today: string): Promise<LeasesDailyResult> {
-	const result: LeasesDailyResult = { activated: 0, waiting: 0, generated: 0, statuses: 0 };
+	const result: LeasesDailyResult = { activated: 0, waiting: 0, generated: 0, statuses: 0, renewed: 0 };
 	const starting = await tx
 		.select()
 		.from(leases)
@@ -74,6 +78,29 @@ export async function leasesDailyFor(tx: Tx, audit: AuditService, organizationId
 			result.waiting += 1;
 		}
 	}
+	// Terme atteint sans congé : reconduction selon le bail (durée indéterminée, ou même durée), journalisée ; une tâche
+	// manquée plusieurs fois rattrape les périodes l'une après l'autre (une version chacune).
+	const ended = await tx
+		.select()
+		.from(leases)
+		.where(
+			and(
+				eq(leases.organizationId, organizationId),
+				eq(leases.status, 'active'),
+				isNotNull(leases.endsOn),
+				lt(leases.endsOn, today),
+				isNull(leases.noticeGivenOn)
+			)
+		)
+		.orderBy(asc(leases.id))
+		.for('update');
+	for (let lease of ended) {
+		while (lease.endsOn && lease.endsOn < today) {
+			const newEndsOn = automaticRenewalEnd({ ...lease, endsOn: lease.endsOn });
+			lease = await renewLease(tx, audit, lease, { newEndsOn, renewedOn: addDays(lease.endsOn, 1), automatic: true }, today, SYSTEM, 'job');
+		}
+		result.renewed += 1;
+	}
 	const openEnded = await tx
 		.select()
 		.from(leases)
@@ -96,7 +123,8 @@ export async function runLeasesDaily(
 		activated: 0,
 		waiting: 0,
 		generated: 0,
-		statuses: 0
+		statuses: 0,
+		renewed: 0
 	};
 	for (const { id } of r.rows) {
 		const one = await database.withOrganization(id, (tx) => leasesDailyFor(tx, audit, id, today));
@@ -104,6 +132,7 @@ export async function runLeasesDaily(
 		total.waiting += one.waiting;
 		total.generated += one.generated;
 		total.statuses += one.statuses;
+		total.renewed += one.renewed;
 	}
 	return total;
 }
