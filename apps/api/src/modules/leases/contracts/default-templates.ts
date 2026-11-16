@@ -174,10 +174,11 @@ const LEASE_CLAUSES: DocxBlock[][] = [
 		j(
 			'Fait à {signature.lieu}, le {signature.date}, en {signature.exemplaires_lettres} ({signature.exemplaires}) exemplaires originaux, dont un pour chaque partie.'
 		),
-		j('Chaque partie fait précéder sa signature de la mention manuscrite « lu et approuvé ».'),
+		j('Chaque partie fait précéder sa signature de la mention manuscrite « lu et approuvé ».', { keepNext: true }),
 		{
 			kind: 'table',
 			widths: [4800, 4800],
+			keepTogether: true,
 			rows: [
 				[p([{ text: 'Le Bailleur', bold: true }], { align: 'center' }), p([{ text: 'Le Locataire', bold: true }], { align: 'center' })],
 				[
@@ -190,8 +191,20 @@ const LEASE_CLAUSES: DocxBlock[][] = [
 					p('{locataire.nom_complet}', { align: 'center' })
 				],
 				[
-					p([{ text: ' ', lineBreak: true }, { text: ' ', lineBreak: true }, ' ']),
-					p([{ text: ' ', lineBreak: true }, { text: ' ', lineBreak: true }, ' '])
+					p([
+						{ text: ' ', lineBreak: true },
+						{ text: ' ', lineBreak: true },
+						{ text: ' ', lineBreak: true },
+						{ text: ' ', lineBreak: true },
+						' '
+					]),
+					p([
+						{ text: ' ', lineBreak: true },
+						{ text: ' ', lineBreak: true },
+						{ text: ' ', lineBreak: true },
+						{ text: ' ', lineBreak: true },
+						' '
+					])
 				]
 			]
 		}
@@ -233,12 +246,25 @@ const AMENDMENT_BLOCKS: DocxBlock[] = [
 	{
 		kind: 'table',
 		widths: [4800, 4800],
+		keepTogether: true,
 		rows: [
 			[p([{ text: 'Le Bailleur', bold: true }], { align: 'center' }), p([{ text: 'Le Locataire', bold: true }], { align: 'center' })],
 			[p('{representant.nom}', { align: 'center' }), p('{locataire.nom_complet}', { align: 'center' })],
 			[
-				p([{ text: ' ', lineBreak: true }, { text: ' ', lineBreak: true }, ' ']),
-				p([{ text: ' ', lineBreak: true }, { text: ' ', lineBreak: true }, ' '])
+				p([
+					{ text: ' ', lineBreak: true },
+					{ text: ' ', lineBreak: true },
+					{ text: ' ', lineBreak: true },
+					{ text: ' ', lineBreak: true },
+					' '
+				]),
+				p([
+					{ text: ' ', lineBreak: true },
+					{ text: ' ', lineBreak: true },
+					{ text: ' ', lineBreak: true },
+					{ text: ' ', lineBreak: true },
+					' '
+				])
 			]
 		]
 	}

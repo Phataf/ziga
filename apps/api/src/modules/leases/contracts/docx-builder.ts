@@ -28,6 +28,8 @@ export interface DocxParagraph {
 	align?: 'left' | 'center' | 'right' | 'both';
 	/** Saut de page avant le paragraphe. */
 	pageBreakBefore?: boolean;
+	/** Garder ce paragraphe sur la même page que le suivant. */
+	keepNext?: boolean;
 	/** Espace après, en points. */
 	spacingAfter?: number;
 }
@@ -37,6 +39,8 @@ export interface DocxTable {
 	/** Largeurs des colonnes, en vingtièmes de point (dxa) ; 9 000 dxa ≈ largeur utile d'une page A4. */
 	widths: number[];
 	rows: DocxParagraph[][];
+	/** Garder le tableau d'un seul tenant (bloc des signatures) : lignes insécables, chacune liée à la suivante. */
+	keepTogether?: boolean;
 }
 
 export type DocxBlock = DocxParagraph | DocxTable;
@@ -85,8 +89,9 @@ function runXml(input: DocxRun | string): string {
 	return `<w:r>${rPr}${parts.join('')}</w:r>`;
 }
 
-function paragraphXml(p: DocxParagraph): string {
+function paragraphXml(p: DocxParagraph, keepNext = false): string {
 	const props: string[] = [];
+	if (keepNext || p.keepNext) props.push('<w:keepNext/>');
 	if (p.style && p.style !== 'Normal') props.push(`<w:pStyle w:val="${p.style}"/>`);
 	if (p.pageBreakBefore) props.push('<w:pageBreakBefore/>');
 	if (p.spacingAfter !== undefined) props.push(`<w:spacing w:after="${p.spacingAfter * 20}"/>`);
@@ -101,12 +106,15 @@ function tableXml(t: DocxTable): string {
 		.join('');
 	const grid = t.widths.map((w) => `<w:gridCol w:w="${w}"/>`).join('');
 	const rows = t.rows
-		.map(
-			(cells) =>
-				`<w:tr>${cells
-					.map((cell, i) => `<w:tc><w:tcPr><w:tcW w:w="${t.widths[i] ?? t.widths[0]}" w:type="dxa"/></w:tcPr>${paragraphXml(cell)}</w:tc>`)
-					.join('')}</w:tr>`
-		)
+		.map((cells, r) => {
+			const keep = !!t.keepTogether && r < t.rows.length - 1;
+			const trPr = t.keepTogether ? '<w:trPr><w:cantSplit/></w:trPr>' : '';
+			return `<w:tr>${trPr}${cells
+				.map(
+					(cell, i) => `<w:tc><w:tcPr><w:tcW w:w="${t.widths[i] ?? t.widths[0]}" w:type="dxa"/></w:tcPr>${paragraphXml(cell, keep)}</w:tc>`
+				)
+				.join('')}</w:tr>`;
+		})
 		.join('');
 	return `<w:tbl><w:tblPr><w:tblW w:w="${t.widths.reduce((s, w) => s + w, 0)}" w:type="dxa"/><w:tblBorders>${borders}</w:tblBorders></w:tblPr><w:tblGrid>${grid}</w:tblGrid>${rows}</w:tbl>`;
 }
