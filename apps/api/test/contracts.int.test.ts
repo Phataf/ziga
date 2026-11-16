@@ -17,6 +17,7 @@ import { NestFactory } from '@nestjs/core';
 import type { ContractDetailView, TemplatesOverview, ContractTemplateView } from '@ziga/shared/contracts';
 import { addDays, addMonths, monthDay, toIsoDate } from '@ziga/shared/dates';
 import type { DocumentView } from '@ziga/shared/documents';
+import { PLATFORM_TEMPLATES } from '@ziga/shared/contracts';
 import { newId } from '@ziga/shared/ids';
 import type { LeaseDetailView, TenantView } from '@ziga/shared/leases';
 import type { MandateView, OwnerView } from '@ziga/shared/owners';
@@ -282,7 +283,8 @@ describe('génération (tâche de fond) avec le modèle par défaut', () => {
 			status: 'draft',
 			currentVersion: 1,
 			templateSource: 'platform',
-			templateVersion: 2,
+			// Version 3 du bail depuis le lot 09 (article 4 : « reçu de paiement »).
+			templateVersion: PLATFORM_TEMPLATES.lease.version,
 			defaultTemplateNotice: true
 		});
 		const [v] = c.versions;

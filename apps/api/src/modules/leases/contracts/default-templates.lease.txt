@@ -18,7 +18,7 @@ Article 3 – Durée et date d’effet
 {/bail.duree_determinee}
 Article 4 – Loyer et modalités de paiement
 Le loyer mensuel est fixé à {loyer.montant} ({loyer.montant_lettres}){#loyer.avec_charges}, auquel s’ajoutent des charges de {loyer.charges} ({loyer.charges_lettres}), soit un total de {loyer.total} par mois{/loyer.avec_charges}.
-Le loyer est payable d’avance, au plus tard le {loyer.jour_limite} de chaque mois{#loyer.modalites}, {loyer.modalites}{/loyer.modalites}. Une quittance est remise au Locataire à chaque paiement.
+Le loyer est payable d’avance, au plus tard le {loyer.jour_limite} de chaque mois{#loyer.modalites}, {loyer.modalites}{/loyer.modalites}. Un reçu de paiement est remis au Locataire à chaque paiement.
 {#loyer.premier_mois_prorata}
 Le Locataire entrant en cours de mois, le loyer du {loyer.premier_mois_debut} au {loyer.premier_mois_fin}, calculé au prorata des jours, soit {loyer.premier_mois_montant} ({loyer.premier_mois_lettres}), est dû à la signature{#avance}, en plus de l’avance prévue ci-après{/avance}.
 {/loyer.premier_mois_prorata}

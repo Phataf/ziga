@@ -4,6 +4,7 @@
  * Pénalité de retard et garantie des factures : absentes par défaut, présentes seulement si le bail les prévoit.
  */
 import { blankFields, EXAMPLE_CONTRACT_DATA, resolveContractFields, type ContractData } from '@ziga/shared/contract-fields';
+import { PLATFORM_TEMPLATES } from '@ziga/shared/contracts';
 import { describe, expect, it } from 'vitest';
 import PizZip from 'pizzip';
 import { docxText, fillTemplate } from './contract-renderer.js';
@@ -163,6 +164,15 @@ describe('corrections du porteur, dans le texte (étape 4)', () => {
 		const styles = new PizZip(defaultTemplate('lease')).file('word/styles.xml')!.asText();
 		expect(styles.slice(styles.indexOf('w:styleId="Heading1"'))).toMatch(/^[^]*?<w:keepNext\/>[^]*?<\/w:style>/);
 		expect(signature).toContain('<w:cantSplit/>');
+	});
+
+	it('version 3 (lot 09) : l’article 4 prévoit un « reçu de paiement », jamais une « quittance »', () => {
+		expect(PLATFORM_TEMPLATES.lease.version).toBe(3);
+		const text = docxText(defaultTemplate('lease'));
+		const article4 = text.slice(text.indexOf('Article 4'), text.indexOf('Article 5'));
+		expect(article4).toContain('Un reçu de paiement est remis au Locataire à chaque paiement.');
+		expect(text.toLowerCase()).not.toContain('quittance');
+		expect(docxText(defaultTemplate('amendment')).toLowerCase()).not.toContain('quittance');
 	});
 
 	it('texte des clauses : identique à la version relue (fichier versionné, à mettre à jour avec le texte)', async () => {

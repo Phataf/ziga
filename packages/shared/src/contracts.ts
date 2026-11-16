@@ -284,7 +284,9 @@ export const CONTRACT_TEMPLATE_LIMITS = {
 export const PLATFORM_TEMPLATES = {
 	// Version 2 (étape 4) : corrections du porteur (signatures d'un seul tenant, pied de page, accords, dates en
 	// lettres, premier mois au prorata, détenteur du dépôt, mandat du …). Les contrats déjà générés gardent la leur.
-	lease: { version: 2, legalReview: 'pending' },
+	// Bail, version 3 (lot 09, réponse du porteur) : article 4, « Un reçu de paiement est remis au Locataire à chaque
+	// paiement » (le document s'appelle toujours « Reçu de paiement », jamais « quittance »).
+	lease: { version: 3, legalReview: 'pending' },
 	amendment: { version: 2, legalReview: 'pending' }
 } as const satisfies Record<ContractTemplateKind, { version: number; legalReview: 'pending' | 'approved' }>;
 

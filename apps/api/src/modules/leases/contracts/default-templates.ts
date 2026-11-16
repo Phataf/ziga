@@ -99,13 +99,13 @@ const LEASE_CLAUSES: DocxBlock[][] = [
 			)
 		)
 	],
-	// 4. Loyer en chiffres et en lettres, jour limite, modalités, quittance, révision selon la réglementation.
+	// 4. Loyer en chiffres et en lettres, jour limite, modalités, reçu de paiement, révision selon la réglementation.
 	[
 		j(
 			'Le loyer mensuel est fixé à {loyer.montant} ({loyer.montant_lettres}){#loyer.avec_charges}, auquel s’ajoutent des charges de {loyer.charges} ({loyer.charges_lettres}), soit un total de {loyer.total} par mois{/loyer.avec_charges}.'
 		),
 		j(
-			'Le loyer est payable d’avance, au plus tard le {loyer.jour_limite} de chaque mois{#loyer.modalites}, {loyer.modalites}{/loyer.modalites}. Une quittance est remise au Locataire à chaque paiement.'
+			'Le loyer est payable d’avance, au plus tard le {loyer.jour_limite} de chaque mois{#loyer.modalites}, {loyer.modalites}{/loyer.modalites}. Un reçu de paiement est remis au Locataire à chaque paiement.'
 		),
 		...when(
 			'loyer.premier_mois_prorata',
