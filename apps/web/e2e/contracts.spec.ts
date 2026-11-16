@@ -12,6 +12,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test, type APIRequestContext, type Browser, type Page } from '@playwright/test';
 import { addDays, addMonths, toIsoDate } from '@ziga/shared/dates';
+import { PLATFORM_TEMPLATES } from '@ziga/shared/contracts';
 import { newId } from '@ziga/shared/ids';
 import { PDFDocument } from 'pdf-lib';
 import { addMember, freshAgency, get, login, post, receivedOwn, receivedWhen, type Agency, type Member } from './agency';
@@ -274,7 +275,9 @@ for (const [name, size] of [
 			const director = await context(browser, size);
 			await signInWith(director.page, agency.director, '/app/contrats/modeles');
 			await synced(director.page);
-			await expect(director.page.getByTestId('en-usage-lease')).toContainText('Modèle par défaut de la plateforme, version 2');
+			await expect(director.page.getByTestId('en-usage-lease')).toContainText(
+				`Modèle par défaut de la plateforme, version ${PLATFORM_TEMPLATES.lease.version}`
+			);
 			await expect(director.page.getByTestId('formulaire-modele')).toBeVisible();
 			await expectNoHorizontalOverflow(director.page, `modèles de contrat (${name})`);
 			await director.ctx.close();
