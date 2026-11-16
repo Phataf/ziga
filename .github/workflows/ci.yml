@@ -73,7 +73,7 @@ jobs:
       - run: pnpm test
 
   e2e:
-    name: Coque et authentification (Playwright, contre la vraie API)
+    name: Playwright (vraie API, PowerSync, Gotenberg)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     # L'API de test crée et migre sa propre base (ziga_e2e) et utilise la base Redis n° 2.

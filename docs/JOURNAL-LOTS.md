@@ -1052,7 +1052,7 @@ Six pull requests, chacune aussi envoyée sur `claude/lot08bis-sauvegarde` :
 - [x] **Avenant de loyer** : nouvelles échéances à la date d'effet, anciennes inchangées. **Reconduction** : appliquée selon le paramètre du bail, journalisée.
 - [x] **Alerte « sans contrat signé »** : présente pour un bail actif sans contrat, absente après le dépôt.
 - [x] **Matrice des documents** : l'agent de terrain ne voit pas le projet ; le locataire ne voit pas le mandat.
-- [x] **Playwright sur les trois appareils** (360 × 800, 820 × 1180, 1440 × 900), contre la vraie API, le vrai worker et le vrai PowerSync : génération, relecture, figement, dépôt du scan, avenant de loyer signé et appliqué, liste et modèles, sans débordement. Scan préparé hors ligne, envoyé à la reconnexion. Flux : rien pour l'agent de terrain ni le profil lecture, rien de A chez B.
+- [x] **Playwright sur les trois appareils** (360 × 800, 820 × 1180, 1440 × 900), contre la vraie API, le vrai worker et le vrai PowerSync : génération, relecture, figement, dépôt du scan, avenant de loyer signé et appliqué, liste et modèles, sans débordement. Scan préparé hors ligne, envoyé à la reconnexion. Flux : rien pour l'agent de terrain ni le profil lecture, rien de A chez B. Ces 5 tests tournent en CI avec toute la suite Playwright (113 tests), dans la tâche « Playwright (vraie API, PowerSync, Gotenberg) », renommée après le lot (son ancien nom, « Coque et authentification », ne disait pas tout ce qu'elle couvre).
 
 ### Critères d'acceptation
 - [ ] **Contrat sans blanc en moins de 2 minutes à partir du modèle Word réel de l'agence pilote** : **reporté au pilote** (réponse du porteur). Vérifié sur le modèle synthétique de même structure : chaque balise reconnue et remplie, 5 pages en PDF comme dans Word, polices de même métrique. De la fiche bail au contrat relu, le parcours Playwright prend une vingtaine de secondes avec le modèle par défaut.
@@ -1070,13 +1070,13 @@ Six pull requests, chacune aussi envoyée sur `claude/lot08bis-sauvegarde` :
 - **Alertes calculées, jamais stockées** : sur le serveur comme sur l'appareil, par les mêmes fonctions. Sur l'appareil, « à régénérer » compare la version du bail ; le serveur compare les conditions elles-mêmes et fait foi (fiche du contrat en ligne, refus du figement et de la signature).
 - **Étape 3 en deux pull requests** (3a et 3b), sans l'avoir demandé au porteur.
 - **Pull request de la règle 2** (Phataf/ziga#30), hors des étapes, à la demande du porteur : U+202F dans les montants, U+00A0 avant « FCFA » et entre les groupes d'un téléphone. Gotenberg rend U+202F sans carré vide dans les quatre familles de polices ; les polices standard de pdf-lib ne l'ont pas : les PDF de pdf-lib reçoivent U+00A0 (`formatFcfaForPdf`).
-- **Case « Le Propriétaire »** dans le tableau des signatures quand son mandat ne donne pas le pouvoir de signer, et une case de paraphe par partie : ajoutées avec la correction a.
+- **Case « Le Propriétaire »** dans le tableau des signatures quand son mandat ne donne pas le pouvoir de signer, et une case de paraphe par partie : ajoutées avec la correction a, validées par le porteur après le lot.
 - **Aides des tests de bout en bout** des lots 08 et 08 bis regroupées dans `apps/web/e2e/agency.ts`.
 
 ### Dette technique
 - **Aperçu PDF sur téléphone** : un `iframe`, avec « Ouvrir le PDF dans un nouvel onglet » pour les navigateurs qui n'affichent pas un PDF en ligne.
 - **Rappel de légalisation** : affiché comme alerte, sans notification (les relances viennent au lot 10).
-- **Service PowerSync de test sans Docker** : installé hors du dépôt pour chaque nouveau conteneur (`docs/SYNC.md`).
+- **Service PowerSync de test dans une session sans Docker** : installé hors du dépôt pour chaque nouveau conteneur (`docs/SYNC.md`). La CI, elle, utilise l'image Docker.
 
 ### Questions ouvertes pour le porteur
 1. **Juriste** : relecture du modèle par défaut (bail et avenant), dont les articles cités, le préavis du bailleur et la case du propriétaire signataire.
