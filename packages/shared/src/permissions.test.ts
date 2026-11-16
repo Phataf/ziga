@@ -140,6 +140,10 @@ describe('matrice des rôles plateforme (lot 04)', () => {
 		expect(PLATFORM_ROLE_KEYS.filter((r) => platformCan(r, 'geography.manage'))).toEqual(['super_admin', 'support']);
 	});
 
+	it('préfixe des reçus après le premier reçu (lot 09) : super administrateur seulement', () => {
+		expect(PLATFORM_ROLE_KEYS.filter((r) => platformCan(r, 'receipt.prefix_override'))).toEqual(['super_admin']);
+	});
+
 	it('seul le super administrateur modifie les interrupteurs', () => {
 		expect(PLATFORM_ROLE_KEYS.filter((r) => platformCan(r, 'feature.manage'))).toEqual(['super_admin']);
 	});

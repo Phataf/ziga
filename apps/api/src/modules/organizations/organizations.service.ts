@@ -20,9 +20,10 @@ import {
 import { formatPhone } from '@ziga/shared/phone';
 import type { OrganizationRole, OrganizationType } from '@ziga/shared/permissions';
 import type { AuditEntryView } from '@ziga/shared/organizations';
+import { defaultReceiptPrefix, type ReceiptOrganizationSnapshot, type ReceiptSettingsView } from '@ziga/shared/receipts';
 import { and, desc, eq, gt, isNull, sql } from 'drizzle-orm';
 import { AppError } from '../../common/app-error.js';
-import { RequestContext } from '../../common/request-context.js';
+import { RequestContext, type AuditOrigin } from '../../common/request-context.js';
 import { APP_CONFIG } from '../../config/config.module.js';
 import type { AppConfig } from '../../config/env.js';
 import { DatabaseService } from '../../db/database.module.js';
@@ -30,7 +31,7 @@ import type { Tx } from '../../db/database.js';
 import { users } from '../../db/schema/identity.js';
 import { organizationInvitations, organizationLogos, organizationMembers, organizations } from '../../db/schema/organizations.js';
 import { auditPage } from '../audit/audit-page.js';
-import { AuditService, diff } from '../audit/audit.service.js';
+import { AuditService, diff, type AuditActor } from '../audit/audit.service.js';
 import { FeaturesService } from '../features/features.service.js';
 import { QuotasService } from '../features/quotas.service.js';
 import { AuthService } from '../identity/auth.service.js';
@@ -591,6 +592,136 @@ export class OrganizationsService implements OnModuleInit {
 			});
 		}
 		return this.view(tx);
+	}
+
+	// ------------------------------------------------------------ lot 09 : reçus
+
+	/** Réglages des reçus et préfixe proposé (initiales du nom), pour l'écran du directeur. */
+	async receiptSettings(tx: Tx = RequestContext.tx()): Promise<ReceiptSettingsView> {
+		const org = await this.row(tx);
+		return {
+			prefix: org.receiptPrefix,
+			proposedPrefix: defaultReceiptPrefix(org.tradeName ?? org.legalName),
+			ticketWidth: org.receiptTicketWidth,
+			numberingStartedAt: org.receiptNumberingStartedAt?.toISOString() ?? null
+		};
+	}
+
+	/**
+	 * Préfixe des reçus (directeur) : modifiable jusqu'au premier reçu, puis figé par la base (RECEIPT_PREFIX_LOCKED ;
+	 * seul le back-office le change ensuite). Journalisé avec avant et après.
+	 */
+	async setReceiptPrefix(prefix: string, tx: Tx = RequestContext.tx()): Promise<void> {
+		const scope = RequestContext.organization();
+		const [org] = await tx.select().from(organizations).where(eq(organizations.id, scope.organizationId)).limit(1).for('update');
+		if (!org || org.receiptPrefix === prefix) return;
+		if (org.receiptNumberingStartedAt) {
+			throw new AppError(
+				'RECEIPT_PREFIX_LOCKED',
+				'Le préfixe des reçus est figé depuis le premier reçu ; seul le support de la plateforme peut le changer.',
+				409
+			);
+		}
+		await tx.update(organizations).set({ receiptPrefix: prefix, updatedAt: new Date() }).where(eq(organizations.id, org.id));
+		await this.audit.record(tx, {
+			actor: this.actor(),
+			organizationId: org.id,
+			action: 'organization.receipt_prefix',
+			objectType: 'organization',
+			objectId: org.id,
+			before: { receiptPrefix: org.receiptPrefix },
+			after: { receiptPrefix: prefix }
+		});
+	}
+
+	/** Largeur du ticket de caisse (58 ou 80 mm), réglage du directeur, journalisé. */
+	async setReceiptTicketWidth(width: 58 | 80, tx: Tx = RequestContext.tx()): Promise<void> {
+		const org = await this.row(tx);
+		if (org.receiptTicketWidth === width) return;
+		await tx.update(organizations).set({ receiptTicketWidth: width, updatedAt: new Date() }).where(eq(organizations.id, org.id));
+		await this.audit.record(tx, {
+			actor: this.actor(),
+			organizationId: org.id,
+			action: 'organization.receipt_ticket_width',
+			objectType: 'organization',
+			objectId: org.id,
+			before: { receiptTicketWidth: org.receiptTicketWidth },
+			after: { receiptTicketWidth: width }
+		});
+	}
+
+	/**
+	 * Préfixe en vigueur pour numéroter un reçu : sans réglage, les initiales du nom sont posées (réponse du porteur,
+	 * point 8), journalisées, pour que le premier encaissement ne soit jamais bloqué.
+	 */
+	async ensureReceiptPrefix(actor: AuditActor, tx: Tx = RequestContext.tx(), origin?: AuditOrigin): Promise<string> {
+		const org = await this.row(tx);
+		if (org.receiptPrefix) return org.receiptPrefix;
+		const prefix = defaultReceiptPrefix(org.tradeName ?? org.legalName);
+		await tx.update(organizations).set({ receiptPrefix: prefix, updatedAt: new Date() }).where(eq(organizations.id, org.id));
+		await this.audit.record(tx, {
+			actor,
+			organizationId: org.id,
+			action: 'organization.receipt_prefix_default',
+			objectType: 'organization',
+			objectId: org.id,
+			before: { receiptPrefix: null },
+			after: { receiptPrefix: prefix },
+			...(origin ? { origin } : {})
+		});
+		return prefix;
+	}
+
+	/** Changement exceptionnel du préfixe après le premier reçu : back-office seulement, motivé, journalisé chez l'organisation. */
+	async adminSetReceiptPrefix(
+		tx: Tx,
+		actor: { type: 'user'; userId: string; role: string },
+		organizationId: string,
+		prefix: string,
+		reason: string
+	): Promise<void> {
+		const [org] = await tx.select().from(organizations).where(eq(organizations.id, organizationId)).limit(1);
+		if (!org) throw new AppError('NOT_FOUND', 'Organisation introuvable.', 404);
+		if (org.receiptPrefix === prefix) return;
+		await tx.update(organizations).set({ receiptPrefix: prefix }).where(eq(organizations.id, organizationId));
+		await this.audit.record(tx, {
+			actor,
+			organizationId,
+			action: 'organization.receipt_prefix_override',
+			objectType: 'organization',
+			objectId: organizationId,
+			before: { receiptPrefix: org.receiptPrefix },
+			after: { receiptPrefix: prefix, reason },
+			origin: 'admin'
+		});
+	}
+
+	/** Données de l'organisation copiées dans un reçu à son émission (D29), avec la version du logo en vigueur. */
+	async receiptSnapshot(tx: Tx = RequestContext.tx()): Promise<ReceiptOrganizationSnapshot> {
+		const org = await this.row(tx);
+		const [logo] = org.logoId
+			? await tx.select({ status: organizationLogos.status }).from(organizationLogos).where(eq(organizationLogos.id, org.logoId)).limit(1)
+			: [];
+		return {
+			name: org.tradeName ?? org.legalName,
+			address: org.address,
+			commune: org.commune,
+			poBox: org.poBox,
+			phone: formatPhone(org.phone),
+			rccm: org.rccm,
+			ifu: org.ifu,
+			logoId: logo?.status === 'ready' ? org.logoId : null
+		};
+	}
+
+	/** Image du logo pour un PDF (PNG produit au lot 03), version donnée, jamais écrasée. */
+	async logoPrintKey(logoId: string, tx: Tx = RequestContext.tx()): Promise<string | null> {
+		const [logo] = await tx
+			.select({ printKey: organizationLogos.printKey })
+			.from(organizationLogos)
+			.where(eq(organizationLogos.id, logoId))
+			.limit(1);
+		return logo?.printKey ?? null;
 	}
 
 	/** Lot 08 : réglage lu par le module leases à la création d'un bail. */

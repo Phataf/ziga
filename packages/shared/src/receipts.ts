@@ -15,7 +15,7 @@ import { z } from 'zod';
 import { formatDate } from './dates.js';
 import { amountInFrenchWords } from './french-words.js';
 import { formatFcfa, type Fcfa } from './money.js';
-import type { MobileMoneyOperator, PaymentMeans, PaymentPurpose } from './payments.js';
+import type { MobileMoneyOperator, PaymentMeans, PaymentPurpose, PaymentView } from './payments.js';
 
 export const RECEIPT_TITLE = 'Reçu de paiement';
 export const RECEIPT_PROVISIONAL_TITLE = 'Reçu provisoire';
@@ -138,6 +138,16 @@ export const receiptSettingsSchema = z
 		error: 'Aucun réglage à enregistrer.'
 	});
 export type ReceiptSettingsData = z.output<typeof receiptSettingsSchema>;
+
+/** Réglages des reçus lus par l'écran du directeur (GET /organization/receipt-settings). */
+export interface ReceiptSettingsView {
+	prefix: string | null;
+	/** Initiales du nom, posées au premier reçu si aucun préfixe n'est choisi. */
+	proposedPrefix: string;
+	ticketWidth: ReceiptTicketWidth;
+	/** Date du premier reçu : préfixe et premier numéro figés depuis. */
+	numberingStartedAt: string | null;
+}
 
 /** Changement exceptionnel du préfixe après le premier reçu : back-office de la plateforme seulement, motivé. */
 export const adminReceiptPrefixSchema = z.object({
@@ -331,3 +341,42 @@ export interface ReceiptVerificationView {
 	amount: Fcfa;
 	status: ReceiptStatus;
 }
+
+/** Encaissement avec ses imputations et son reçu (fiche d'un encaissement, en ligne). */
+export interface PaymentDetailView {
+	payment: PaymentView;
+	allocations: {
+		target: 'rent_due' | 'deposit_account' | 'credit';
+		targetId: string | null;
+		direction: 'allocate' | 'reverse';
+		amount: Fcfa;
+	}[];
+	receipt: ReceiptView | null;
+}
+
+/** Résultat d'une validation groupée : chaque encaissement validé, ou refusé avec son motif. */
+export interface PaymentValidationResult {
+	paymentId: string;
+	status: 'confirmed' | 'rejected';
+	receiptNumber?: string | null;
+	code?: string;
+	message?: string;
+}
+
+/**
+ * Lien partagé (`/recu/<jeton>`) : le reçu en lecture seule. `pending` : le jeton n'est pas (encore) connu du serveur,
+ * le reçu n'est pas encore synchronisé (« Reçu en cours d'enregistrement », réponse du porteur).
+ */
+export type SharedReceiptView =
+	| { state: 'pending' }
+	| {
+			state: 'available';
+			organizationName: string;
+			status: ReceiptStatus;
+			number: string | null;
+			provisionalNumber: string;
+			paidOn: string;
+			amount: Fcfa;
+			document: ReceiptDocument | null;
+			hasPdf: boolean;
+	  };

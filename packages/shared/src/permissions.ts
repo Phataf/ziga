@@ -137,7 +137,9 @@ export const PLATFORM_PERMISSIONS = {
 	/** Modes globaux, exceptions, formules incluses, exceptions de quota. */
 	'feature.manage': [SA],
 	/** Référentiel géographique (lot 07) : ajouter un quartier, corriger un point, le marquer vérifié. */
-	'geography.manage': [SA, SU]
+	'geography.manage': [SA, SU],
+	/** Lot 09 : changement exceptionnel du préfixe des reçus après le premier reçu, motivé (réponse du porteur, point 8). */
+	'receipt.prefix_override': [SA]
 } as const satisfies Record<string, readonly PlatformRoleKey[]>;
 
 export type PlatformAction = keyof typeof PLATFORM_PERMISSIONS;

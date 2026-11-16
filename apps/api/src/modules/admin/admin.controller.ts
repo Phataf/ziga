@@ -19,6 +19,7 @@ import {
 import { createNeighborhoodSchema, updateNeighborhoodSchema } from '@ziga/shared/geography';
 import { FEATURES_BY_KEY, GLOBAL_MODES, isFeatureKey, type GlobalMode } from '@ziga/shared/features';
 import { idSchema, isUuid } from '@ziga/shared/ids';
+import { adminReceiptPrefixSchema } from '@ziga/shared/receipts';
 import { z } from 'zod';
 import { AppError } from '../../common/app-error.js';
 import { FeatureAdminService } from '../features/feature-admin.service.js';
@@ -93,6 +94,19 @@ export class AdminController {
 		const orgId = idSchema.parse(id);
 		const { reason } = suspendSchema.parse(body);
 		await this.admin.withOrganization(orgId, (tx) => this.organizations.setVerification(tx, actorOf(p), orgId, 'reinstated', reason));
+	}
+
+	/**
+	 * Lot 09 : changement exceptionnel du préfixe des reçus, après le premier reçu (réponse du porteur, point 8) : motif
+	 * obligatoire, audit chez l'organisation. Les reçus déjà émis gardent leur numéro.
+	 */
+	@Put('organizations/:id/receipt-prefix')
+	@PlatformCan('receipt.prefix_override')
+	@HttpCode(204)
+	async receiptPrefix(@Platform() p: PlatformActor, @Param('id') id: string, @Body() body: unknown) {
+		const orgId = idSchema.parse(id);
+		const { prefix, reason } = adminReceiptPrefixSchema.parse(body);
+		await this.admin.withOrganization(orgId, (tx) => this.organizations.adminSetReceiptPrefix(tx, actorOf(p), orgId, prefix, reason));
 	}
 
 	/** Changement de formule ; une formule payante sans abonnement en cours reçoit un abonnement « à payer ». */
