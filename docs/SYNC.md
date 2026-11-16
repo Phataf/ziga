@@ -65,6 +65,12 @@ Dans l'ordre, dans le lot qui crée la table :
 | `lease_versions` | 08 | copie de chaque version validée, écrite par la base seule | jamais |
 | `rent_dues` | 08 | échéances, écrites par le serveur seul (validation du bail, tâche quotidienne) ; agent de terrain : celles de ses unités | jamais |
 | `deposit_accounts`, `deposit_movements` | 08 | comptes de caution (statut et détenteur écrits par la base) et mouvements en ajout seul ; direction, gestion, profil lecture ; jamais l'agent de terrain | création d'un compte, versement reçu, changement de détenteur (direction, gestion) |
+| `leases` (colonnes du lot 08 bis) | 08 bis | `last_renewed_on`, `last_renewal_automatic` : dernier renouvellement (avenant signé ou reconduction au terme) | jamais (renouvellement par le serveur, version suivante) |
+| `documents` (colonnes du lot 08 bis) | 08 bis | rattachement au contrat (`lease_contract_id`) ou au modèle (`contract_template_id`) ; types du contrat, Word compris (direction et gestion) | jamais (en ligne) |
+| `contract_templates` | 08 bis | modèles Word de l'organisation et leur inspection (balises reconnues et inconnues, polices sans équivalent, pages) ; direction et gestion seulement | jamais (mise en place en ligne, direction) |
+| `lease_contracts` | 08 bis | contrats du bail et des avenants : cycle, figement, signataires, signature manuscrite déposée, légalisation et enregistrement ; direction et gestion seulement, jamais l'agent de terrain ni le profil lecture | jamais (génération et figement en ligne ; le scan se prépare hors ligne puis s'envoie) |
+| `contract_versions` | 08 bis | versions en ajout seul, **sans** la copie des données ni les valeurs résolues (état civil compris), lues en ligne ; fichiers par URL signée | jamais |
+| `lease_amendments` | 08 bis | avenants (renouvellement, loyer, autre) et leur application au bail | jamais (en ligne) |
 
 ## 4. Lire dans la base locale (écrans)
 
