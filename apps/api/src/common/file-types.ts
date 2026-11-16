@@ -2,7 +2,17 @@
  * Type réel d'un fichier reçu, d'après sa signature (jamais d'après son nom ni l'en-tête annoncé) : photos et
  * documents du lot 07. Les deux marques HEIF se valent (un fichier annoncé HEIC peut porter la marque « mif1 »).
  */
-export type DetectedType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/heic' | 'image/heif' | 'application/pdf';
+export type DetectedType =
+	| 'image/jpeg'
+	| 'image/png'
+	| 'image/webp'
+	| 'image/heic'
+	| 'image/heif'
+	| 'application/pdf'
+	| 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+/** Lot 08 bis : un .docx est un zip ; son contenu est contrôlé ensuite en entier (template-inspection.ts). */
+const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
 export function detectFileType(body: Buffer): DetectedType | null {
 	if (body.length >= 3 && body[0] === 0xff && body[1] === 0xd8 && body[2] === 0xff) return 'image/jpeg';
@@ -15,6 +25,7 @@ export function detectFileType(body: Buffer): DetectedType | null {
 		if (['mif1', 'msf1'].includes(brand)) return 'image/heif';
 	}
 	if (body.length >= 5 && body.subarray(0, 5).toString('latin1') === '%PDF-') return 'application/pdf';
+	if (body.length >= 4 && body.readUInt32LE(0) === 0x04034b50) return DOCX;
 	return null;
 }
 

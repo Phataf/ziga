@@ -33,6 +33,29 @@ import { PropertiesService } from '../properties/properties.service.js';
 
 type DocumentRow = typeof documents.$inferSelect;
 
+/** Documents du contrat (lot 08 bis) : déposés ou générés par le module leases, par ces méthodes seulement. */
+export interface ContractDocumentInput {
+	id: string;
+	type:
+		| 'contract_template'
+		| 'contract_draft'
+		| 'signed_lease_scan'
+		| 'signed_amendment_scan'
+		| 'contract_legalization'
+		| 'contract_registration';
+	leaseId: string | null;
+	leaseContractId: string | null;
+	contractTemplateId: string | null;
+	fileName: string;
+	mimeType: DocumentRow['mimeType'];
+}
+
+/**
+ * Point d'inscription (lot 08 bis) : un bail signé scanné vient d'entrer en vigueur. Le module leases y inscrit son
+ * traitement (contrat « signature manuscrite, scan déposé ») ; le module documents ne lit jamais les tables des baux.
+ */
+export type SignedLeaseScanListener = (document: { id: string; leaseId: string; leaseContractId: string | null }) => Promise<void>;
+
 const iso = (d: Date | null) => (d ? d.toISOString() : null);
 
 export function documentView(d: DocumentRow): DocumentView {
@@ -73,6 +96,8 @@ const NOT_FOUND = () => new AppError('DOCUMENT_NOT_FOUND', 'Document introuvable
 
 @Injectable()
 export class DocumentsService {
+	private signedScanListener: SignedLeaseScanListener | null = null;
+
 	constructor(
 		private readonly audit: AuditService,
 		private readonly owners: OwnersService,
@@ -279,7 +304,131 @@ export class DocumentsService {
 			before: { status: 'pending' },
 			after: { status: 'active', sha256, version: row.version, replacesId: row.replacesId }
 		});
+		// Un bail signé scanné : le contrat du bail passe par le module leases (même transaction : tout ou rien).
+		if (row.type === 'signed_lease_scan' && row.leaseId && this.signedScanListener) {
+			await this.signedScanListener({ id, leaseId: row.leaseId, leaseContractId: row.leaseContractId });
+		}
 		return documentView(active!);
+	}
+
+	// ---------------------------------------------------------------- lot 08 bis : documents du contrat
+
+	onSignedLeaseScan(listener: SignedLeaseScanListener): void {
+		this.signedScanListener = listener;
+	}
+
+	private async insertContractDocument(input: ContractDocumentInput, byteSize: number): Promise<DocumentRow> {
+		const { tx, organizationId, userId, actor } = this.context();
+		const exists = await tx.select({ id: documents.id }).from(documents).where(eq(documents.id, input.id)).limit(1);
+		if (exists.length) throw new AppError('CONFLICT', 'Ce document existe déjà.', 409);
+		const [row] = await tx
+			.insert(documents)
+			.values({
+				id: input.id,
+				organizationId,
+				type: input.type,
+				leaseId: input.leaseId,
+				leaseContractId: input.leaseContractId,
+				contractTemplateId: input.contractTemplateId,
+				version: 1,
+				fileName: input.fileName,
+				mimeType: input.mimeType,
+				byteSize,
+				storageKey: documentKey(organizationId, input.id),
+				status: 'pending',
+				uploadedBy: userId
+			})
+			.returning();
+		await this.audit.record(tx, {
+			actor,
+			organizationId,
+			action: 'document.create',
+			objectType: 'document',
+			objectId: input.id,
+			after: {
+				type: input.type,
+				leaseId: input.leaseId,
+				leaseContractId: input.leaseContractId,
+				contractTemplateId: input.contractTemplateId,
+				fileName: input.fileName,
+				byteSize,
+				status: 'pending'
+			}
+		});
+		return row!;
+	}
+
+	/** Dépôt d'un fichier du contrat par l'appareil : fiche en attente et URL d'envoi signée (comme `create`). */
+	async createContractUpload(input: ContractDocumentInput, byteSize: number): Promise<{ document: DocumentView; upload: PresignedUpload }> {
+		const row = await this.insertContractDocument(input, byteSize);
+		const upload = await this.storage.presignPut(row.storageKey, {
+			contentType: row.mimeType,
+			contentLength: byteSize,
+			expiresInSeconds: UPLOAD_URL_TTL_SECONDS
+		});
+		return { document: documentView(row), upload };
+	}
+
+	/**
+	 * Fichier produit par le serveur (projet Word et PDF d'un contrat, aperçu d'un modèle) : enregistré sous une clé
+	 * neuve, jamais écrasée, puis en vigueur avec son empreinte SHA-256 (calculée sur les octets stockés).
+	 */
+	async storeGenerated(input: ContractDocumentInput, body: Buffer): Promise<{ id: string; sha256: string }> {
+		const { tx, organizationId, actor } = this.context();
+		const row = await this.insertContractDocument(input, body.length);
+		await this.storage.put(row.storageKey, body, row.mimeType);
+		const sha256 = createHash('sha256').update(body).digest('hex');
+		const now = new Date();
+		await tx
+			.update(documents)
+			.set({ status: 'active', sha256, activatedAt: now, updatedAt: now })
+			.where(and(eq(documents.organizationId, organizationId), eq(documents.id, row.id)));
+		await this.audit.record(tx, {
+			actor,
+			organizationId,
+			action: 'document.generate',
+			objectType: 'document',
+			objectId: row.id,
+			after: {
+				type: input.type,
+				leaseContractId: input.leaseContractId,
+				contractTemplateId: input.contractTemplateId,
+				sha256,
+				status: 'active'
+			}
+		});
+		return { id: row.id, sha256 };
+	}
+
+	/** Dernier aperçu PDF de chaque modèle de contrat (généré avec les données d'exemple). */
+	async templatePreviews(templateIds: readonly string[]): Promise<Map<string, string>> {
+		if (!templateIds.length) return new Map();
+		const { tx, organizationId } = this.context();
+		const rows = await tx
+			.select({ id: documents.id, templateId: documents.contractTemplateId })
+			.from(documents)
+			.where(
+				and(
+					eq(documents.organizationId, organizationId),
+					eq(documents.type, 'contract_template'),
+					eq(documents.mimeType, 'application/pdf'),
+					eq(documents.status, 'active'),
+					inArray(documents.contractTemplateId, [...templateIds])
+				)
+			)
+			.orderBy(asc(documents.createdAt), asc(documents.id));
+		const out = new Map<string, string>();
+		for (const r of rows) out.set(r.templateId!, r.id);
+		return out;
+	}
+
+	/** Contenu d'un document en vigueur de l'organisation, lu par le serveur (modèle à inspecter ou à remplir). */
+	async readFile(id: string): Promise<{ view: DocumentView; body: Buffer }> {
+		const row = await this.readable(id);
+		if (row.status !== 'active' && row.status !== 'replaced') {
+			throw new AppError('DOCUMENT_NOT_AVAILABLE', 'Ce document n’a pas de fichier consultable.', 409, { status: row.status });
+		}
+		return { view: documentView(row), body: await this.storage.get(row.storageKey) };
 	}
 
 	/** URL de lecture signée de 5 minutes ; chaque URL délivrée est journalisée. */
