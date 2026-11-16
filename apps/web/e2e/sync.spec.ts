@@ -77,6 +77,30 @@ async function received(request: APIRequestContext, accessToken: string): Promis
 	return [...rows.values()];
 }
 
+/**
+ * Le flux de cette personne, relu jusqu'à ce que `ready` soit vrai (la réplication prend un instant après une
+ * écriture), dans la limite de `timeout` ; renvoie la lecture qui l'a satisfait. Les assertions portent ensuite sur
+ * cette lecture : l'attente ne remplace aucune assertion.
+ */
+async function receivedWhen(
+	request: APIRequestContext,
+	accessToken: string,
+	ready: (rows: Row[]) => boolean,
+	timeout = 15_000
+): Promise<Row[]> {
+	let rows: Row[] = [];
+	await expect
+		.poll(
+			async () => {
+				rows = await received(request, accessToken);
+				return ready(rows);
+			},
+			{ timeout, message: 'le flux PowerSync n’a pas reçu les lignes attendues à temps' }
+		)
+		.toBe(true);
+	return rows;
+}
+
 const organizationsIn = (rows: Row[]) =>
 	rows.filter((r) => r.table === 'organizations').map((r) => String(r.data.trade_name ?? r.data.legal_name));
 
@@ -143,8 +167,17 @@ test.describe('Synchronisation : ce que reçoit chaque personne (service PowerSy
 				})
 			).status()
 		).toBe(201);
+		// B reçoit d'abord, et ensemble, le propriétaire, le mandat et sa version ; A est lu ensuite, une fois la
+		// réplication de ces écritures faite.
+		const b = await receivedWhen(
+			request,
+			tokenB,
+			(rows) =>
+				rows.some((r) => r.table === 'owners' && r.data.id === ownerId) &&
+				rows.some((r) => r.table === 'mandates' && r.data.id === mandateId) &&
+				rows.some((r) => r.table === 'mandate_versions' && r.data.mandate_id === mandateId)
+		);
 		const a = await received(request, await loginAs(request, 'director'));
-		const b = await received(request, tokenB);
 		const lot06 = ['owners', 'mandates', 'mandate_versions', 'mandate_scopes'];
 		expect(a.filter((r) => lot06.includes(r.table) && r.data.organization_id === orgB)).toEqual([]);
 		expect(a.some((r) => r.data.id === ownerId || r.data.id === mandateId || r.data.mandate_id === mandateId)).toBe(false);
@@ -166,7 +199,7 @@ test.describe('Synchronisation : ce que reçoit chaque personne (service PowerSy
 	test('organisation suspendue : ses membres ne reçoivent plus rien', async ({ request }) => {
 		const agency = await freshAgency(request, `Agence suspendue ${newId().slice(-6)}`);
 		// La réplication prend un instant : on attend que la nouvelle agence arrive avant de la suspendre.
-		await expect.poll(async () => organizationsIn(await received(request, agency.token)).length, { timeout: 10_000 }).toBe(1);
+		await receivedWhen(request, agency.token, (rows) => organizationsIn(rows).length === 1);
 		const admin = await loginAs(request, 'admin');
 		const r = await request.post(`${API_URL}/admin/organizations/${agency.id}/suspend`, {
 			headers: { Authorization: `Bearer ${admin}` },
@@ -177,8 +210,8 @@ test.describe('Synchronisation : ce que reçoit chaque personne (service PowerSy
 		// géographique (lot 07), communs à tous.
 		const ofOrganization = (rows: Row[]) =>
 			rows.filter((r) => r.data.id === agency.id || r.data.organization_id === agency.id).map((r) => r.table);
-		await expect.poll(async () => ofOrganization(await received(request, agency.token)), { timeout: 10_000 }).toEqual([]);
-		const after = await received(request, agency.token);
+		const after = await receivedWhen(request, agency.token, (rows) => ofOrganization(rows).length === 0);
+		expect(ofOrganization(after)).toEqual([]);
 		expect([...new Set(after.map((r) => r.table))].sort()).toEqual(['communes', 'features', 'neighborhoods', 'plan_features']);
 	});
 });
@@ -222,17 +255,17 @@ test.describe('Synchronisation des biens (lot 07) : l’agent de terrain ne reç
 
 		const lot07 = ['properties', 'units', 'media', 'mandate_scopes', 'documents'];
 		const ofLot07 = (rows: Row[]) => rows.filter((r) => lot07.includes(r.table));
-		// La réplication prend un instant : on attend que l'unité affectée arrive chez l'agent.
-		await expect
-			.poll(
-				async () =>
-					ofLot07(await received(request, agentToken))
-						.filter((r) => r.table === 'units')
-						.map((r) => r.data.id),
-				{ timeout: 10_000 }
+		// La réplication prend un instant : on attend que l'unité affectée et son bien arrivent ensemble chez l'agent.
+		const agent = ofLot07(
+			await receivedWhen(
+				request,
+				agentToken,
+				(rows) =>
+					rows.some((r) => r.table === 'units' && r.data.id === assigned) &&
+					rows.some((r) => r.table === 'properties' && r.data.id === propertyId)
 			)
-			.toEqual([assigned]);
-		const agent = ofLot07(await received(request, agentToken));
+		);
+		expect(agent.filter((r) => r.table === 'units').map((r) => r.data.id)).toEqual([assigned]);
 		expect(agent.filter((r) => r.table === 'properties').map((r) => r.data.id)).toEqual([propertyId]);
 		// Aucune trace des unités non affectées, dans aucune table ; aucun document.
 		const text = JSON.stringify(agent);
@@ -241,25 +274,19 @@ test.describe('Synchronisation des biens (lot 07) : l’agent de terrain ne reç
 
 		// La direction et le profil lecture reçoivent tout.
 		for (const account of ['director', 'viewer'] as const) {
-			await expect
-				.poll(
-					async () => {
-						const units = (await received(request, await loginAs(request, account)))
-							.filter((r) => r.table === 'units')
-							.map((r) => r.data.id);
-						return [assigned, unassigned, otherUnit].every((id) => units.includes(id));
-					},
-					{ timeout: 10_000 }
-				)
-				.toBe(true);
+			await receivedWhen(request, await loginAs(request, account), (rows) => {
+				const units = rows.filter((r) => r.table === 'units').map((r) => r.data.id);
+				return [assigned, unassigned, otherUnit].every((id) => units.includes(id));
+			});
 		}
 
 		// Désaffectée : l'unité et son bien quittent l'appareil de l'agent à la synchronisation suivante.
 		await post(`/units/${assigned}/assign`, { agentId: null });
-		await expect
-			.poll(async () => JSON.stringify(ofLot07(await received(request, agentToken))).includes(assigned), { timeout: 10_000 })
-			.toBe(false);
-		expect(JSON.stringify(ofLot07(await received(request, agentToken)))).not.toContain(propertyId);
+		const gone = JSON.stringify(
+			ofLot07(await receivedWhen(request, agentToken, (rows) => !JSON.stringify(ofLot07(rows)).includes(assigned)))
+		);
+		expect(gone).not.toContain(assigned);
+		expect(gone).not.toContain(propertyId);
 	});
 });
 
@@ -302,8 +329,16 @@ test.describe('Synchronisation : la base locale du navigateur', () => {
 		const membership = members.find((m) => m.userId === me.id)!;
 		expect((await request.delete(`${API_URL}/organization/members/${membership.id}`, { headers: agency.headers })).status()).toBe(204);
 
-		await expect.poll(async () => (await localCounts(page)).organizations, { timeout: 10_000 }).toBe(0);
-		expect((await localCounts(page)).organization_members).toBe(0);
+		// L'organisation et son équipe quittent l'appareil ensemble : on attend les deux, sur la même lecture.
+		await expect
+			.poll(
+				async () => {
+					const counts = await localCounts(page);
+					return { organizations: counts.organizations, organization_members: counts.organization_members };
+				},
+				{ timeout: 10_000 }
+			)
+			.toEqual({ organizations: 0, organization_members: 0 });
 	});
 
 	test('délai de synchronisation inférieur à 5 secondes, une fois en ligne', async ({ page, request }) => {
@@ -351,7 +386,8 @@ test.describe('Synchronisation : la base locale du navigateur', () => {
 		await page.getByRole('navigation', { name: 'Navigation principale' }).getByRole('link', { name: 'Équipe' }).click();
 		await expect(page.getByTestId('membre')).toHaveCount(1);
 		await expect(page.getByTestId('membre')).toContainText(`Directrice Agence hors ligne`);
-		expect(reads).toEqual(['GET /organization/members']);
+		// L'écran est déjà affiché (réponse retenue) ; la requête des numéros peut partir juste après le rendu local.
+		await expect.poll(() => reads, { timeout: 5_000 }).toEqual(['GET /organization/members']);
 		// La réponse arrive : le numéro s'ajoute, pour le directeur.
 		release();
 		await expect(page.getByTestId('telephone-membre')).toHaveText(formatPhone(agency.director.phone));
