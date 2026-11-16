@@ -60,3 +60,26 @@ export interface LeasesDailyJobData {
 	/** Date du jour imposée (tests) ; sinon la date du jour à Ouagadougou. */
 	today?: string;
 }
+
+/**
+ * Contrats (lot 08 bis, D23) : génération d'une version (modèle rempli par docxtemplater, PDF par Gotenberg) et aperçu
+ * d'un modèle avec les données d'exemple. La tâche s'exécute dans le contexte de l'organisation et de la personne qui
+ * l'a demandée (membre actif revérifié), avec les mêmes services que les routes ; origine d'audit `job`.
+ */
+export const CONTRACTS_QUEUE = 'contracts';
+export const CONTRACT_GENERATE_JOB = 'generate';
+export const TEMPLATE_PREVIEW_JOB = 'preview';
+
+export interface ContractGenerateJobData {
+	organizationId: string;
+	userId: string;
+	contractId: string;
+	/** Numéro de la version attendue : un rejeu ne crée jamais une seconde version. */
+	number: number;
+}
+
+export interface TemplatePreviewJobData {
+	organizationId: string;
+	userId: string;
+	templateId: string;
+}

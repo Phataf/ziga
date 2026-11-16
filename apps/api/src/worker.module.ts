@@ -4,8 +4,10 @@ import { loggerParams } from './common/logger.js';
 import { ConfigModule } from './config/config.module.js';
 import type { AppConfig } from './config/env.js';
 import { DatabaseModule } from './db/database.module.js';
+import { ContractsWorkerModule } from './jobs/contracts-worker.module.js';
 import { JobsModule } from './jobs/jobs.module.js';
 import { AuditModule } from './modules/audit/audit.module.js';
+import { NotificationsModule } from './modules/notifications/notifications.module.js';
 import { RedisModule } from './redis/redis.module.js';
 import { StorageModule } from './storage/storage.module.js';
 
@@ -22,7 +24,10 @@ export class WorkerModule {
 				RedisModule,
 				StorageModule,
 				AuditModule,
-				JobsModule.register('worker')
+				// Lot 08 bis : la génération des contrats charge le module leases et ses dépendances (identité comprise).
+				NotificationsModule,
+				JobsModule.register('worker'),
+				ContractsWorkerModule
 			]
 		};
 	}

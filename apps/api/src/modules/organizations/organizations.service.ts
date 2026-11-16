@@ -279,6 +279,25 @@ export class OrganizationsService implements OnModuleInit {
 		};
 	}
 
+	/**
+	 * Lot 08 bis (D29) : données de l'organisation copiées dans un contrat à son émission, représentant légal compris
+	 * (quel que soit le rôle de la personne qui génère), avec la version du logo en vigueur (jamais écrasée).
+	 */
+	async contractSnapshot(tx: Tx = RequestContext.tx()): Promise<{ view: OrganizationView; logoId: string | null }> {
+		const org = await this.row(tx);
+		return { view: await this.view(tx), logoId: org.logoId };
+	}
+
+	/** Nom affiché d'un membre de l'organisation active (libellés « déposé par … »), ou null. */
+	async memberName(userId: string, tx: Tx = RequestContext.tx()): Promise<string | null> {
+		const [m] = await tx
+			.select({ name: organizationMembers.displayName })
+			.from(organizationMembers)
+			.where(eq(organizationMembers.userId, userId))
+			.limit(1);
+		return m?.name ? m.name : null;
+	}
+
 	async update(input: UpdateOrganizationInput & Record<string, unknown>): Promise<OrganizationView> {
 		const tx = RequestContext.tx();
 		const org = await this.row(tx);

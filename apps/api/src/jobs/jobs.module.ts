@@ -8,7 +8,7 @@ import { LeasesDailyProcessor } from './leases-daily.processor.js';
 import { LogoProcessor } from './logo.processor.js';
 import { MandatesExpiryProcessor } from './mandates-expiry.processor.js';
 import { MediaProcessor } from './media.processor.js';
-import { EXAMPLE_QUEUE, LEASES_QUEUE, LOGO_QUEUE, MANDATES_QUEUE, MEDIA_QUEUE } from './queues.js';
+import { CONTRACTS_QUEUE, EXAMPLE_QUEUE, LEASES_QUEUE, LOGO_QUEUE, MANDATES_QUEUE, MEDIA_QUEUE } from './queues.js';
 
 /**
  * Files de tâches. Le processus HTTP ne fait qu'ajouter des tâches (`producer`) ;
@@ -35,7 +35,8 @@ export class JobsModule {
 					{ name: LOGO_QUEUE },
 					{ name: MANDATES_QUEUE },
 					{ name: MEDIA_QUEUE },
-					{ name: LEASES_QUEUE }
+					{ name: LEASES_QUEUE },
+					{ name: CONTRACTS_QUEUE }
 				)
 			],
 			providers: role === 'worker' ? [ExampleProcessor, LogoProcessor, MandatesExpiryProcessor, MediaProcessor, LeasesDailyProcessor] : [],
