@@ -45,6 +45,8 @@ export function documentView(d: DocumentRow): DocumentView {
 		unitId: d.unitId,
 		tenantId: d.tenantId,
 		leaseId: d.leaseId,
+		leaseContractId: d.leaseContractId,
+		contractTemplateId: d.contractTemplateId,
 		version: d.version,
 		replacesId: d.replacesId,
 		fileName: d.fileName,

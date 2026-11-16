@@ -21,7 +21,13 @@ export const documents = pgTable('documents', {
 			'document_photo',
 			'other',
 			'signed_lease_scan',
-			'tenant_identity'
+			'tenant_identity',
+			// Lot 08 bis : modèle et projets (Word et PDF), avenant signé, preuves de légalisation et d'enregistrement.
+			'contract_template',
+			'contract_draft',
+			'signed_amendment_scan',
+			'contract_legalization',
+			'contract_registration'
 		]
 	}).notNull(),
 	ownerId: uuid('owner_id'),
@@ -31,11 +37,22 @@ export const documents = pgTable('documents', {
 	// Lot 08 : bail scanné (lease_id), pièce d'identité du locataire (tenant_id).
 	tenantId: uuid('tenant_id'),
 	leaseId: uuid('lease_id'),
+	// Lot 08 bis : contrat (projets, avenant signé, preuves) ou modèle de contrat.
+	leaseContractId: uuid('lease_contract_id'),
+	contractTemplateId: uuid('contract_template_id'),
 	version: integer('version').notNull(),
 	replacesId: uuid('replaces_id'),
 	fileName: text('file_name').notNull(),
 	mimeType: text('mime_type', {
-		enum: ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']
+		enum: [
+			'application/pdf',
+			'image/jpeg',
+			'image/png',
+			'image/webp',
+			'image/heic',
+			'image/heif',
+			'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+		]
 	}).notNull(),
 	byteSize: integer('byte_size').notNull(),
 	sha256: text('sha256'),
