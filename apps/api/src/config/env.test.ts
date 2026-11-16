@@ -11,7 +11,8 @@ const valid = {
 	DATABASE_STATEMENT_TIMEOUT_MS: '15000',
 	REDIS_URL: 'redis://localhost:6379',
 	STORAGE_DRIVER: 'local',
-	STORAGE_LOCAL_DIR: '.data/storage'
+	STORAGE_LOCAL_DIR: '.data/storage',
+	GOTENBERG_URL: 'http://localhost:3001'
 };
 
 describe('configuration', () => {
@@ -63,6 +64,20 @@ describe('configuration', () => {
 			expect(problems).toContain('AUTH_OTP_SECRET');
 			expect(problems).toContain('SMS_DRIVER : « console » est réservé au développement et aux tests');
 		}
+	});
+
+	it('conversion des contrats : Gotenberg par défaut avec son adresse ; conversion factice refusée en production (lot 08 bis)', () => {
+		expect(parseConfig(valid).PDF_CONVERTER).toBe('gotenberg');
+		const { GOTENBERG_URL: _, ...noUrl } = valid;
+		expect(() => parseConfig(noUrl)).toThrow(ConfigError);
+		expect(parseConfig({ ...noUrl, PDF_CONVERTER: 'fake' }).PDF_CONVERTER).toBe('fake');
+		try {
+			parseConfig({ ...valid, NODE_ENV: 'production', PDF_CONVERTER: 'fake' });
+		} catch (e) {
+			expect((e as ConfigError).problems.some((p) => p.startsWith('PDF_CONVERTER'))).toBe(true);
+		}
+		expect(() => parseConfig({ ...valid, GOTENBERG_USERNAME: 'ziga' })).toThrow(ConfigError);
+		expect(parseConfig({ ...valid, GOTENBERG_USERNAME: 'ziga', GOTENBERG_PASSWORD: 'x' }).GOTENBERG_USERNAME).toBe('ziga');
 	});
 
 	it('lit les origines autorisées et traite une variable vide comme absente', () => {

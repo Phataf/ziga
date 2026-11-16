@@ -1,5 +1,5 @@
 # Services du développement local (CLAUDE.md §3) : PostgreSQL 16, Redis, stockage S3 (SeaweedFS, D27).
-# PowerSync (lot 05, D30) ; Gotenberg au lot 08 bis (D23).
+# PowerSync (lot 05, D30) ; Gotenberg (lot 08 bis, D23).
 # Démarrage : `pnpm infra:up` (attend que chaque service soit sain, puis crée le compartiment S3).
 name: ziga
 
@@ -79,6 +79,32 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+
+  # Conversion des contrats Word en PDF (lot 08 bis, D23) : LibreOffice, avec les polices de même métrique (Carlito,
+  # Caladea, Liberation). Publié sur 127.0.0.1 seulement (l'API et le worker tournent sur la machine) et protégé par
+  # une authentification de base ; ni téléchargement par URL, ni webhook (toute destination refusée) : il ne sort pas.
+  gotenberg:
+    image: gotenberg/gotenberg:8.40.0-libreoffice
+    command:
+      [
+        'gotenberg',
+        '--api-enable-basic-auth',
+        '--api-disable-download-from',
+        '--webhook-deny-private-ips',
+        '--webhook-deny-public-ips',
+        '--api-timeout=120s',
+        '--api-body-limit=20MB'
+      ]
+    environment:
+      # Identiques à GOTENBERG_USERNAME et GOTENBERG_PASSWORD de .env.example (développement seulement).
+      GOTENBERG_API_BASIC_AUTH_USERNAME: ziga
+      GOTENBERG_API_BASIC_AUTH_PASSWORD: gotenberg_dev
+    ports: ['127.0.0.1:3001:3000']
+    healthcheck:
+      test: ['CMD', 'curl', '--silent', '--fail', '--user', 'ziga:gotenberg_dev', 'http://127.0.0.1:3000/health']
+      interval: 3s
+      timeout: 3s
+      retries: 40
 
 volumes:
   postgres-data:

@@ -57,6 +57,15 @@ jobs:
               && curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8333/ziga-dev | grep -q 403 && break
             sleep 1
           done
+      # Conversion des contrats en PDF (lot 08 bis, D23) : la vraie image, avec ses polices de même métrique.
+      - name: Gotenberg (LibreOffice)
+        run: |
+          docker run -d --name gotenberg -p 127.0.0.1:3001:3000 \
+            -e GOTENBERG_API_BASIC_AUTH_USERNAME=ziga -e GOTENBERG_API_BASIC_AUTH_PASSWORD=gotenberg_dev \
+            gotenberg/gotenberg:8.40.0-libreoffice gotenberg --api-enable-basic-auth --api-disable-download-from \
+            --webhook-deny-private-ips --webhook-deny-public-ips --api-timeout=120s --api-body-limit=20MB
+          for i in $(seq 1 90); do curl -sf -u ziga:gotenberg_dev http://127.0.0.1:3001/health > /dev/null && break; sleep 1; done
+          curl -sf -u ziga:gotenberg_dev http://127.0.0.1:3001/health
       # Les tests d'intégration lisent .env (base ziga_test recréée à chaque exécution, stockage local).
       - run: cp .env.example .env
       - run: pnpm lint
@@ -106,6 +115,15 @@ jobs:
           docker restart ${{ job.services.postgres.id }}
           until docker exec ${{ job.services.postgres.id }} pg_isready -U ziga -d ziga; do sleep 1; done
           docker exec ${{ job.services.postgres.id }} psql -U ziga -d ziga -tAc "SHOW wal_level"
+      # Conversion des contrats en PDF (lot 08 bis, D23) : la vraie image, avec ses polices de même métrique.
+      - name: Gotenberg (LibreOffice)
+        run: |
+          docker run -d --name gotenberg -p 127.0.0.1:3001:3000 \
+            -e GOTENBERG_API_BASIC_AUTH_USERNAME=ziga -e GOTENBERG_API_BASIC_AUTH_PASSWORD=gotenberg_dev \
+            gotenberg/gotenberg:8.40.0-libreoffice gotenberg --api-enable-basic-auth --api-disable-download-from \
+            --webhook-deny-private-ips --webhook-deny-public-ips --api-timeout=120s --api-body-limit=20MB
+          for i in $(seq 1 90); do curl -sf -u ziga:gotenberg_dev http://127.0.0.1:3001/health > /dev/null && break; sleep 1; done
+          curl -sf -u ziga:gotenberg_dev http://127.0.0.1:3001/health
       # Image du service PowerSync, lancée par Playwright (apps/api/scripts/e2e-powersync.mjs).
       - run: docker pull journeyapps/powersync-service:1.28.1
       - run: cp .env.example .env

@@ -6,7 +6,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 compose=(docker compose -f infra/docker-compose.dev.yml)
-"${compose[@]}" up -d --wait postgres redis seaweedfs
+"${compose[@]}" up -d --wait postgres redis seaweedfs gotenberg
 bucket="${S3_BUCKET:-ziga-dev}"
 "${compose[@]}" exec -T seaweedfs sh -c "echo 's3.bucket.create -name ${bucket}' | weed shell -master=localhost:9333" >/dev/null 2>&1 || true
 
@@ -20,4 +20,4 @@ SELECT 'CREATE DATABASE ziga_powersync OWNER powersync_storage'
 SQL
 # Sans attendre : PowerSync a besoin de la migration 0006 (pnpm db:migrate) et de l'API (JWKS), et réessaie seul.
 "${compose[@]}" up -d powersync
-echo "Services prêts : PostgreSQL :55432, Redis :6379, S3 (SeaweedFS) :8333, compartiment ${bucket}, PowerSync :8080."
+echo "Services prêts : PostgreSQL :55432, Redis :6379, S3 (SeaweedFS) :8333, compartiment ${bucket}, Gotenberg :3001, PowerSync :8080."

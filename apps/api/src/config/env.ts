@@ -95,6 +95,17 @@ export const envSchema = z
 		S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
 		S3_FORCE_PATH_STYLE: bool.default(true),
 
+		/**
+		 * Conversion des contrats en PDF (lot 08 bis, D23) : Gotenberg (image gotenberg/gotenberg:8.40.0-libreoffice),
+		 * joignable depuis l'API et le worker seulement ; `fake` (un PDF d'une page, sans LibreOffice) pour les tests qui
+		 * ne regardent pas le rendu, refusé en production.
+		 */
+		PDF_CONVERTER: z.enum(['gotenberg', 'fake']).default('gotenberg'),
+		GOTENBERG_URL: optional(z.url()),
+		GOTENBERG_USERNAME: optional(z.string().min(1)),
+		GOTENBERG_PASSWORD: optional(z.string().min(1)),
+		GOTENBERG_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(300_000).default(60_000),
+
 		SENTRY_DSN: z.union([z.url(), z.literal('')]).default(''),
 		SENTRY_ENVIRONMENT: z.string().default('development'),
 
@@ -114,6 +125,15 @@ export const envSchema = z
 		}
 		if (env.STORAGE_DRIVER === 'local' && !env.STORAGE_LOCAL_DIR) {
 			ctx.addIssue({ code: 'custom', path: ['STORAGE_LOCAL_DIR'], message: 'obligatoire quand STORAGE_DRIVER=local' });
+		}
+		if (env.PDF_CONVERTER === 'gotenberg' && !env.GOTENBERG_URL) {
+			ctx.addIssue({ code: 'custom', path: ['GOTENBERG_URL'], message: 'obligatoire quand PDF_CONVERTER=gotenberg' });
+		}
+		if (env.NODE_ENV === 'production' && env.PDF_CONVERTER !== 'gotenberg') {
+			ctx.addIssue({ code: 'custom', path: ['PDF_CONVERTER'], message: 'la conversion factice est réservée aux tests' });
+		}
+		if (!!env.GOTENBERG_USERNAME !== !!env.GOTENBERG_PASSWORD) {
+			ctx.addIssue({ code: 'custom', path: ['GOTENBERG_PASSWORD'], message: 'identifiant et mot de passe de Gotenberg vont ensemble' });
 		}
 		if (env.NODE_ENV === 'production' && env.STORAGE_DRIVER !== 's3') {
 			ctx.addIssue({ code: 'custom', path: ['STORAGE_DRIVER'], message: 'le stockage local est réservé au développement et aux tests' });
