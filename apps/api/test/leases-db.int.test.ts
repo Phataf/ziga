@@ -15,6 +15,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type TestApp } from './http.js';
 import { insertDepositAccount, insertDue, insertLease, insertMovement, insertTenant } from './leases.js';
 import { apiSql, createOrg, inContext, sqlError, type Org } from './orgs.js';
+import { allocate, insertPayment } from './payments.js';
 import { propertyWithUnit } from './properties.js';
 
 let t: TestApp;
@@ -461,7 +462,13 @@ describe('échéances', () => {
 			]);
 			expect(moved.message).toContain('RENT_DUE_ISSUED');
 			await insertDue(api, a.id, lease, '2026-06-01');
-			await api.query(`update rent_dues set amount_paid = 10000 where lease_id = $1 and period_start = '2026-06-01'`, [lease]);
+			// Payée en partie : depuis le lot 09, le montant payé vient d'une imputation, jamais d'une saisie.
+			const june = (await api.query(`select id from rent_dues where lease_id = $1 and period_start = '2026-06-01'`, [lease])).rows[0].id;
+			const payment = await insertPayment(api, a.id, lease, { amount: 10_000, confirmedBy: a.director.userId });
+			await allocate(api, a.id, payment, lease, [{ target: 'rent_due', rentDueId: june, amount: 10_000 }]);
+			expect((await sqlError(api, `update rent_dues set amount_paid = 0 where id = $1`, [june])).message).toContain(
+				'RENT_DUE_PAID_BY_ALLOCATIONS'
+			);
 			const paid = await sqlError(
 				api,
 				`update rent_dues set rent = 1, amount_due = 5001 where lease_id = $1 and period_start = '2026-06-01'`,
