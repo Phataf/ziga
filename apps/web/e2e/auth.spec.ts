@@ -3,7 +3,7 @@
  * hors connexion (correction b), appareils, mot de passe oublié, gardes des espaces, trois appareils.
  */
 import { expect, test, type Page } from '@playwright/test';
-import { accounts, API_URL, expectNoHorizontalOverflow, lastCode, newNational, signIn } from './support';
+import { accounts, API_URL, expectNoHorizontalOverflow, lastCode, newNational, registerViaApi, signIn } from './support';
 
 const phone = { viewport: { width: 360, height: 800 }, isMobile: true, hasTouch: true };
 const tablet = { viewport: { width: 820, height: 1180 }, isMobile: true, hasTouch: true };
@@ -56,11 +56,14 @@ test.describe('Téléphone : parcours complet', () => {
 		expect(Date.now() - started).toBeLessThan(60_000);
 	});
 
-	test('numéro inconnu et mauvais mot de passe : même message', async ({ page }) => {
+	test('numéro inconnu et mauvais mot de passe : même message', async ({ page, request }) => {
+		// Son propre compte : l'échec voulu allonge le délai de ce numéro (limite de débit), sans toucher aux comptes
+		// partagés que d'autres tests utilisent en même temps.
+		const own = await registerViaApi(request, 'Compte du mauvais mot de passe');
 		const messages: string[] = [];
 		const attempts: [string, string][] = [
 			[newNational(), 'un-mot-de-passe'],
-			[accounts.person.national, 'mauvais-mot-de-passe']
+			[own.national, 'mauvais-mot-de-passe']
 		];
 		for (const [national, password] of attempts) {
 			await page.goto('/connexion');
@@ -89,13 +92,15 @@ test.describe('Téléphone : parcours complet', () => {
 		await expect(page).toHaveURL(/\/verification\?numero=%2B336/);
 	});
 
-	test('sans session, les espaces connectés renvoient vers la connexion, puis vers l’écran demandé', async ({ page }) => {
+	test('sans session, les espaces connectés renvoient vers la connexion, puis vers l’écran demandé', async ({ page, request }) => {
+		// Son propre compte, sans rôle plateforme : aucun autre test ne peut en ralentir la connexion.
+		const own = await registerViaApi(request, 'Personne sans rôle plateforme');
 		for (const path of ['/app', '/espace/proprietaire', '/admin']) {
 			await page.goto(path);
 			await expect(page).toHaveURL(`/connexion?retour=${encodeURIComponent(path)}`);
 		}
-		await page.getByLabel('Numéro de téléphone').fill(accounts.person.national);
-		await page.getByLabel('Mot de passe', { exact: true }).fill(accounts.person.password);
+		await page.getByLabel('Numéro de téléphone').fill(own.national);
+		await page.getByLabel('Mot de passe', { exact: true }).fill(own.password);
 		await page.getByRole('button', { name: 'Se connecter' }).click();
 		await expect(page).toHaveURL('/admin');
 		// Une personne sans rôle plateforme n'entre pas dans le back-office.
@@ -157,7 +162,12 @@ test.describe('Téléphone : parcours complet', () => {
 
 		await page.goto('/connexion');
 		await page.getByRole('link', { name: 'Mot de passe oublié ?' }).click();
+		// L'écran de connexion a lui aussi un champ « Numéro de téléphone » : on attend le nouvel écran avant de saisir,
+		// sinon la saisie peut partir dans l'ancien et le formulaire s'envoyer vide (« Numéro de téléphone invalide »).
+		await expect(page).toHaveURL(/\/mot-de-passe-oublie/);
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Mot de passe oublié');
 		await page.getByLabel('Numéro de téléphone').fill(national);
+		await expect(page.getByLabel('Numéro de téléphone')).toHaveValue(national);
 		await page.getByRole('button', { name: 'Recevoir le code' }).click();
 		// Le code n'est lu qu'une fois l'envoi terminé (l'écran suivant affiché).
 		await expect(page.getByLabel('Code reçu par SMS')).toBeVisible();

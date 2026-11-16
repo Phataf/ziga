@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, type APIRequestContext, type Page } from '@playwright/test';
+import { phoneNumberGenerator } from './phone-numbers';
 
 export const API_URL = 'http://localhost:3100';
 export const SMS_FILE = process.env.E2E_SMS_FILE || join(tmpdir(), 'ziga-e2e', 'sms.jsonl');
@@ -49,13 +50,14 @@ export function lastCode(phone: string): string {
 	throw new Error(`Aucun code envoyé à ${phone}`);
 }
 
-let counter = 0;
-/** Numéro burkinabè neuf, propre au test (8 chiffres commençant par 7). */
-export function newNational(): string {
-	counter += 1;
-	const n = (Date.now() * 10 + counter + Number(process.env.TEST_PARALLEL_INDEX ?? 0) * 7919) % 10_000_000;
-	return `7${String(n).padStart(7, '0')}`;
-}
+/**
+ * Numéro burkinabè neuf, propre au test : valide selon la règle de l'application, unique dans l'exécution (une plage
+ * par processus de Playwright), jamais celui d'un compte du jeu d'essai (e2e/phone-numbers.ts).
+ */
+export const newNational = phoneNumberGenerator(
+	Number(process.env.TEST_WORKER_INDEX ?? 0),
+	new Set(Object.values(accounts).map((a) => a.national.replace(/\s/g, '')))
+);
 
 /** Connexion par l'écran, puis arrivée sur `target` (chemin de retour). */
 export async function signIn(page: Page, account: Account = 'person', target = '/espace'): Promise<void> {

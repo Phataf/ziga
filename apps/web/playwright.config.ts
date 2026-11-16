@@ -11,6 +11,8 @@ process.env.E2E_SMS_FILE ||= join(smsDir, 'sms.jsonl');
 // Émulation mobile par défaut (téléphone d'entrée de gamme, 360 × 800) ; chaque test peut changer d'appareil.
 export default defineConfig({
 	testDir: 'e2e',
+	// Seuls les *.spec.ts sont des tests de bout en bout ; les *.test.ts de e2e/ sont des tests unitaires (Vitest).
+	testMatch: '**/*.spec.ts',
 	fullyParallel: true,
 	reporter: [['list']],
 	use: {

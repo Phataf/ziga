@@ -36,7 +36,8 @@ export default defineConfig({
 	// Port réglable par WEB_PORT (lu ici plutôt que dans un script : la syntaxe ${…:-…} n'existe pas sous Windows).
 	server: { port: Number(process.env.WEB_PORT || 5173), strictPort: true },
 	test: {
-		include: ['src/**/*.test.ts'],
+		// Les tests de bout en bout sont des *.spec.ts (Playwright) ; un *.test.ts de e2e/ est un test unitaire de leurs outils.
+		include: ['src/**/*.test.ts', 'e2e/**/*.test.ts'],
 		environment: 'node'
 	}
 });
