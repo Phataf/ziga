@@ -983,3 +983,101 @@ Quatre pull requests, une par étape, toutes fusionnées après une CI verte, ch
 1. **Juriste** (`docs/DECISIONS.md`, question ouverte complétée) : plafond de la caution sur le loyer seul ; valeurs par défaut des paramètres du bail ; reconduction pour la même durée face au passage légal à durée indéterminée.
 2. **Avance non payée** : faut-il la laisser passer « en retard » dès le lendemain de la signature, ou attendre le début du bail ? La règle actuelle suit « dues dès la signature » du prompt.
 3. **Locataire sans bail** : faut-il pouvoir enregistrer un locataire seul (prospect, dossier en attente), hors de l'assistant de bail ?
+
+## Lot 08 bis — Contrats et documents contractuels — 16/11/2026
+
+Prompt : `prompts/lot-08bis-contrats.md`. Plan validé par le porteur, avec ses réponses :
+- **Jeu d'essai** : le modèle Word de l'agence pilote reste hors de git, même anonymisé. Un modèle synthétique de même structure (mêmes polices, tableaux, cases à cocher, 5 pages selon Word) est versionné et testé en CI (`apps/api/test/fixtures/pilot-like-template.ts`).
+- **Dépendances** (D23) : docxtemplater 3.71.1 et pizzip 3.3.0 (MIT), pdf-lib 1.17.1, image `gotenberg/gotenberg:8.40.0-libreoffice` fixée à cette version. pdf-lib n'est chargé que dans `/app`, à la demande, jamais dans la vitrine (vérifié sur la version construite).
+- **Avenant de loyer** : appliqué à sa signature par `LeasesService.changeRent`, le mécanisme de `POST /leases/:id/rent-changes`. La route directe du lot 08 reste pour les corrections et les imports ; son audit l'indique « sans avenant ».
+- **Scan déposé sur un bail en brouillon** : il le valide par la même fonction que `POST /leases/:id/validate` ; si la validation est refusée, rien n'est enregistré.
+- **Liens hypertextes d'un modèle** : seules les relations `hyperlink` externes vers `http`, `https` et `mailto` sont acceptées ; toute autre relation externe (modèle attaché, image liée, objet OLE, cadres, sous-document) et tout lien vers `file:`, un chemin réseau `\\` ou un autre schéma sont refusés. Chaque cas est testé.
+- **Profil lecture** : aucune donnée de contrat.
+- **Modèle Word de l'agence pilote** : la vérification sur le modèle réel (nombre de pages, capture de chaque page) est **reportée au démarrage du pilote**. Le modèle sera mis en place par le parcours « Modèles de contrat ».
+- **Espaces (règle 2)** : corrigées dans une pull request à part, avant l'étape 4.
+- **Corrections du modèle par défaut** (a à i), faites à l'étape 4 : voir « Fait ».
+
+Six pull requests, chacune aussi envoyée sur `claude/lot08bis-sauvegarde` :
+- étape 1, montant en lettres, catalogue des champs, règles du contrat, matrice des documents (Phataf/ziga#26) ;
+- étape 2, migration 0014, reprise des baux scannés, synchronisation en lecture (Phataf/ziga#27) ;
+- étape 3a, contrôle des modèles Word, rendu PDF par Gotenberg, modèles par défaut (Phataf/ziga#28) ;
+- étape 3b, contrats, modèles et avenants par l'API, génération en tâche de fond, reconduction (Phataf/ziga#29) ;
+- règle 2, vraies espaces insécables dans les montants et les téléphones (Phataf/ziga#30) ;
+- étape 4, corrections du modèle par défaut, écrans, Playwright et journal.
+
+### Fait
+- **Fonctions pures** (`packages/shared`) :
+  - montant et nombre en lettres, orthographe traditionnelle (`french-words.ts`) ; dates du contrat en toutes lettres (« 1er janvier 2027 ») ;
+  - catalogue des champs (`contract-fields.ts`) : chaque balise, son libellé, sa source et sa valeur ; données figées d'une version (D29) ; blancs ;
+  - cycle du contrat (brouillon, vérification, prêt à signer, signé), signataires attendus, contrôles avant génération et figement, alertes calculées, avenants, reconduction (`contracts.ts`) ;
+  - matrice des documents du contrat (projet, modèle, scan signé, preuves) par rôle.
+- **Base** (`0014_contracts`) :
+  - tables `contract_templates`, `lease_contracts`, `contract_versions` (ajout seul), `lease_amendments` : organisation, RLS, clés composites, triggers du cycle ;
+  - un contrat par bail et par avenant ; un contrat prêt à signer ne change plus, toute modification crée une version ;
+  - reprise des baux du lot 08 : chaque bail signé scanné actif devient un contrat `uploaded_scan`, signé, « Signature manuscrite, scan déposé » ;
+  - renouvellement du bail par sa version suivante ; synchronisation en lecture pour la direction et la gestion seulement.
+- **API et worker** :
+  - contrôle des modèles Word déposés : `.docx` seul, taille et taille décompressée, nombre d'entrées, rapport de compression, macros, relations externes, balises reconnues et inconnues, polices sans équivalent, nombre de pages ;
+  - remplissage par docxtemplater (balises du catalogue seulement, jamais une expression), conversion en PDF par Gotenberg, empreinte SHA-256 de chaque fichier ;
+  - génération en tâche de fond, dans le contexte de l'organisation et de la personne ;
+  - figement, dépôt du scan signé, légalisation, enregistrement, rappel mensuel ; avenants (renouvellement, loyer, autre) appliqués à la signature ; reconduction au terme par la tâche de nuit ;
+  - modèles par défaut de la plateforme (bail et avenant), construits depuis leur texte lisible (`default-templates.ts`).
+- **Corrections du modèle par défaut demandées par le porteur** (version 2 des modèles de la plateforme) :
+  - a. articles 11 et 12, « Fait à… », la mention « lu et approuvé » et le tableau des signatures sur une même page (garder avec le suivant, lignes insécables) ; une case « Le Propriétaire » quand son mandat ne donne pas le pouvoir de signer ;
+  - b. pied de page sur chaque page : référence du bail, « Page X sur Y », et une case de paraphe par partie ;
+  - c. « né » ou « née » selon la civilité ;
+  - d. préavis du bailleur : « trois (3) mois dans les deux cas » ;
+  - e. « en trois (3) exemplaires originaux, dont un pour chaque partie et un pour l'enregistrement », selon le nombre choisi ;
+  - f. dates du contrat en toutes lettres ; les écrans gardent jj/mm/aaaa ;
+  - g. entrée en cours de mois (`calendar_prorata`) : montant du premier mois incomplet, dû à la signature en plus de l'avance ;
+  - h. article 5 : détenteur du dépôt de garantie, d'après le compte de caution ;
+  - i. propriétaire représenté « en vertu du mandat de gestion du … ».
+  - Le texte lisible des clauses et du pied de page est versionné (`default-templates.lease.txt`, `default-templates.amendment.txt`) et comparé au `.docx` construit par un test.
+- **Web** :
+  - « Contrats » dans la navigation de la direction, de la gestion et du bailleur particulier ;
+  - liste des contrats : un bail par ligne, statut du contrat, alertes calculées sur l'appareil, filtres ; cartes sur téléphone, tableau sur ordinateur ;
+  - fiche bail : section « Contrat » (générer : lieu, date, exemplaires ; avenants) ;
+  - fiche du contrat : aperçu PDF (plein écran sur téléphone, à gauche sur ordinateur), champs vides, actions selon le statut, versions et empreintes, signataires, légalisation et enregistrement, chronologie ;
+  - dépôt du scan : photos et PDF réunis en un seul PDF sur l'appareil, date de signature de chaque partie, file d'envoi hors ligne (IndexedDB) ;
+  - modèles de contrat : modèle en usage, dépôt et contrôle d'un `.docx`, aperçu avec des données d'exemple, activation, retrait (direction) ;
+  - bandeau « modèle par défaut non relu par un juriste » dans l'application seulement, jamais dans le document (D25) ;
+  - hors connexion : listes et fiches lues sur l'appareil ; générer, figer, enregistrer une signature « disponibles en ligne » ; scan préparé hors ligne.
+
+### Tests attendus par le prompt
+- [x] **Accès croisé A/B** sur chaque nouvelle table et sur les documents générés : SQL (`contracts-db.int.test.ts`), API (`contracts.int.test.ts`), flux du vrai service PowerSync (`contracts.spec.ts`). Un lien signé expiré est refusé.
+- [x] **Catalogue** : chaque champ du modèle synthétique de l'agence pilote et du modèle par défaut est résolu, sans blanc. `amountInFrenchWords` sur 0, 1, 21, 80, 81, 100, 1 000, 75 000, 1 250 000, 999 999 999, et les cas du porteur (71, 91, 180, 200, 2 000, 80 000, 1 000 000).
+- [x] **Génération** : modèle avec balise inconnue refusé à l'activation ; bail sans mandat actif refusé ; caution au-delà de deux mois : avertissement dans la version et audit, jamais un refus.
+- [x] **Figement** : modifier un contrat prêt à signer crée la version suivante ; `UPDATE` et `DELETE` refusés sur `contract_versions`, même au propriétaire du schéma ; empreinte recalculée identique au téléchargement.
+- [x] **Dépôt du scan** : statut « signé », libellé exact « Signature manuscrite, scan déposé », bail en brouillon passé à `signed`.
+- [x] **Avenant de loyer** : nouvelles échéances à la date d'effet, anciennes inchangées. **Reconduction** : appliquée selon le paramètre du bail, journalisée.
+- [x] **Alerte « sans contrat signé »** : présente pour un bail actif sans contrat, absente après le dépôt.
+- [x] **Matrice des documents** : l'agent de terrain ne voit pas le projet ; le locataire ne voit pas le mandat.
+- [x] **Playwright sur les trois appareils** (360 × 800, 820 × 1180, 1440 × 900), contre la vraie API, le vrai worker et le vrai PowerSync : génération, relecture, figement, dépôt du scan, avenant de loyer signé et appliqué, liste et modèles, sans débordement. Scan préparé hors ligne, envoyé à la reconnexion. Flux : rien pour l'agent de terrain ni le profil lecture, rien de A chez B.
+
+### Critères d'acceptation
+- [ ] **Contrat sans blanc en moins de 2 minutes à partir du modèle Word réel de l'agence pilote** : **reporté au pilote** (réponse du porteur). Vérifié sur le modèle synthétique de même structure : chaque balise reconnue et remplie, 5 pages en PDF comme dans Word, polices de même métrique. De la fiche bail au contrat relu, le parcours Playwright prend une vingtaine de secondes avec le modèle par défaut.
+- [ ] **Modèle de l'agence pilote mis en place** : reporté au démarrage du pilote, par le parcours « Modèles de contrat ». Le modèle par défaut est actif pour toute organisation sans modèle, dont les bailleurs particuliers.
+- [x] **Douze clauses dans l'ordre, sans blanc**, avec le modèle par défaut : bailleur organisation, propriétaire représenté, bailleur particulier, options.
+- [ ] **Modèle par défaut relu par un juriste avant la première signature réelle** : pas encore. Écart noté ci-dessous ; la première signature réelle est reportée ; le bandeau le rappelle dans l'application.
+- [x] **Aucun écran ni aucun document ne présente un scan déposé comme une signature électronique** : libellé unique « Signature manuscrite, scan déposé par … le … », testé en unitaire, par l'API et par Playwright.
+- [x] **Journal des lots mis à jour.** Pas encore de réponse du juriste.
+
+### Écarts par rapport au prompt
+- **Juriste** : le modèle par défaut n'est pas relu. Les articles de la loi n° 103-2015/CNT qu'il cite viennent de `docs/AUDIT.md`, à confirmer. Bandeau dans l'application, signature réelle reportée.
+- **Modèle réel de l'agence pilote** : vérification reportée au pilote (réponse du porteur).
+- **Modèle par défaut versionné en texte** : le `.docx` est construit à la demande depuis le texte lisible des clauses (mêmes entrées, mêmes octets). Le texte, pied de page compris, est versionné et comparé par un test, au lieu d'un `.docx` binaire.
+- **Refus supplémentaires au contrôle des modèles** : champs Word qui chargent un contenu extérieur (INCLUDETEXT, INCLUDEPICTURE, LINK, DDE), contrôles ActiveX, documents importés (`altChunk`), en plus des refus du prompt. Les champs de numérotation (PAGE, NUMPAGES) restent acceptés.
+- **Alertes calculées, jamais stockées** : sur le serveur comme sur l'appareil, par les mêmes fonctions. Sur l'appareil, « à régénérer » compare la version du bail ; le serveur compare les conditions elles-mêmes et fait foi (fiche du contrat en ligne, refus du figement et de la signature).
+- **Étape 3 en deux pull requests** (3a et 3b), sans l'avoir demandé au porteur.
+- **Pull request de la règle 2** (Phataf/ziga#30), hors des étapes, à la demande du porteur : U+202F dans les montants, U+00A0 avant « FCFA » et entre les groupes d'un téléphone. Gotenberg rend U+202F sans carré vide dans les quatre familles de polices ; les polices standard de pdf-lib ne l'ont pas : les PDF de pdf-lib reçoivent U+00A0 (`formatFcfaForPdf`).
+- **Case « Le Propriétaire »** dans le tableau des signatures quand son mandat ne donne pas le pouvoir de signer, et une case de paraphe par partie : ajoutées avec la correction a.
+- **Aides des tests de bout en bout** des lots 08 et 08 bis regroupées dans `apps/web/e2e/agency.ts`.
+
+### Dette technique
+- **Aperçu PDF sur téléphone** : un `iframe`, avec « Ouvrir le PDF dans un nouvel onglet » pour les navigateurs qui n'affichent pas un PDF en ligne.
+- **Rappel de légalisation** : affiché comme alerte, sans notification (les relances viennent au lot 10).
+- **Service PowerSync de test sans Docker** : installé hors du dépôt pour chaque nouveau conteneur (`docs/SYNC.md`).
+
+### Questions ouvertes pour le porteur
+1. **Juriste** : relecture du modèle par défaut (bail et avenant), dont les articles cités, le préavis du bailleur et la case du propriétaire signataire.
+2. **Agence pilote** : date de mise en place de son modèle Word, pour vérifier le critère des 2 minutes sur le modèle réel.
