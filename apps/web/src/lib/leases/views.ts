@@ -9,6 +9,7 @@ import {
 	depositBalances,
 	leaseAlerts,
 	rentDueBalance,
+	rentDueOverdueFrom,
 	rentDueStatus,
 	unitOccupancy,
 	type DepositAccountView,
@@ -20,6 +21,7 @@ import {
 	type TenantIdentity,
 	type TenantView
 } from '@ziga/shared/leases';
+import { isIsoDate } from '@ziga/shared/dates';
 import type { Occupancy } from '@ziga/shared/properties';
 import { generateRentSchedule, scheduleUntil, type RentDueDraft } from '@ziga/shared/rent-schedule';
 import { normalize } from '../owners/views';
@@ -109,12 +111,22 @@ export function toLease(r: Row, hasSignedContract = false): LeaseView {
 	};
 }
 
-/** Échéance : le statut affiché est celui du jour (même règle que la tâche de nuit), le solde se calcule. */
+/**
+ * Échéance : le statut affiché est celui du jour (même règle que la tâche de nuit, dont l'avance en retard seulement à
+ * partir du début du bail quand la requête joint `lease_starts_on`), le solde se calcule.
+ */
 export function toRentDue(r: Row, today: string): RentDueView {
+	const dueOn = String(r.due_on ?? '');
+	const leaseStartsOn = str(r.lease_starts_on);
+	const periodStart = String(r.period_start ?? '');
 	const d = {
-		dueOn: String(r.due_on ?? ''),
+		dueOn,
 		amountDue: int(r.amount_due) ?? 0,
-		amountPaid: int(r.amount_paid) ?? 0
+		amountPaid: int(r.amount_paid) ?? 0,
+		overdueFrom:
+			leaseStartsOn && isIsoDate(dueOn) && isIsoDate(leaseStartsOn)
+				? rentDueOverdueFrom({ dueOn, periodStart, isAdvance: bool(r.is_advance), prorated: bool(r.prorated) }, leaseStartsOn)
+				: null
 	};
 	const stored = (str(r.status) ?? 'upcoming') as RentDueView['status'];
 	return {

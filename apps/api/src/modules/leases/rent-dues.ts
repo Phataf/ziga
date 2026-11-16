@@ -6,11 +6,11 @@
  * - Génération : la même fonction pure que l'aperçu de l'appareil (packages/shared, generateRentSchedule), puis
  *   `INSERT … ON CONFLICT (organization_id, lease_id, period_start) DO NOTHING` : un rejeu, une double
  *   synchronisation ou la tâche de nuit ne créent jamais de doublon.
- * - Statut : `rentDueStatus` (à venir, due à sa date, en retard le lendemain) ; seules les échéances non soldées
- *   avancent.
+ * - Statut : `rentDueStatus` (à venir, due à sa date, en retard le lendemain ; une somme due à la signature n'est en
+ *   retard qu'à partir du début du bail, `rentDueOverdueFrom`) ; seules les échéances non soldées avancent.
  */
 import { newId } from '@ziga/shared/ids';
-import { leaseOccupancySignal, rentDueStatus, type LeaseStatus } from '@ziga/shared/leases';
+import { leaseOccupancySignal, rentDueOverdueFrom, rentDueStatus, type LeaseStatus } from '@ziga/shared/leases';
 import type { OccupancySignal } from '@ziga/shared/properties';
 import { generateRentSchedule, scheduleUntil, type RentDueDraft, type RentRate, type RentScheduleInput } from '@ziga/shared/rent-schedule';
 import { and, asc, eq, inArray, lte } from 'drizzle-orm';
@@ -84,7 +84,10 @@ export async function insertMissingDues(tx: Tx, lease: LeaseRow, today: string):
 				charges: d.charges,
 				amountDue: d.amountDue,
 				amountPaid: 0,
-				status: rentDueStatus({ dueOn: d.dueOn, amountDue: d.amountDue, amountPaid: 0 }, today),
+				status: rentDueStatus(
+					{ dueOn: d.dueOn, amountDue: d.amountDue, amountPaid: 0, overdueFrom: rentDueOverdueFrom(d, lease.startsOn) },
+					today
+				),
 				prorated: d.prorated,
 				isAdvance: d.isAdvance,
 				leaseVersion: d.leaseVersion
@@ -126,8 +129,8 @@ export async function generateDues(
 }
 
 /**
- * Fait avancer le statut des échéances non soldées au jour `today` (due à sa date, en retard le lendemain). Une ligne
- * d'audit par échéance qui change. `leaseIds` : seulement ces baux ; sinon toute l'organisation.
+ * Fait avancer le statut des échéances non soldées au jour `today` (due à sa date, en retard le lendemain ; une somme
+ * due à la signature, en retard à partir du début du bail). Une ligne d'audit par échéance qui change. `leaseIds` : seulement ces baux ; sinon toute l'organisation.
  */
 export async function refreshDueStatuses(
 	tx: Tx,
@@ -140,8 +143,9 @@ export async function refreshDueStatuses(
 ): Promise<number> {
 	if (leaseIds && !leaseIds.length) return 0;
 	const rows = await tx
-		.select()
+		.select({ due: rentDues, leaseStartsOn: leases.startsOn })
 		.from(rentDues)
+		.innerJoin(leases, and(eq(leases.organizationId, rentDues.organizationId), eq(leases.id, rentDues.leaseId)))
 		.where(
 			and(
 				eq(rentDues.organizationId, organizationId),
@@ -151,10 +155,10 @@ export async function refreshDueStatuses(
 			)
 		)
 		.orderBy(asc(rentDues.id))
-		.for('update');
+		.for('update', { of: rentDues });
 	let changed = 0;
-	for (const row of rows) {
-		const next = rentDueStatus(row, today);
+	for (const { due: row, leaseStartsOn } of rows) {
+		const next = rentDueStatus({ ...row, overdueFrom: rentDueOverdueFrom(row, leaseStartsOn) }, today);
 		if (next === row.status) continue;
 		await tx
 			.update(rentDues)

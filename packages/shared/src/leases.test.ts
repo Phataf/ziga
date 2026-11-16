@@ -20,6 +20,7 @@ import {
 	LEGAL_LEASE_DEFAULTS,
 	outstandingBalance,
 	rentChangeSchema,
+	rentDueOverdueFrom,
 	rentDueStatus,
 	tenantIdentitySchema,
 	unitOccupancy,
@@ -159,6 +160,43 @@ describe('statut d’une échéance', () => {
 		expect(rentDueStatus({ ...due, amountPaid: 80_000 }, '2027-06-01')).toBe('paid');
 		expect(rentDueStatus({ ...due, waived: true }, '2027-06-01')).toBe('waived');
 	});
+	it('avance due à la signature : exigible dès la signature, en retard seulement à partir du début du bail (lot 09)', () => {
+		// Bail signé le 10/12/2026, début le 01/01/2027 : deux mois d'avance dus à la signature.
+		const startsOn = '2027-01-01';
+		const advance = { dueOn: '2026-12-10', periodStart: '2027-01-01', isAdvance: true, prorated: false };
+		const overdueFrom = rentDueOverdueFrom(advance, startsOn);
+		expect(overdueFrom).toBe('2027-01-01');
+		const d = { dueOn: advance.dueOn, amountDue: 80_000, amountPaid: 0, overdueFrom };
+		expect(rentDueStatus(d, '2026-12-09')).toBe('upcoming');
+		expect(rentDueStatus(d, '2026-12-10')).toBe('due');
+		expect(rentDueStatus(d, '2026-12-11')).toBe('due');
+		expect(rentDueStatus(d, '2026-12-31')).toBe('due');
+		expect(rentDueStatus(d, '2027-01-01')).toBe('overdue');
+		expect(rentDueStatus({ ...d, amountPaid: 30_000 }, '2026-12-20')).toBe('partial');
+		expect(rentDueStatus({ ...d, amountPaid: 80_000 }, '2027-01-01')).toBe('paid');
+		// Exigible : compté dans le solde dès la signature.
+		expect(outstandingBalance([d], '2026-12-11')).toBe(80_000);
+		expect(outstandingBalance([d], '2026-12-09')).toBe(0);
+	});
+	it('premier mois incomplet dû à la signature : même règle ; bail signé le jour du début : en retard le lendemain', () => {
+		const prorata = { dueOn: '2026-12-10', periodStart: '2026-12-15', isAdvance: false, prorated: true };
+		expect(rentDueOverdueFrom(prorata, '2026-12-15')).toBe('2026-12-15');
+		expect(rentDueOverdueFrom({ ...prorata, dueOn: '2027-01-01', periodStart: '2027-01-01', isAdvance: true }, '2027-01-01')).toBe(
+			'2027-01-02'
+		);
+		// Bail repris en cours (signature après le début) : le lendemain de la date d'échéance.
+		expect(rentDueOverdueFrom({ ...prorata, dueOn: '2027-03-01', periodStart: '2027-03-01', isAdvance: true }, '2027-01-01')).toBe(
+			'2027-03-02'
+		);
+	});
+	it('échéances ordinaires et dernier mois au prorata : en retard le lendemain, sans changement', () => {
+		expect(rentDueOverdueFrom({ dueOn: '2027-02-05', periodStart: '2027-02-01', isAdvance: false, prorated: false }, '2027-01-01')).toBe(
+			'2027-02-06'
+		);
+		expect(rentDueOverdueFrom({ dueOn: '2027-06-05', periodStart: '2027-06-01', isAdvance: false, prorated: true }, '2027-01-01')).toBe(
+			'2027-06-06'
+		);
+	});
 	it('solde du locataire : seulement ce qui est exigible', () => {
 		const dues = [
 			{ dueOn: '2026-10-05', amountDue: 80_000, amountPaid: 80_000 },
@@ -171,6 +209,36 @@ describe('statut d’une échéance', () => {
 });
 
 describe('compte de caution', () => {
+	it('versement annulé (lot 09) : contre-écriture qui retire le reçu, jamais sous les sorties déjà faites (règle 14)', () => {
+		const account = { agreedAmount: 150_000, status: 'held' as const };
+		const b = depositBalances(150_000, [
+			{ type: 'received', amount: 100_000 },
+			{ type: 'received', amount: 50_000 },
+			{ type: 'received_cancelled', amount: 50_000 }
+		]);
+		expect(b).toMatchObject({ received: 100_000, outflows: 0, held: 100_000, remainingDue: 50_000 });
+		expect(depositAccountStatus(150_000, b)).toBe('partially_received');
+		// Le versement annulé peut être versé de nouveau.
+		expect(depositMovementBlocker(account, b, { type: 'received', amount: 50_000 })).toBeNull();
+		const withOutflow = depositBalances(150_000, [
+			{ type: 'received', amount: 100_000 },
+			{ type: 'received', amount: 50_000 },
+			{ type: 'refunded', amount: 120_000 }
+		]);
+		expect(depositMovementBlocker(account, withOutflow, { type: 'received_cancelled', amount: 50_000 })).toBe(
+			'DEPOSIT_CANCELLATION_BELOW_OUTFLOWS'
+		);
+		expect(depositMovementBlocker(account, withOutflow, { type: 'received_cancelled', amount: 30_000 })).toBeNull();
+		expect(
+			depositAccountStatus(
+				100_000,
+				depositBalances(100_000, [
+					{ type: 'received', amount: 100_000 },
+					{ type: 'received_cancelled', amount: 100_000 }
+				])
+			)
+		).toBe('pending');
+	});
 	it('versements partiels : reçu, détenu et reste dû justes ; statut déduit', () => {
 		const b1 = depositBalances(150_000, [{ type: 'received', amount: 50_000 }]);
 		expect(b1).toMatchObject({ received: 50_000, held: 50_000, remainingDue: 100_000 });

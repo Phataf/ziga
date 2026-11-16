@@ -85,6 +85,23 @@ describe('vues locales des baux (lot 08)', () => {
 		expect(toRentDue({ id: 'd', due_on: '2026-11-05', amount_due: 80000, amount_paid: 0, status: 'waived' }, TODAY).status).toBe('waived');
 	});
 
+	it('avance due à la signature : due jusqu’au début du bail, puis en retard (lot 09, même règle que le serveur)', () => {
+		const advance = {
+			id: 'd',
+			due_on: '2026-11-10',
+			period_start: '2026-12-01',
+			is_advance: 1,
+			prorated: 0,
+			amount_due: 80000,
+			amount_paid: 0,
+			status: 'due'
+		};
+		expect(toRentDue({ ...advance, lease_starts_on: '2026-12-01' }, TODAY).status).toBe('due');
+		expect(toRentDue({ ...advance, lease_starts_on: '2026-12-01' }, '2026-12-01').status).toBe('overdue');
+		// Sans la date de début jointe : la règle ordinaire.
+		expect(toRentDue(advance, TODAY).status).toBe('overdue');
+	});
+
 	it('compte de caution : soldes, plafond, détenteur suivi par le mouvement en attente', () => {
 		const movements = [
 			toMovement({ id: 'm1', account_id: 'a1', type: 'received', amount: 100000, occurred_on: TODAY }),

@@ -40,6 +40,7 @@ import {
 	type CreateTenantData,
 	type DepositAccountView,
 	type DepositHolderChangeData,
+	type DepositMovementBlocker,
 	type DepositMovementView,
 	type DepositReceiptData,
 	type LeaseCreationBlocker,
@@ -1106,8 +1107,9 @@ export class LeasesService {
 			const messages = {
 				DEPOSIT_OVERPAID: 'Ce versement dépasse le montant convenu de la caution.',
 				DEPOSIT_OUTFLOW_EXCEEDS_RECEIVED: 'Les sorties ne dépassent jamais la caution reçue.',
-				DEPOSIT_ACCOUNT_CLOSED: 'Ce compte de caution est soldé.'
-			} as const;
+				DEPOSIT_ACCOUNT_CLOSED: 'Ce compte de caution est soldé.',
+				DEPOSIT_CANCELLATION_BELOW_OUTFLOWS: 'Annuler ce versement ferait passer la caution reçue sous les sorties déjà faites.'
+			} as const satisfies Record<DepositMovementBlocker, string>;
 			throw new AppError(blocker, messages[blocker], 409);
 		}
 		await this.insertMovement(c, {

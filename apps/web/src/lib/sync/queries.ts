@@ -62,9 +62,9 @@ export const LOCAL_QUERIES = {
 	unitLeases: `SELECT * FROM leases WHERE organization_id = ? AND unit_id = ? ORDER BY starts_on DESC, id DESC`,
 	tenantLeases: `SELECT * FROM leases WHERE organization_id = ? AND tenant_id = ? ORDER BY starts_on DESC, id DESC`,
 	leaseVersions: `SELECT * FROM lease_versions WHERE organization_id = ? AND lease_id = ? ORDER BY version DESC`,
-	leaseDues: `SELECT * FROM rent_dues WHERE organization_id = ? AND lease_id = ? ORDER BY period_start, id`,
+	leaseDues: `SELECT d.*, l.starts_on AS lease_starts_on FROM rent_dues d JOIN leases l ON l.id = d.lease_id AND l.organization_id = d.organization_id WHERE d.organization_id = ? AND d.lease_id = ? ORDER BY d.period_start, d.id`,
 	/** Échéances des baux d'un locataire (reste à payer de sa fiche). */
-	tenantDues: `SELECT d.* FROM rent_dues d JOIN leases l ON l.id = d.lease_id WHERE d.organization_id = ? AND l.tenant_id = ?`,
+	tenantDues: `SELECT d.*, l.starts_on AS lease_starts_on FROM rent_dues d JOIN leases l ON l.id = d.lease_id AND l.organization_id = d.organization_id WHERE d.organization_id = ? AND l.tenant_id = ?`,
 	/** Échéances de toute l'organisation : encours des locataires (liste). */
 	dues: `SELECT lease_id, due_on, amount_due, amount_paid, status FROM rent_dues WHERE organization_id = ?`,
 	leaseDeposits: `SELECT * FROM deposit_accounts WHERE organization_id = ? AND lease_id = ? ORDER BY type, id`,

@@ -10,7 +10,7 @@
  *   hors charges, caution seulement), avertissement et audit, sans blocage. L'avance n'est pas une caution.
  */
 import { z } from 'zod';
-import { isIsoDate } from './dates.js';
+import { addDays, isIsoDate } from './dates.js';
 import { idSchema } from './ids.js';
 import { fcfaSchema, type Fcfa } from './money.js';
 import { ID_DOCUMENT_TYPES } from './organizations.js';
@@ -159,19 +159,41 @@ export interface RentDueForStatus {
 	amountDue: Fcfa;
 	amountPaid: Fcfa;
 	waived?: boolean;
+	/**
+	 * Premier jour où l'échéance peut être en retard, si ce n'est pas le lendemain de `dueOn` : les sommes dues à la
+	 * signature (avance, premier mois incomplet) ne sont en retard qu'à partir du début du bail (réponse du porteur au
+	 * lot 09). Voir `rentDueOverdueFrom`.
+	 */
+	overdueFrom?: string | null;
 }
 
 /**
- * Statut d'une échéance au jour `today` : à venir avant sa date, due à sa date, en retard dès le lendemain si elle
- * n'est pas soldée, payée en partie ou en entier selon les imputations (lot 09). Le serveur le stocke (tâche
- * quotidienne) ; l'appareil calcule le même pour l'affichage.
+ * Premier jour de retard possible d'une échéance. Une échéance ordinaire est en retard le lendemain de sa date. Une
+ * somme due à la signature (avance, ou premier mois incomplet en `calendar_prorata`) est exigible dès la signature,
+ * mais n'est en retard qu'à partir de la date de début du bail, et jamais avant le lendemain de sa date (réponse du
+ * porteur au lot 09, qui remplace la règle du lot 08 : « en retard le lendemain de la signature »).
+ */
+export function rentDueOverdueFrom(
+	due: { dueOn: string; periodStart: string; isAdvance: boolean; prorated: boolean },
+	leaseStartsOn: string
+): string {
+	const dayAfter = addDays(due.dueOn, 1);
+	const dueAtSignature = due.isAdvance || (due.prorated && due.periodStart === leaseStartsOn);
+	return dueAtSignature && leaseStartsOn > dayAfter ? leaseStartsOn : dayAfter;
+}
+
+/**
+ * Statut d'une échéance au jour `today` : à venir avant sa date, due à sa date (et, pour une somme due à la
+ * signature, jusqu'au début du bail), en retard ensuite si elle n'est pas soldée, payée en partie ou en entier selon
+ * les imputations (lot 09). Le serveur le stocke (tâche quotidienne, imputations) ; l'appareil calcule le même pour
+ * l'affichage.
  */
 export function rentDueStatus(due: RentDueForStatus, today: string): RentDueStatus {
 	if (due.waived) return 'waived';
 	if (due.amountPaid >= due.amountDue) return 'paid';
-	if (today > due.dueOn) return 'overdue';
+	if (due.overdueFrom ? today >= due.overdueFrom : today > due.dueOn) return 'overdue';
 	if (due.amountPaid > 0) return 'partial';
-	return today === due.dueOn ? 'due' : 'upcoming';
+	return today >= due.dueOn ? 'due' : 'upcoming';
 }
 
 /** Reste à payer d'une échéance. */
@@ -200,9 +222,14 @@ export type DepositHolder = (typeof DEPOSIT_HOLDERS)[number];
 export const DEPOSIT_ACCOUNT_STATUSES = ['pending', 'partially_received', 'held', 'settling', 'closed'] as const;
 export type DepositAccountStatus = (typeof DEPOSIT_ACCOUNT_STATUSES)[number];
 
-/** Au lot 08, seuls `received` et `holder_changed` sont créés ; les autres types servent au lot 10 bis. */
+/**
+ * Au lot 08, seuls `received` et `holder_changed` sont créés ; au lot 09, `received` naît d'un encaissement (avec son
+ * reçu) et `received_cancelled` est sa contre-écriture quand l'encaissement est annulé ; les autres types servent au
+ * lot 10 bis.
+ */
 export const DEPOSIT_MOVEMENT_TYPES = [
 	'received',
+	'received_cancelled',
 	'retained',
 	'applied_to_rent',
 	'refunded',
@@ -237,6 +264,8 @@ export function depositBalances(agreedAmount: Fcfa, movements: readonly DepositM
 	let claimed = 0;
 	for (const m of movements) {
 		if (m.type === 'received') received += m.amount;
+		// Contre-écriture d'un versement dont l'encaissement est annulé (lot 09) : jamais une sortie d'argent.
+		else if (m.type === 'received_cancelled') received -= m.amount;
 		else if ((DEPOSIT_OUTFLOW_TYPES as readonly string[]).includes(m.type)) outflows += m.amount;
 		else if (m.type === 'additional_claimed') claimed += m.amount;
 	}
@@ -257,7 +286,8 @@ export function depositAccountStatus(
 	return balances.received < agreedAmount ? 'partially_received' : 'held';
 }
 
-export type DepositMovementBlocker = 'DEPOSIT_OVERPAID' | 'DEPOSIT_OUTFLOW_EXCEEDS_RECEIVED' | 'DEPOSIT_ACCOUNT_CLOSED';
+export type DepositMovementBlocker =
+	'DEPOSIT_OVERPAID' | 'DEPOSIT_OUTFLOW_EXCEEDS_RECEIVED' | 'DEPOSIT_ACCOUNT_CLOSED' | 'DEPOSIT_CANCELLATION_BELOW_OUTFLOWS';
 
 /** Contrôle d'un nouveau mouvement, avant la barrière de la base. */
 export function depositMovementBlocker(
@@ -269,6 +299,10 @@ export function depositMovementBlocker(
 	if (movement.type === 'received' && balances.received + movement.amount > account.agreedAmount) return 'DEPOSIT_OVERPAID';
 	if ((DEPOSIT_OUTFLOW_TYPES as readonly string[]).includes(movement.type) && balances.outflows + movement.amount > balances.received) {
 		return 'DEPOSIT_OUTFLOW_EXCEEDS_RECEIVED';
+	}
+	// Annuler un versement ne fait jamais passer le reçu sous les sorties déjà faites (règle 14, réponse du porteur).
+	if (movement.type === 'received_cancelled' && balances.received - movement.amount < balances.outflows) {
+		return 'DEPOSIT_CANCELLATION_BELOW_OUTFLOWS';
 	}
 	return null;
 }
