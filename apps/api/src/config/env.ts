@@ -106,6 +106,14 @@ export const envSchema = z
 		GOTENBERG_PASSWORD: optional(z.string().min(1)),
 		GOTENBERG_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(300_000).default(60_000),
 
+		/**
+		 * Lot 09 : adresse publique du web, pour le lien du QR code d'un reçu (/r/<jeton>). Sans elle, la première origine
+		 * de CORS_ORIGINS.
+		 */
+		WEB_PUBLIC_URL: optional(z.url()),
+		/** Pages publiques des reçus (vérification, lien partagé) : demandes par adresse IP et par minute. */
+		RECEIPT_PUBLIC_RATE_PER_MINUTE: z.coerce.number().int().min(1).default(30),
+
 		SENTRY_DSN: z.union([z.url(), z.literal('')]).default(''),
 		SENTRY_ENVIRONMENT: z.string().default('development'),
 

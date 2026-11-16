@@ -83,3 +83,15 @@ export interface TemplatePreviewJobData {
 	userId: string;
 	templateId: string;
 }
+
+/**
+ * Reçus (lot 09) : PDF A6 et ticket d'un reçu émis (pdf-lib, QR code de vérification), régénérés avec « ANNULÉ » à
+ * l'annulation. Chaque génération écrit de nouveaux fichiers : un PDF n'est jamais écrasé.
+ */
+export const RECEIPTS_QUEUE = 'receipts';
+export const RECEIPT_PDF_JOB = 'pdf';
+
+export interface ReceiptPdfJobData {
+	organizationId: string;
+	receiptId: string;
+}

@@ -26,7 +26,20 @@ export const syncOperationSchema = z.object({
 	 * modifiées, jamais `organization_id`. Le serveur ne la croit pas sur parole : membre actif exigé, puis la ligne est
 	 * cherchée sous la RLS de cette organisation (une organisation forgée ne mène qu'à un refus).
 	 */
-	organizationId: z.string().max(64).nullish()
+	organizationId: z.string().max(64).nullish(),
+	/**
+	 * Lot 09 : reçu créé avec un encaissement sur l'appareil (table locale `receipt_drafts`, jamais synchronisée),
+	 * joint par le connecteur au PUT de `payments`. Les jetons n'existent que sur l'appareil qui les a créés et dans
+	 * cette opération : la base n'en garde que l'empreinte (réponse du porteur, point 5).
+	 */
+	receipt: z
+		.object({
+			id: z.string().max(64),
+			provisionalNumber: z.string().max(20),
+			verificationToken: z.string().max(128),
+			shareToken: z.string().max(128)
+		})
+		.nullish()
 });
 export type SyncOperation = z.output<typeof syncOperationSchema>;
 

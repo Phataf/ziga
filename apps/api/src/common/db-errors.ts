@@ -41,7 +41,48 @@ const RULES: Record<string, { status: number; message: string }> = {
 	DEPOSIT_OUTFLOW_EXCEEDS_RECEIVED: { status: 409, message: 'Les sorties ne dépassent jamais la caution reçue.' },
 	DEPOSIT_ACCOUNT_CLOSED: { status: 409, message: 'Ce compte de caution est soldé.' },
 	DEPOSIT_HOLDER_MISMATCH: { status: 409, message: 'Le détenteur a changé entre-temps : rechargez le compte de caution.' },
-	APPEND_ONLY: { status: 409, message: 'Cet enregistrement est en ajout seul.' }
+	APPEND_ONLY: { status: 409, message: 'Cet enregistrement est en ajout seul.' },
+	// Lot 09 : encaissements, imputations, reçus (migration 0015).
+	PAYMENT_LEASE_NOT_VALIDATED: { status: 409, message: 'On n’encaisse que sur un bail signé, en vigueur ou terminé.' },
+	PAYMENT_DEPOSIT_ACCOUNT_LEASE: { status: 409, message: 'Le compte de caution appartient à un autre bail.' },
+	PAYMENT_INITIAL_STATUS: { status: 409, message: 'Ce statut ne se choisit pas à la saisie : il est décidé par le serveur.' },
+	PAYMENT_CONFIRMED_BY: { status: 409, message: 'Une validation a son auteur et sa date.' },
+	PAYMENT_REVERSAL_INVALID: { status: 409, message: 'Une contre-écriture compense un encaissement confirmé puis annulé, à l’identique.' },
+	PAYMENT_AMOUNT_IMMUTABLE: { status: 409, message: 'Le montant d’un encaissement ne change jamais : corrigez par une annulation.' },
+	PAYMENT_IMMUTABLE: { status: 409, message: 'Un encaissement enregistré ne se modifie pas.' },
+	PAYMENT_TRANSITION_FORBIDDEN: { status: 409, message: 'Ce changement de statut n’est pas permis.' },
+	PAYMENT_ALLOCATION_MISMATCH: { status: 409, message: 'Les imputations ne correspondent pas au montant de l’encaissement.' },
+	ALLOCATION_ON_REVERSAL: { status: 409, message: 'Une contre-écriture n’est jamais imputée.' },
+	ALLOCATION_LEASE: { status: 409, message: 'Une imputation reste sur le bail de son encaissement.' },
+	ALLOCATION_NOT_CONFIRMED: { status: 409, message: 'Seul un encaissement confirmé est imputé.' },
+	ALLOCATION_PURPOSE: { status: 409, message: 'Un loyer s’impute sur les échéances, une caution sur son compte.' },
+	ALLOCATION_DUE_WAIVED: { status: 409, message: 'Une échéance abandonnée ne reçoit rien.' },
+	ALLOCATION_NEGATIVE: { status: 409, message: 'On ne contrepasse pas plus que ce qui a été imputé.' },
+	RENT_DUE_PAID_BY_ALLOCATIONS: { status: 409, message: 'Le montant payé d’une échéance vient de ses imputations.' },
+	DEPOSIT_CANCELLATION_BELOW_OUTFLOWS: {
+		status: 409,
+		message: 'Annuler ce versement ferait passer la caution reçue sous les sorties déjà faites (règle 14).'
+	},
+	DEPOSIT_CANCELLATION_UNMATCHED: { status: 409, message: 'On n’annule que ce que cet encaissement a versé.' },
+	RECEIPT_PAYMENT_NOT_FOUND: { status: 404, message: 'Encaissement introuvable.' },
+	RECEIPT_ON_REVERSAL: { status: 409, message: 'Une contre-écriture n’a pas de reçu.' },
+	RECEIPT_NUMBER_BY_SERVER: { status: 409, message: 'Le numéro d’un reçu est attribué par le serveur, à la validation.' },
+	RECEIPT_IMMUTABLE: { status: 409, message: 'Un reçu émis ne change plus.' },
+	RECEIPT_TRANSITION_FORBIDDEN: { status: 409, message: 'Ce changement de statut du reçu n’est pas permis.' },
+	RECEIPT_CANCELLED_WITH_PAYMENT: { status: 409, message: 'Un reçu s’annule avec son encaissement.' },
+	RECEIPT_PAYMENT_NOT_CONFIRMED: { status: 409, message: 'Un reçu n’est numéroté qu’à la confirmation de son encaissement.' },
+	RECEIPT_SNAPSHOT_REQUIRED: { status: 409, message: 'Un reçu émis porte sa date et sa copie figée.' },
+	RECEIPT_PREFIX_MISSING: { status: 409, message: 'Le préfixe des reçus n’est pas réglé.' },
+	RECEIPT_PREFIX_LOCKED: {
+		status: 409,
+		message: 'Le préfixe des reçus est figé depuis le premier reçu ; seul le support de la plateforme peut le changer.'
+	},
+	RECEIPT_PREFIX_REQUIRED: { status: 409, message: 'Un préfixe de reçu ne s’efface pas.' },
+	RECEIPT_NUMBERING_STARTED: { status: 409, message: 'La date du premier reçu ne change pas.' },
+	RECEIPT_FIRST_NUMBER_LOCKED: { status: 409, message: 'Un reçu a déjà été émis : le premier numéro ne se fixe plus.' },
+	RECEIPT_FIRST_NUMBER_ALREADY_SET: { status: 409, message: 'Le premier numéro a déjà été fixé ; il ne se fixe qu’une fois.' },
+	RECEIPT_FIRST_NUMBER_INVALID: { status: 400, message: 'Le premier numéro vaut 1 au moins.' },
+	RECEIPT_TOKEN_REVOKED: { status: 409, message: 'Ce lien est déjà révoqué.' }
 };
 
 /** Contraintes nommées traduites en refus métier (le reste : CONFLICT). */
@@ -72,7 +113,15 @@ const CONSTRAINTS: Record<string, { code: string; status: number; message: strin
 		code: 'DEPOSIT_ACCOUNT_EXISTS',
 		status: 409,
 		message: 'Ce bail a déjà un compte pour ce dépôt.'
-	}
+	},
+	// Lot 09, point b du porteur : la base tranche en dernier ressort (deux appareils hors ligne, deux envois simultanés).
+	payments_mobile_money_reference: {
+		code: 'MOBILE_MONEY_REFERENCE_DUPLICATE',
+		status: 409,
+		message: 'Cette référence Mobile Money est déjà enregistrée chez cet opérateur. Vérifiez la transaction.'
+	},
+	payments_reversed_once: { code: 'PAYMENT_ALREADY_CANCELLED', status: 409, message: 'Cet encaissement est déjà annulé.' },
+	receipts_one_per_payment: { code: 'RECEIPT_EXISTS', status: 409, message: 'Cet encaissement a déjà son reçu.' }
 };
 
 /** Clés étrangères composites : la ligne visée n'existe pas dans l'organisation (règle 1). */
@@ -82,7 +131,10 @@ const FOREIGN_KEYS: Record<string, { code: string; message: string }> = {
 	leases_unit_fk: { code: 'UNIT_NOT_FOUND', message: 'Unité introuvable.' },
 	leases_tenant_fk: { code: 'TENANT_NOT_FOUND', message: 'Locataire introuvable.' },
 	deposit_accounts_lease_fk: { code: 'LEASE_NOT_FOUND', message: 'Bail introuvable.' },
-	deposit_movements_account_fk: { code: 'DEPOSIT_ACCOUNT_NOT_FOUND', message: 'Compte de caution introuvable.' }
+	deposit_movements_account_fk: { code: 'DEPOSIT_ACCOUNT_NOT_FOUND', message: 'Compte de caution introuvable.' },
+	payments_lease_fk: { code: 'LEASE_NOT_FOUND', message: 'Bail introuvable.' },
+	payments_deposit_account_fk: { code: 'DEPOSIT_ACCOUNT_NOT_FOUND', message: 'Compte de caution introuvable.' },
+	payment_allocations_due_fk: { code: 'RENT_DUE_NOT_FOUND', message: 'Échéance introuvable.' }
 };
 
 interface PgLike {

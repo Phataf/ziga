@@ -19,6 +19,8 @@ import { OwnersModule } from './modules/owners/owners.module.js';
 import { PropertiesModule } from './modules/properties/properties.module.js';
 import { DocumentsModule } from './modules/documents/documents.module.js';
 import { LeasesModule } from './modules/leases/leases.module.js';
+import { LeaseEventsModule } from './modules/leases/rent-due-events.js';
+import { PaymentsModule } from './modules/payments/payments.module.js';
 import { NotificationsModule } from './modules/notifications/notifications.module.js';
 import { RedisModule } from './redis/redis.module.js';
 import { StorageModule } from './storage/storage.module.js';
@@ -45,7 +47,9 @@ export class AppModule {
 				OwnersModule,
 				PropertiesModule,
 				DocumentsModule,
+				LeaseEventsModule,
 				LeasesModule,
+				PaymentsModule,
 				AdminModule,
 				SyncModule,
 				...extraModules,
