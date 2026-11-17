@@ -10,8 +10,10 @@ import type pg from 'pg';
 export type PaymentMethodSql = 'cash' | 'mobile_money_manual' | 'bank_transfer' | 'mobile_money_direct';
 
 export interface PaymentExtra {
-	purpose?: 'rent' | 'deposit';
+	purpose?: 'rent' | 'deposit' | 'expense';
 	depositAccountId?: string | null;
+	/** Lot 10 : dépense réclamée au locataire (objet `expense`). */
+	expenseId?: string | null;
 	amount?: number;
 	method?: PaymentMethodSql;
 	status?: string;
@@ -30,8 +32,8 @@ export async function insertPayment(c: pg.Client, organizationId: string, leaseI
 	const isMobile = method === 'mobile_money_manual' || method === 'mobile_money_direct';
 	await c.query(
 		`insert into payments (id, organization_id, lease_id, purpose, deposit_account_id, amount, method, operator, transaction_reference,
-			paid_on, status, idempotency_key, confirmed_at, confirmed_by)
-		 values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+			paid_on, status, idempotency_key, confirmed_at, confirmed_by, expense_id)
+		 values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
 		[
 			id,
 			organizationId,
@@ -46,16 +48,18 @@ export async function insertPayment(c: pg.Client, organizationId: string, leaseI
 			status,
 			`test:${id}`,
 			status === 'confirmed' ? new Date().toISOString() : null,
-			status === 'confirmed' ? (extra.confirmedBy ?? null) : null
+			status === 'confirmed' ? (extra.confirmedBy ?? null) : null,
+			extra.expenseId ?? null
 		]
 	);
 	return id;
 }
 
 export interface AllocationSql {
-	target: 'rent_due' | 'deposit_account' | 'credit';
+	target: 'rent_due' | 'deposit_account' | 'credit' | 'expense';
 	rentDueId?: string;
 	depositAccountId?: string;
+	expenseId?: string;
 	direction?: 'allocate' | 'reverse';
 	amount: number;
 }
@@ -69,8 +73,9 @@ export async function allocate(
 ): Promise<void> {
 	for (const l of lines) {
 		await c.query(
-			`insert into payment_allocations (id, organization_id, payment_id, lease_id, target, rent_due_id, deposit_account_id, direction, amount)
-			 values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+			`insert into payment_allocations (id, organization_id, payment_id, lease_id, target, rent_due_id, deposit_account_id, direction, amount,
+				expense_id)
+			 values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
 			[
 				newId(),
 				organizationId,
@@ -80,7 +85,8 @@ export async function allocate(
 				l.rentDueId ?? null,
 				l.depositAccountId ?? null,
 				l.direction ?? 'allocate',
-				l.amount
+				l.amount,
+				l.expenseId ?? null
 			]
 		);
 	}
@@ -113,8 +119,8 @@ export async function cancelPayment(
 	);
 	const p = (await c.query(`select * from payments where organization_id = $1 and id = $2`, [organizationId, paymentId])).rows[0];
 	const lines = await c.query(
-		`select target, rent_due_id, deposit_account_id, sum(case direction when 'allocate' then amount else -amount end)::bigint as net
-		 from payment_allocations where organization_id = $1 and payment_id = $2 group by 1, 2, 3`,
+		`select target, rent_due_id, deposit_account_id, expense_id, sum(case direction when 'allocate' then amount else -amount end)::bigint as net
+		 from payment_allocations where organization_id = $1 and payment_id = $2 group by 1, 2, 3, 4`,
 		[organizationId, paymentId]
 	);
 	await allocate(
@@ -128,6 +134,7 @@ export async function cancelPayment(
 				target: r.target,
 				rentDueId: r.rent_due_id ?? undefined,
 				depositAccountId: r.deposit_account_id ?? undefined,
+				expenseId: r.expense_id ?? undefined,
 				direction: 'reverse' as const,
 				amount: Number(r.net)
 			}))
@@ -136,8 +143,8 @@ export async function cancelPayment(
 		const reversal = newId();
 		await c.query(
 			`insert into payments (id, organization_id, kind, reverses_payment_id, lease_id, purpose, deposit_account_id, amount, method, operator,
-				transaction_reference, paid_on, status, idempotency_key, confirmed_at, confirmed_by)
-			 values ($1, $2, 'reversal', $3, $4, $5, $6, $7, $8, $9, $10, current_date, 'confirmed', $11, now(), $12)`,
+				transaction_reference, paid_on, status, idempotency_key, confirmed_at, confirmed_by, expense_id)
+			 values ($1, $2, 'reversal', $3, $4, $5, $6, $7, $8, $9, $10, current_date, 'confirmed', $11, now(), $12, $13)`,
 			[
 				reversal,
 				organizationId,
@@ -150,7 +157,8 @@ export async function cancelPayment(
 				p.operator,
 				p.transaction_reference,
 				`reversal:${paymentId}`,
-				userId
+				userId,
+				p.expense_id
 			]
 		);
 		return reversal;
