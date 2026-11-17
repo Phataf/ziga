@@ -51,7 +51,15 @@ const expected: Record<OrganizationRole, Action[]> = {
 		'payment.record_cash',
 		'payment.validate',
 		'receipt.share',
+		'reminder.read',
 		'reminder.send',
+		'reminder.record_visit',
+		'expense.read',
+		'expense.record',
+		'statement.read',
+		'statement.issue',
+		'statement.share',
+		'payout.record',
 		'listing.publish',
 		'lead.manage',
 		'visit.manage',
@@ -70,6 +78,8 @@ const expected: Record<OrganizationRole, Action[]> = {
 		'payment.read',
 		'payment.record_cash',
 		'receipt.share',
+		'reminder.read',
+		'reminder.record_visit',
 		'lead.manage',
 		'visit.manage',
 		'photo.upload'
@@ -85,6 +95,9 @@ const expected: Record<OrganizationRole, Action[]> = {
 		'lease.read',
 		'deposit.read',
 		'payment.read',
+		'reminder.read',
+		'expense.read',
+		'statement.read',
 		'export.csv'
 	]
 };

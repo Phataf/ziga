@@ -81,8 +81,21 @@ export const PERMISSIONS = {
 	'payment.cancel': [D],
 	'receipt.share': [D, M, F],
 	'receipt.settings': [D],
-	// Déclarées dès le lot 03 pour fixer le partage des rôles ; leurs endpoints viennent avec leur lot.
+	// Lot 10 : impayés, relances, dépenses, relevés et reversements. L'agent de terrain lit les impayés de ses unités et
+	// note ses visites et appels ; un message (WhatsApp, SMS) part de la direction ou de la gestion.
+	'reminder.read': [D, M, F, V],
 	'reminder.send': [D, M],
+	'reminder.record_visit': [D, M, F],
+	'reminder.templates': [D],
+	'expense.read': [D, M, V],
+	'expense.record': [D, M],
+	'expense.cancel': [D],
+	'statement.read': [D, M, V],
+	'statement.issue': [D, M],
+	'statement.share': [D, M],
+	'payout.record': [D, M],
+	'payout.cancel': [D],
+	// Déclarées dès le lot 03 pour fixer le partage des rôles ; leurs endpoints viennent avec leur lot.
 	'listing.publish': [D, M],
 	'lead.manage': [D, M, F],
 	'visit.manage': [D, M, F],

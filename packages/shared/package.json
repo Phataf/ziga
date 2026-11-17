@@ -103,6 +103,26 @@
 		"./receipts": {
 			"types": "./dist/receipts.d.ts",
 			"default": "./dist/receipts.js"
+		},
+		"./expenses": {
+			"types": "./dist/expenses.d.ts",
+			"default": "./dist/expenses.js"
+		},
+		"./statements": {
+			"types": "./dist/statements.d.ts",
+			"default": "./dist/statements.js"
+		},
+		"./reminders": {
+			"types": "./dist/reminders.d.ts",
+			"default": "./dist/reminders.js"
+		},
+		"./collections": {
+			"types": "./dist/collections.d.ts",
+			"default": "./dist/collections.js"
+		},
+		"./dashboard": {
+			"types": "./dist/dashboard.d.ts",
+			"default": "./dist/dashboard.js"
 		}
 	},
 	"files": [
