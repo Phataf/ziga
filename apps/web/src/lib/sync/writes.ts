@@ -7,7 +7,9 @@
 import type { PowerSyncDatabase } from '@powersync/web';
 import type { UpdateOrganizationOutput as OrganizationSettings } from '@ziga/shared/organizations';
 import { newId } from '@ziga/shared/ids';
+import type { ExpenseData } from '@ziga/shared/expenses';
 import type { PaymentEntryData } from '@ziga/shared/payments';
+import type { CreateReminderData } from '@ziga/shared/reminders';
 import { commissionColumns, type CreateMandateData, type MandateTerms, type OwnerData } from '@ziga/shared/owners';
 import type {
 	CreateDepositAccountData,
@@ -630,4 +632,49 @@ export async function saveReceiptTokens(
 /** Liens de partage révoqués : l'appareil oublie le sien (le QR code de vérification reste). */
 export async function forgetShareToken(db: PowerSyncDatabase, organizationId: string, paymentId: string): Promise<void> {
 	await db.execute(`UPDATE receipt_drafts SET share_token = '' WHERE organization_id = ? AND payment_id = ?`, [organizationId, paymentId]);
+}
+
+// ---------------------------------------------------------------- lot 10 : relances et dépenses
+
+/**
+ * Relance enregistrée sur l'appareil, hors ligne compris (au retour de WhatsApp, ou visite et appel de l'agent de
+ * terrain) : ajout seul ; échéances et dépenses visées en texte JSON, comme les tableaux synchronisés. La date d'envoi
+ * vient du serveur (vide sur l'appareil jusqu'à la synchronisation : l'écran la compte comme « à l'instant »). Le
+ * serveur vérifie la permission du canal et l'interrupteur du lien WhatsApp.
+ */
+export async function recordReminder(db: PowerSyncDatabase, organizationId: string, r: CreateReminderData): Promise<void> {
+	await db.writeTransaction((tx) =>
+		insert(tx, 'reminders', {
+			id: r.id,
+			organization_id: organizationId,
+			tenant_id: r.tenantId,
+			rent_due_ids: JSON.stringify(r.rentDueIds),
+			expense_ids: JSON.stringify(r.expenseIds),
+			channel: r.channel,
+			template_level: r.templateLevel,
+			note: r.note
+		})
+	);
+}
+
+/** Dépense enregistrée sur l'appareil, hors ligne compris : ajout seul ; l'annulation se fait en ligne (directeur). */
+export async function recordExpense(db: PowerSyncDatabase, organizationId: string, e: ExpenseData): Promise<void> {
+	await db.writeTransaction((tx) =>
+		insert(tx, 'expenses', {
+			id: e.id,
+			organization_id: organizationId,
+			property_id: e.propertyId,
+			unit_id: e.unitId,
+			lease_id: e.leaseId,
+			spent_on: e.spentOn,
+			category: e.category,
+			description: e.description,
+			supplier: e.supplier,
+			amount: e.amount,
+			document_id: e.documentId,
+			paid_by: e.paidBy,
+			borne_by: e.borneBy,
+			recovery: e.recovery
+		})
+	);
 }

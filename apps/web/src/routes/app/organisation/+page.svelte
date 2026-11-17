@@ -23,6 +23,8 @@
 	import PaymentMethodsSection from '#lib/components/org/PaymentMethodsSection.svelte';
 	import BillingModeSection from '#lib/components/org/BillingModeSection.svelte';
 	import ReceiptSettingsSection from '#lib/components/org/ReceiptSettingsSection.svelte';
+	import ReminderSettingsSection from '#lib/components/org/ReminderSettingsSection.svelte';
+	import FeatureGate from '#lib/components/FeatureGate.svelte';
 	import ReceiptHeader from '#lib/components/org/ReceiptHeader.svelte';
 	import SubscriptionSection from '#lib/components/org/SubscriptionSection.svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
@@ -375,6 +377,8 @@
 				<BillingModeSection bind:view {editable} />
 				<!-- Lot 09 : numérotation et format des reçus (directeur ; en ligne). -->
 				<ReceiptSettingsSection {editable} />
+				<!-- Lot 10 : modèles et seuils des relances WhatsApp (direction ; en ligne). -->
+				<FeatureGate key="collections.reminders_whatsapp_link"><ReminderSettingsSection {editable} /></FeatureGate>
 				<SubscriptionSection />
 			</div>
 			<FeaturesSection {editable} />

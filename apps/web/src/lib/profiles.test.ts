@@ -45,6 +45,8 @@ describe('navigation par profil (docs/UX.md §2)', () => {
 			'Impayés',
 			'Propriétaires',
 			'Locataires',
+			'Dépenses',
+			'Relevés propriétaires',
 			'Contrats',
 			'À valider',
 			'Équipe'
@@ -55,6 +57,25 @@ describe('navigation par profil (docs/UX.md §2)', () => {
 		const has = (id: keyof typeof profiles) => profiles[id].nav.some((i) => i.href === '/app/contrats');
 		expect([has('director'), has('manager'), has('landlord')]).toEqual([true, true, true]);
 		expect([has('viewer'), has('field_agent')]).toEqual([false, false]);
+	});
+
+	it('lot 10 : dépenses pour l’agence et le bailleur, relevés pour l’agence seule, rien pour l’agent', () => {
+		const has = (id: keyof typeof profiles, href: string) => profiles[id].nav.some((i) => i.href === href);
+		expect((['director', 'manager', 'viewer', 'landlord', 'field_agent'] as const).map((p) => has(p, '/app/depenses'))).toEqual([
+			true,
+			true,
+			true,
+			true,
+			false
+		]);
+		expect((['director', 'manager', 'viewer', 'landlord', 'field_agent'] as const).map((p) => has(p, '/app/releves'))).toEqual([
+			true,
+			true,
+			true,
+			false,
+			false
+		]);
+		expect(profiles.director.nav.find((i) => i.href === '/app/impayes')?.lot).toBeUndefined();
 	});
 
 	it('trouve l’entrée active par le plus long préfixe', () => {

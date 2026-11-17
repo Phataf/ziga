@@ -130,6 +130,39 @@ export const LOCAL_QUERIES = {
 	/** Reçus créés sur cet appareil (table locale) : jetons du QR code et du lien partagé. */
 	receiptDrafts: `SELECT * FROM receipt_drafts WHERE organization_id = ?`,
 	paymentDraft: `SELECT * FROM receipt_drafts WHERE organization_id = ? AND payment_id = ?`,
+	/**
+	 * Lot 10 : échéances des baux validés, avec le locataire, l'unité et le début du bail (impayés, tableau de bord) ;
+	 * l'agent de terrain ne reçoit que celles de ses unités.
+	 */
+	arrearsDues: `SELECT d.*, l.tenant_id, l.unit_id, l.starts_on AS lease_starts_on FROM rent_dues d
+		JOIN leases l ON l.organization_id = d.organization_id AND l.id = d.lease_id
+		WHERE d.organization_id = ? AND l.status IN ('signed', 'active', 'notice', 'ended')`,
+	/** Encaissements à valider ou à rapprocher (loyers et remboursements de dépense). */
+	awaitingPayments: `SELECT lease_id, purpose, expense_id, amount FROM payments
+		WHERE organization_id = ? AND (kind IS NULL OR kind = 'payment') AND status IN ('to_validate', 'to_reconcile')`,
+	/** Encaissements de loyer confirmés (encaissé du mois, tableau de bord). */
+	confirmedRentPayments: `SELECT amount, paid_on FROM payments
+		WHERE organization_id = ? AND (kind IS NULL OR kind = 'payment') AND purpose = 'rent' AND status = 'confirmed'`,
+	/** Dépenses réclamées aux locataires, avec le locataire du bail et le remboursé (imputations nettes). */
+	expenseClaims: `SELECT e.*, l.tenant_id, l.unit_id AS lease_unit_id, (SELECT coalesce(sum(CASE a.direction WHEN 'allocate' THEN a.amount ELSE -a.amount END), 0)
+			FROM payment_allocations a WHERE a.organization_id = e.organization_id AND a.expense_id = e.id) AS recovered
+		FROM expenses e JOIN leases l ON l.organization_id = e.organization_id AND l.id = e.lease_id
+		WHERE e.organization_id = ? AND e.recovery = 'claimed_from_tenant'`,
+	/** Relances de l'organisation, les plus récentes d'abord. */
+	reminders: `SELECT * FROM reminders WHERE organization_id = ? ORDER BY sent_at DESC, id DESC`,
+	reminderSettings: `SELECT * FROM reminder_settings WHERE organization_id = ?`,
+	/** Unités avec leur bien : libellés, quartier, propriétaire, agent (filtres des impayés). */
+	unitContexts: `SELECT u.id, u.label, u.assigned_agent_id, p.id AS property_id, p.name AS property_name, p.owner_id, p.neighborhood_id
+		FROM units u JOIN properties p ON p.organization_id = u.organization_id AND p.id = u.property_id WHERE u.organization_id = ?`,
+	/** Dépenses de l'organisation, avec le bien et l'unité, les plus récentes d'abord. */
+	expenses: `SELECT e.*, p.name AS property_name, u.label AS unit_label FROM expenses e
+		LEFT JOIN properties p ON p.organization_id = e.organization_id AND p.id = e.property_id
+		LEFT JOIN units u ON u.organization_id = e.organization_id AND u.id = e.unit_id
+		WHERE e.organization_id = ? ORDER BY e.spent_on DESC, e.id DESC`,
+	/** Relevés propriétaires (direction, gestion, lecture), les plus récents d'abord. */
+	statements: `SELECT * FROM owner_statements WHERE organization_id = ? ORDER BY month DESC, version DESC, id DESC`,
+	statement: `SELECT * FROM owner_statements WHERE organization_id = ? AND id = ?`,
+	statementPayouts: `SELECT * FROM owner_payouts WHERE organization_id = ? AND statement_id = ? ORDER BY created_at, id`,
 	/** Tous les membres, retirés compris (nom de la personne qui a encaissé). */
 	allMembers: `SELECT * FROM organization_members WHERE organization_id = ? ORDER BY display_name`,
 	/** Modifications refusées par le serveur (table locale de l'appareil), de l'organisation, les plus récentes d'abord. */
