@@ -13,6 +13,7 @@ import type { INestApplicationContext } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { ArrearsGroup } from '@ziga/shared/collections';
 import { monthDay, toIsoDate } from '@ziga/shared/dates';
+import type { DocumentView } from '@ziga/shared/documents';
 import type { ExpenseView } from '@ziga/shared/expenses';
 import { newId } from '@ziga/shared/ids';
 import type { LeaseDetailView, Page, TenantView } from '@ziga/shared/leases';
@@ -261,6 +262,126 @@ describe('dépenses par l’API (règle 16)', () => {
 		expect((await b.director.call('POST', `/expenses/${e.id}/cancel`, { reason: 'Essai de B' })).status).toBe(404);
 		// Une dépense de B sur un bien de A : refusée (clé composite).
 		expect((await b.director.call('POST', '/expenses', expense(pf.propertyId))).status).toBe(404);
+	});
+});
+
+// ---------------------------------------------------------------- justificatif d'une dépense (lot 10 bis, étape 0)
+
+const PDF = Buffer.from('%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n');
+
+/** Dépôt d'un justificatif par la route générique des documents, comme la file de l'appareil : fiche, envoi, réception. */
+async function receipt(
+	m: Member,
+	subject: { propertyId: string; unitId?: string | null; leaseId?: string | null },
+	type = 'expense_receipt'
+) {
+	const created = await call<{ document: DocumentView; upload: { url: string } }>(
+		m,
+		'POST',
+		'/documents',
+		{ id: newId(), type, ...subject, fileName: 'facture.pdf', mimeType: 'application/pdf', byteSize: PDF.length },
+		201
+	);
+	const u = new URL(created.upload.url);
+	const put = await fetch(new URL(u.pathname + u.search, t.url), {
+		method: 'PUT',
+		body: PDF,
+		headers: { 'content-type': 'application/pdf' }
+	});
+	expect(put.status).toBe(200);
+	return created.document;
+}
+
+describe('justificatif d’une dépense (lot 10 bis, étape 0 ; règle 14)', () => {
+	let pf: Portfolio;
+	let other: Portfolio;
+	beforeAll(async () => {
+		pf = await portfolio(manager);
+		other = await portfolio(manager);
+	});
+
+	it('ajouté après coup, une seule fois, par la gestion ; rejoué sans effet ; journalisé ; consulté par URL signée', async () => {
+		const e = await call<ExpenseView>(manager, 'POST', '/expenses', expense(pf.propertyId), 201);
+		expect(e.documentId).toBeNull();
+		const doc = await receipt(manager, { propertyId: pf.propertyId });
+		// Pas encore reçu : refusé (la file renvoie le fichier puis réessaie).
+		expect(await refusal(manager, 'POST', `/expenses/${e.id}/document`, { documentId: doc.id })).toMatchObject({
+			status: 409,
+			code: 'EXPENSE_DOCUMENT_NOT_ACTIVE'
+		});
+		expect((await call<DocumentView>(manager, 'POST', `/documents/${doc.id}/uploaded`)).status).toBe('active');
+		// Ni l'agent de terrain ni la lecture.
+		expect(await refusal(agent, 'POST', `/expenses/${e.id}/document`, { documentId: doc.id })).toMatchObject({ status: 403 });
+		expect(await refusal(viewer, 'POST', `/expenses/${e.id}/document`, { documentId: doc.id })).toMatchObject({ status: 403 });
+		const attached = await call<ExpenseView>(manager, 'POST', `/expenses/${e.id}/document`, { documentId: doc.id });
+		expect(attached).toMatchObject({ documentId: doc.id, amount: 15_000, status: 'recorded' });
+		expect((await call<ExpenseView>(manager, 'POST', `/expenses/${e.id}/document`, { documentId: doc.id })).documentId).toBe(doc.id);
+		const audit = await owner.query(`select action, after from audit_log where object_id = $1 and action = 'expense.attach_document'`, [
+			e.id
+		]);
+		expect(audit.rows).toEqual([{ action: 'expense.attach_document', after: { documentId: doc.id } }]);
+		// Un second justificatif ne remplace jamais le premier (API, puis base).
+		const second = await receipt(manager, { propertyId: pf.propertyId });
+		await call(manager, 'POST', `/documents/${second.id}/uploaded`);
+		expect(await refusal(manager, 'POST', `/expenses/${e.id}/document`, { documentId: second.id })).toMatchObject({
+			status: 409,
+			code: 'EXPENSE_DOCUMENT_ALREADY_SET'
+		});
+		await expect(owner.query(`update expenses set document_id = $1 where id = $2`, [second.id, e.id])).rejects.toThrow(/EXPENSE_IMMUTABLE/);
+		// Consultation : URL signée, journalisée.
+		const { url } = await call<{ url: string }>(manager, 'POST', `/documents/${doc.id}/download`);
+		const got = new URL(url);
+		const file = await fetch(new URL(got.pathname + got.search, t.url));
+		expect(Buffer.from(await file.arrayBuffer()).equals(PDF)).toBe(true);
+		expect((await owner.query(`select 1 from audit_log where object_id = $1 and action = 'document.download'`, [doc.id])).rowCount).toBe(1);
+	});
+
+	it('à la saisie : seul un justificatif reçu du même bien est accepté', async () => {
+		const doc = await receipt(manager, { propertyId: pf.propertyId });
+		expect(await refusal(manager, 'POST', '/expenses', expense(pf.propertyId, { documentId: doc.id }))).toMatchObject({
+			status: 409,
+			code: 'EXPENSE_DOCUMENT_NOT_ACTIVE'
+		});
+		await call(manager, 'POST', `/documents/${doc.id}/uploaded`);
+		expect(await refusal(manager, 'POST', '/expenses', expense(other.propertyId, { documentId: doc.id }))).toMatchObject({
+			status: 400,
+			code: 'EXPENSE_DOCUMENT_INVALID'
+		});
+		const e = await call<ExpenseView>(manager, 'POST', '/expenses', expense(pf.propertyId, { documentId: doc.id }), 201);
+		expect(e.documentId).toBe(doc.id);
+	});
+
+	it('refusé : autre type de document, autre bien, dépense annulée, document d’une autre organisation', async () => {
+		const e = await call<ExpenseView>(manager, 'POST', '/expenses', expense(pf.propertyId), 201);
+		const wrongType = await receipt(manager, { propertyId: pf.propertyId }, 'other');
+		await call(manager, 'POST', `/documents/${wrongType.id}/uploaded`);
+		expect(await refusal(manager, 'POST', `/expenses/${e.id}/document`, { documentId: wrongType.id })).toMatchObject({
+			status: 400,
+			code: 'EXPENSE_DOCUMENT_INVALID'
+		});
+		const otherProperty = await receipt(manager, { propertyId: other.propertyId });
+		await call(manager, 'POST', `/documents/${otherProperty.id}/uploaded`);
+		expect(await refusal(manager, 'POST', `/expenses/${e.id}/document`, { documentId: otherProperty.id })).toMatchObject({
+			status: 400,
+			code: 'EXPENSE_DOCUMENT_INVALID'
+		});
+		const pfB = await portfolio(b.director);
+		const docB = await receipt(b.director, { propertyId: pfB.propertyId });
+		await call(b.director, 'POST', `/documents/${docB.id}/uploaded`);
+		expect(await refusal(manager, 'POST', `/expenses/${e.id}/document`, { documentId: docB.id })).toMatchObject({
+			status: 400,
+			code: 'EXPENSE_DOCUMENT_INVALID'
+		});
+		// B ne rattache rien à une dépense de A, ni ne lit son justificatif.
+		const doc = await receipt(manager, { propertyId: pf.propertyId });
+		await call(manager, 'POST', `/documents/${doc.id}/uploaded`);
+		expect((await b.director.call('POST', `/expenses/${e.id}/document`, { documentId: docB.id })).status).toBe(404);
+		expect((await b.director.call('POST', `/documents/${doc.id}/download`)).status).toBe(404);
+		await call(a.director, 'POST', `/expenses/${e.id}/cancel`, { reason: 'Saisie en double' });
+		expect(await refusal(manager, 'POST', `/expenses/${e.id}/document`, { documentId: doc.id })).toMatchObject({
+			status: 409,
+			code: 'EXPENSE_ALREADY_CANCELLED'
+		});
 	});
 });
 

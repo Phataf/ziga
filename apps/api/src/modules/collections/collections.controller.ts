@@ -11,7 +11,7 @@
  */
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Put, Query, Req, Res } from '@nestjs/common';
 import { ARREARS_BUCKETS } from '@ziga/shared/collections';
-import { cancelExpenseSchema, expenseSchema } from '@ziga/shared/expenses';
+import { attachExpenseDocumentSchema, cancelExpenseSchema, expenseSchema } from '@ziga/shared/expenses';
 import { idSchema } from '@ziga/shared/ids';
 import { createReminderSchema, reminderSettingsSchema } from '@ziga/shared/reminders';
 import {
@@ -120,6 +120,14 @@ export class ExpensesController {
 	@HttpCode(201)
 	create(@Body() body: unknown) {
 		return this.expenses.create(expenseSchema.parse(body));
+	}
+
+	/** Justificatif ajouté après coup, une seule fois (lot 10 bis, étape 0) : le document est déposé par /documents. */
+	@Post(':id/document')
+	@Can('expense.record')
+	@HttpCode(200)
+	attachDocument(@Param('id') id: string, @Body() body: unknown) {
+		return this.expenses.attachDocument(idSchema.parse(id), attachExpenseDocumentSchema.parse(body).documentId);
 	}
 
 	@Post(':id/cancel')

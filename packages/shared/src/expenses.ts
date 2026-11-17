@@ -181,6 +181,16 @@ export const cancelExpenseSchema = z.object({
 });
 export type CancelExpenseData = z.output<typeof cancelExpenseSchema>;
 
+/**
+ * Justificatif d'une dépense (devis, facture, photo du reçu du prestataire), ajouté une seule fois, après coup ou
+ * depuis la file de l'appareil (lot 10 bis, étape 0). Sans justificatif, aucune retenue sur caution (règle 14).
+ */
+export const attachExpenseDocumentSchema = z.object({ documentId: idSchema });
+export type AttachExpenseDocumentData = z.output<typeof attachExpenseDocumentSchema>;
+
+/** Le justificatif se dépose en PDF (photos et PDF réunis sur l'appareil), 10 Mo au plus, comme un scan de contrat. */
+export const EXPENSE_RECEIPT_FILE_NAME = (spentOn: string) => `justificatif-${spentOn}.pdf`;
+
 /** Contrôles qui dépendent du contexte (type d'organisation, date du jour), en plus du schéma. */
 export function expenseBlockers(e: ExpenseRoles & { spentOn: string }, ctx: { organizationType: OrganizationType; today: string }) {
 	const out: ExpenseRuleError['code'][] = [];

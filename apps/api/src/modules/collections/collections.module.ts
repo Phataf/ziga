@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { DocumentsModule } from '../documents/documents.module.js';
 import { FeaturesModule } from '../features/features.module.js';
 import { IdentityModule } from '../identity/identity.module.js';
 import { LeasesModule } from '../leases/leases.module.js';
@@ -27,7 +28,17 @@ import { StatementsService } from './statements.service.js';
  * module payments. Seul à lire et écrire ses tables (règle ESLint et test d'architecture).
  */
 @Module({
-	imports: [OrganizationsModule, SyncModule, OwnersModule, PropertiesModule, LeasesModule, PaymentsModule, FeaturesModule, IdentityModule],
+	imports: [
+		OrganizationsModule,
+		DocumentsModule,
+		SyncModule,
+		OwnersModule,
+		PropertiesModule,
+		LeasesModule,
+		PaymentsModule,
+		FeaturesModule,
+		IdentityModule
+	],
 	controllers: [
 		ArrearsController,
 		RemindersController,

@@ -3,15 +3,18 @@
 	 * Dépenses (lot 10, CLAUDE.md règle 16) : une dépense est un seul enregistrement — qui a payé, qui la supporte,
 	 * comment elle est récupérée. Liste lue sur l'appareil (cartes sur téléphone, tableau ailleurs) ; saisie hors ligne
 	 * comprise (ajout seul) ; annulation motivée par le directeur, en ligne. La commission n'est pas une dépense.
+	 * Lot 10 bis, étape 0 : justificatif (photo ou PDF) préparé hors ligne, à la saisie ou après coup, une seule fois ;
+	 * consulté en ligne par URL signée (journalisée). Sans justificatif, aucune retenue sur caution (règle 14).
 	 */
 	import { onMount } from 'svelte';
-	import { Plus } from '@lucide/svelte';
+	import { FileText, Plus } from '@lucide/svelte';
 	import { formatDate, toIsoDate } from '@ziga/shared/dates';
 	import {
 		allowedExpenseCombinations,
 		cancelExpenseSchema,
 		EXPENSE_CATEGORIES,
 		EXPENSE_CATEGORY_LABELS,
+		EXPENSE_RECEIPT_FILE_NAME,
 		expenseNeedsLease,
 		expenseSchema
 	} from '@ziga/shared/expenses';
@@ -19,12 +22,15 @@
 	import { formatFcfa, parseFcfa } from '@ziga/shared/money';
 	import { can } from '@ziga/shared/permissions';
 	import FormAlert from '#lib/components/auth/FormAlert.svelte';
+	import ReceiptPicker from '#lib/components/collections/ReceiptPicker.svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.ts';
 	import { Button } from '#lib/components/ui/button/index.ts';
 	import { Input } from '#lib/components/ui/input/index.ts';
 	import Sheet from '#lib/components/ui/sheet/Sheet.svelte';
 	import { messageOf } from '#lib/auth/forms.ts';
+	import { assembleReceipt } from '#lib/collections/receipt.ts';
+	import { expenseReceiptQueue } from '#lib/collections/receipt-queue.svelte.ts';
 	import { toExpense, type LocalExpense } from '#lib/collections/views.ts';
 	import { device } from '#lib/device.svelte.ts';
 	import { fr } from '#lib/i18n/fr.ts';
@@ -58,8 +64,67 @@
 			sync.watch<Row>(LOCAL_QUERIES.leases, [org], (r) => (leases = r), onError),
 			sync.watch<Row>(LOCAL_QUERIES.tenants, [org], (r) => (tenants = r), onError)
 		];
+		void expenseReceiptQueue.start();
 		return () => stops.forEach((s) => s());
 	});
+
+	// ---- justificatif (lot 10 bis, étape 0)
+	const r = t.receipt;
+	const receiptError = (error: unknown) => r.errors[(error as { code?: string }).code ?? ''] ?? r.errors.UNREADABLE!;
+
+	/** Le PDF assemblé entre dans la file de l'appareil ; il part dès la connexion, puis se rattache à la dépense. */
+	async function queueReceipt(e: Pick<LocalExpense, 'id' | 'propertyId' | 'unitId' | 'leaseId' | 'spentOn'>, blob: Blob) {
+		await expenseReceiptQueue.add({
+			id: newId(),
+			organizationId: organizations.activeId!,
+			expenseId: e.id,
+			propertyId: e.propertyId,
+			unitId: e.unitId,
+			leaseId: e.leaseId,
+			blob,
+			fileName: EXPENSE_RECEIPT_FILE_NAME(e.spentOn)
+		});
+	}
+
+	async function openReceipt(documentId: string) {
+		message = null;
+		try {
+			const { url } = await organizations.call<{ url: string }>('POST', `/documents/${documentId}/download`);
+			window.open(url, '_blank', 'noopener');
+		} catch (error) {
+			message = messageOf(error);
+		}
+	}
+
+	let receiptOf = $state<LocalExpense | null>(null);
+	let receiptOpen = $state(false);
+	let receiptFiles = $state<File[]>([]);
+	let receiptMessage = $state<string | null>(null);
+	let receiptBusy = $state(false);
+
+	function openReceiptForm(e: LocalExpense) {
+		receiptOf = e;
+		receiptFiles = [];
+		receiptMessage = null;
+		receiptOpen = true;
+	}
+
+	async function saveReceipt(event: SubmitEvent) {
+		event.preventDefault();
+		receiptMessage = null;
+		if (!receiptOf) return;
+		if (!receiptFiles.length) return void (receiptMessage = r.errors.EMPTY!);
+		receiptBusy = true;
+		try {
+			await queueReceipt(receiptOf, await assembleReceipt(receiptFiles));
+			receiptOpen = false;
+			info = r.saved;
+		} catch (error) {
+			receiptMessage = receiptError(error);
+		} finally {
+			receiptBusy = false;
+		}
+	}
 
 	// ---- formulaire
 	let formOpen = $state(false);
@@ -74,6 +139,7 @@
 	let supplier = $state('');
 	let amount = $state('');
 	let combo = $state(0);
+	let files = $state<File[]>([]);
 
 	const chosen = $derived(combos[combo] ?? combos[0]!);
 	const needsLease = $derived(expenseNeedsLease(chosen));
@@ -95,6 +161,7 @@
 		supplier = '';
 		amount = '';
 		combo = 0;
+		files = [];
 		formOpen = true;
 	}
 
@@ -121,9 +188,20 @@
 		}
 		busy = true;
 		try {
+			// Le PDF d'abord : une photo illisible n'enregistre rien.
+			let blob: Blob | null = null;
+			if (files.length) {
+				try {
+					blob = await assembleReceipt(files);
+				} catch (error) {
+					formMessage = receiptError(error);
+					return;
+				}
+			}
 			await recordExpense(sync.db ?? (await sync.start()), organizations.activeId!, parsed.data);
+			if (blob) await queueReceipt(parsed.data, blob);
 			formOpen = false;
-			info = t.saved;
+			info = blob ? r.saved : t.saved;
 		} catch (error) {
 			formMessage = messageOf(error);
 		} finally {
@@ -154,6 +232,37 @@
 	const select = 'min-h-11 w-full rounded-lg border bg-background px-3 text-base';
 </script>
 
+{#snippet receipt(e: LocalExpense)}
+	{@const queued = expenseReceiptQueue.of(e.id)}
+	<div class="space-y-1" data-testid="justificatif-etat">
+		{#if e.documentId}
+			{#if can(role, 'document.read')}
+				<Button variant="outline" onclick={() => openReceipt(e.documentId!)} disabled={!sync.online} data-testid="voir-justificatif"
+					><FileText class="size-5" aria-hidden="true" />{r.view}</Button
+				>
+				{#if !sync.online}<p class="text-sm text-muted-foreground">{r.viewOnline}</p>{/if}
+			{:else}
+				<p class="text-sm">{r.attached}</p>
+			{/if}
+		{:else if queued}
+			{#if queued.error}
+				<FormAlert message={r.refused(queued.error)} />
+				<Button variant="outline" onclick={() => expenseReceiptQueue.remove(queued.id)}>{r.discard}</Button>
+			{:else}
+				<p class="text-sm text-muted-foreground" data-testid="justificatif-en-attente">
+					{expenseReceiptQueue.sending === queued.id ? r.sending : r.queued}
+				</p>
+			{/if}
+		{:else if e.status === 'recorded' && can(role, 'expense.record')}
+			<Button variant="outline" onclick={() => openReceiptForm(e)} data-testid="ajouter-justificatif"
+				><FileText class="size-5" aria-hidden="true" />{r.add}</Button
+			>
+		{:else}
+			<p class="text-sm text-muted-foreground">{r.missing}</p>
+		{/if}
+	</div>
+{/snippet}
+
 <PageHeader title={t.title} subtitle={t.subtitle}>
 	{#snippet actions()}
 		{#if can(role, 'expense.record')}
@@ -180,6 +289,7 @@
 							<th class="px-4 py-3 font-medium">{t.columns.category}</th>
 							<th class="px-4 py-3 text-right font-medium">{t.columns.amount}</th>
 							{#if device.isDesktop}<th class="px-4 py-3 font-medium">{t.columns.effect}</th>{/if}
+							<th class="px-4 py-3 font-medium">{t.columns.receipt}</th>
 							<th class="px-4 py-3 font-medium">{t.columns.status}</th>
 						</tr>
 					</thead>
@@ -193,6 +303,7 @@
 								>
 								<td class="px-4 py-3 text-right whitespace-nowrap tabular-nums">{formatFcfa(e.amount)}</td>
 								{#if device.isDesktop}<td class="px-4 py-3 text-sm">{e.effect ? t.effects[e.effect] : ''}</td>{/if}
+								<td class="px-4 py-3">{@render receipt(e)}</td>
 								<td class="px-4 py-3">
 									{#if e.status === 'cancelled'}<Badge variant="danger">{t.cancelled}</Badge>
 									{:else if can(role, 'expense.cancel')}
@@ -219,6 +330,7 @@
 						</p>
 						<p class="text-base break-words">{e.description}</p>
 						{#if e.effect}<p class="text-sm text-muted-foreground">{t.effects[e.effect]}</p>{/if}
+						{@render receipt(e)}
 						{#if e.status === 'cancelled'}<Badge variant="danger">{t.cancelled}</Badge>{/if}
 					</li>
 				{/each}
@@ -285,7 +397,26 @@
 			<label for="depense-prestataire" class="text-base font-medium">{t.supplier}</label>
 			<Input id="depense-prestataire" bind:value={supplier} maxlength={120} />
 		</div>
-		<Button type="submit" class="w-full" disabled={busy} data-testid="enregistrer-depense">{t.save}</Button>
+		<ReceiptPicker bind:files />
+		<Button type="submit" class="w-full" disabled={busy} data-testid="enregistrer-depense"
+			>{busy && files.length ? r.preparing : t.save}</Button
+		>
+	</form>
+</Sheet>
+
+<Sheet bind:open={receiptOpen} labelledby="justificatif-titre" side="right">
+	<form class="space-y-4" onsubmit={saveReceipt} novalidate data-testid="formulaire-justificatif">
+		<h2 id="justificatif-titre" class="pr-10 text-xl font-semibold">{r.addTitle}</h2>
+		{#if receiptOf}
+			<p class="text-base break-words">
+				{EXPENSE_CATEGORY_LABELS[receiptOf.category]} · {formatFcfa(receiptOf.amount)} · {formatDate(receiptOf.spentOn)}
+			</p>
+		{/if}
+		<FormAlert message={receiptMessage} />
+		<ReceiptPicker bind:files={receiptFiles} />
+		<Button type="submit" class="w-full" disabled={receiptBusy} data-testid="enregistrer-justificatif"
+			>{receiptBusy ? r.preparing : r.submit}</Button
+		>
 	</form>
 </Sheet>
 

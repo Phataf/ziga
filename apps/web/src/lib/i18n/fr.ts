@@ -1947,7 +1947,44 @@ export const fr = {
 		cancelled: 'Annulée',
 		directorOnly: 'Seule la direction annule une dépense.',
 		onlineOnly: 'L’annulation se fait en ligne.',
-		columns: { date: 'Date', property: 'Bien', category: 'Catégorie', amount: 'Montant', effect: 'Récupération', status: 'Statut' }
+		columns: {
+			date: 'Date',
+			property: 'Bien',
+			category: 'Catégorie',
+			amount: 'Montant',
+			effect: 'Récupération',
+			receipt: 'Justificatif',
+			status: 'Statut'
+		},
+		// Lot 10 bis, étape 0 : justificatif (devis, facture), préparé hors ligne, ajouté une seule fois.
+		receipt: {
+			title: 'Justificatif (devis ou facture)',
+			hint: 'Photo ou PDF, réunis en un seul PDF sur l’appareil. Il part dès la connexion. Sans justificatif, aucune retenue sur la caution.',
+			takePhoto: 'Prendre une photo',
+			addFiles: 'Ajouter des fichiers',
+			pageCount: (n: number) => (n === 1 ? '1 pièce' : `${n} pièces`),
+			moveUp: 'Monter',
+			remove: 'Retirer',
+			add: 'Ajouter le justificatif',
+			addTitle: 'Justificatif de la dépense',
+			submit: 'Enregistrer le justificatif',
+			preparing: 'Préparation du PDF…',
+			view: 'Voir le justificatif',
+			attached: 'Justificatif joint',
+			missing: 'Sans justificatif',
+			queued: 'Justificatif en attente d’envoi',
+			sending: 'Envoi du justificatif…',
+			refused: (reason: string) => `Justificatif refusé : ${reason}`,
+			discard: 'Retirer de la file',
+			saved: 'Justificatif enregistré : il part dès la connexion.',
+			viewOnline: 'Le justificatif se consulte en ligne.',
+			errors: {
+				EMPTY: 'Ajoutez au moins une page.',
+				UNSUPPORTED: 'Format refusé : PDF, JPEG ou PNG.',
+				UNREADABLE: 'Une page est illisible sur cet appareil : reprenez la photo.',
+				TOO_LARGE: 'Le PDF assemblé dépasse 10 Mo : reprenez les photos de plus près ou en moins de pages.'
+			} as Record<string, string>
+		}
 	},
 	statements: {
 		title: 'Relevés propriétaires',

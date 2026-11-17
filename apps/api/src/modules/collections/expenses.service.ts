@@ -13,6 +13,7 @@ import type { AuditOrigin } from '../../common/request-context.js';
 import type { Tx } from '../../db/database.js';
 import { expenses } from '../../db/schema/collections.js';
 import { AuditService } from '../audit/audit.service.js';
+import { DocumentsService } from '../documents/documents.service.js';
 import { ExpenseClaims } from '../payments/expense-claims.js';
 import { collectionsContext, iso } from './collections-context.js';
 
@@ -48,7 +49,8 @@ export function expenseView(e: ExpenseRow): ExpenseView {
 export class ExpensesService implements OnModuleInit {
 	constructor(
 		private readonly audit: AuditService,
-		private readonly claims: ExpenseClaims
+		private readonly claims: ExpenseClaims,
+		private readonly documents: DocumentsService
 	) {}
 
 	onModuleInit(): void {
@@ -115,6 +117,7 @@ export class ExpensesService implements OnModuleInit {
 			throw new AppError(blocker, 'Cette combinaison (qui a payé, qui supporte, comment c’est récupéré) n’est pas prise en charge.', 400);
 		}
 		if (blocker === 'EXPENSE_DATE_IN_FUTURE') throw new AppError(blocker, 'La date de la dépense est dans le futur.', 400);
+		if (input.documentId) await this.checkReceipt(input.documentId, input.propertyId);
 		const [row] = await c.tx
 			.insert(expenses)
 			.values({ ...input, organizationId: c.organizationId, recordedBy: c.userId })
@@ -139,6 +142,49 @@ export class ExpensesService implements OnModuleInit {
 			...(origin ? { origin } : {})
 		});
 		return expenseView(row!);
+	}
+
+	/**
+	 * Le justificatif : un document « Justificatif de dépense » de l'organisation, reçu (en vigueur), du même bien. Lu
+	 * par le service public du module documents (matrice par type), jamais par sa table.
+	 */
+	private async checkReceipt(documentId: string, propertyId: string): Promise<void> {
+		const doc = await this.documents.get(documentId).catch((error: unknown) => {
+			if (error instanceof AppError && error.code === 'DOCUMENT_NOT_FOUND') return null;
+			throw error;
+		});
+		if (!doc || doc.type !== 'expense_receipt' || doc.propertyId !== propertyId) {
+			throw new AppError('EXPENSE_DOCUMENT_INVALID', 'Ce document n’est pas un justificatif de cette dépense.', 400);
+		}
+		if (doc.status !== 'active') {
+			throw new AppError('EXPENSE_DOCUMENT_NOT_ACTIVE', 'Le justificatif n’est pas encore reçu : renvoyez-le.', 409, {
+				status: doc.status
+			});
+		}
+	}
+
+	/**
+	 * Justificatif ajouté après coup (lot 10 bis, étape 0), une seule fois : le même document rejoué ne change rien, un
+	 * autre est refusé (la base le refuse aussi, EXPENSE_IMMUTABLE). Jamais sur une dépense annulée.
+	 */
+	async attachDocument(id: string, documentId: string): Promise<ExpenseView> {
+		const c = collectionsContext();
+		const row = await this.row(c.tx, id, true);
+		if (row.documentId === documentId) return expenseView(row);
+		if (row.documentId) throw new AppError('EXPENSE_DOCUMENT_ALREADY_SET', 'Cette dépense a déjà son justificatif.', 409);
+		if (row.status === 'cancelled') throw new AppError('EXPENSE_ALREADY_CANCELLED', 'Cette dépense est annulée.', 409);
+		await this.checkReceipt(documentId, row.propertyId);
+		const [updated] = await c.tx.update(expenses).set({ documentId }).where(eq(expenses.id, id)).returning();
+		await this.audit.record(c.tx, {
+			actor: c.actor,
+			organizationId: c.organizationId,
+			action: 'expense.attach_document',
+			objectType: 'expense',
+			objectId: id,
+			before: { documentId: null },
+			after: { documentId }
+		});
+		return expenseView(updated!);
 	}
 
 	/** Annulation motivée (directeur) : la dépense reste, marquée annulée ; jamais modifiée ni supprimée. */

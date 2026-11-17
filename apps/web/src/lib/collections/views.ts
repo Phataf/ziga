@@ -231,6 +231,8 @@ export interface LocalExpense extends ExpenseRoles {
 	description: string;
 	supplier: string | null;
 	amount: number;
+	/** Justificatif (registre des documents), ajouté une seule fois. */
+	documentId: string | null;
 	status: 'recorded' | 'cancelled';
 	effect: ExpenseEffect | null;
 	cancellationReason: string | null;
@@ -250,6 +252,7 @@ export function toExpense(r: Row): LocalExpense {
 		description: String(r.description ?? ''),
 		supplier: str(r.supplier),
 		amount: num(r.amount),
+		documentId: str(r.document_id),
 		status: r.status === 'cancelled' ? 'cancelled' : 'recorded',
 		effect: expenseEffect(roles),
 		cancellationReason: str(r.cancellation_reason),

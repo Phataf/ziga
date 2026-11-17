@@ -173,6 +173,9 @@ class Sync {
 		// Scans signés en attente (lot 08 bis) : de même.
 		const { scanQueue } = await import('../contracts/scan-queue.svelte');
 		await scanQueue.clear();
+		// Justificatifs de dépense en attente (lot 10 bis, étape 0) : de même.
+		const { expenseReceiptQueue } = await import('../collections/receipt-queue.svelte');
+		await expenseReceiptQueue.clear();
 	}
 }
 

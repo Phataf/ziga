@@ -91,7 +91,10 @@ describe('accueil, dépenses, relevés', () => {
 			recovery: 'owner_statement',
 			status: 'recorded'
 		});
-		expect(e).toMatchObject({ effect: 'statement_deduction', status: 'recorded' });
+		expect(e).toMatchObject({ effect: 'statement_deduction', status: 'recorded', documentId: null });
+		expect(
+			toExpense({ id: 'e', document_id: 'd', paid_by: 'organization', borne_by: 'owner', recovery: 'owner_statement' }).documentId
+		).toBe('d');
 	});
 
 	it('relevés : copie JSON lue, dernière version par propriétaire, mois proposés, propriétaires sous mandat', () => {

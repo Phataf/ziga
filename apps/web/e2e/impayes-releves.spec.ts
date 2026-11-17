@@ -7,16 +7,22 @@
  * - Agent de terrain, hors ligne : « Ma tournée », visite notée sur l'appareil, envoyée au retour du réseau ; ni
  *   dépenses ni relevés.
  * - Dépense saisie hors ligne sur téléphone, annulée en ligne par la direction.
+ * - Lot 10 bis, étape 0 : justificatif d'une dépense (photo ou PDF réunis en un PDF sur l'appareil), préparé hors ligne
+ *   à la saisie et envoyé au retour du réseau, ou ajouté après coup ; consulté par URL signée ; une seule fois ; le
+ *   profil lecture voit qu'il est joint sans pouvoir l'ouvrir. Trois appareils, sans débordement horizontal.
  * - Relevé préparé, émis, envoyé par WhatsApp au propriétaire, reversement enregistré ; page /s/<jeton> rendue sans
  *   JavaScript, noindex et no-store, sans aucun téléphone de locataire, en moins de 3 s en 3G (1,6 Mbit/s, 300 ms,
  *   cache vide) ; liens révoqués : page introuvable. Profil lecture : rien à préparer.
  */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { expect, test, type APIRequestContext, type Browser, type BrowserContextOptions, type Page } from '@playwright/test';
 import { addDays, toIsoDate } from '@ziga/shared/dates';
 import { newId } from '@ziga/shared/ids';
 import { formatFcfa } from '@ziga/shared/money';
 import { newReceiptToken, provisionalReceiptNumber } from '@ziga/shared/payments';
 import { addMonthsToMonth, monthLabel, monthOfDate } from '@ziga/shared/statements';
+import { PDFDocument } from 'pdf-lib';
 import { addMember, freshAgency, get, login, post, type Agency, type Person } from './agency';
 import { accounts, API_URL, expectNoHorizontalOverflow, signInWith, synced } from './support';
 
@@ -150,6 +156,23 @@ async function open(browser: Browser, options: BrowserContextOptions, who: Perso
 	await expect(page).toHaveURL(target);
 	await synced(page, 20_000);
 	return { ctx, page };
+}
+
+async function onePagePdf(): Promise<Buffer> {
+	const doc = await PDFDocument.create();
+	doc.addPage([595, 842]);
+	return Buffer.from(await doc.save());
+}
+
+const PHOTO = readFileSync(join(import.meta.dirname, 'fixtures/photo.jpg'));
+
+/** Ouvre l'adresse signée gardée par window.open et renvoie le début du fichier servi. */
+async function openedFileHead(request: APIRequestContext, page: Page): Promise<string> {
+	await expect.poll(async () => (await opened(page)).length, { timeout: 10_000 }).toBeGreaterThan(0);
+	const url = (await opened(page)).at(-1)!;
+	const r = await request.get(url);
+	expect(r.status()).toBe(200);
+	return (await r.body()).subarray(0, 5).toString('latin1');
 }
 
 const opened = (page: Page) => page.evaluate(() => (window as unknown as { __opened: string[] }).__opened);
@@ -351,6 +374,102 @@ test.describe('Dépenses', () => {
 		await expectNoHorizontalOverflow(desk.page, 'Dépenses (direction, ordinateur)');
 		await desk.ctx.close();
 	});
+});
+
+test.describe('Justificatif d’une dépense (lot 10 bis, étape 0)', () => {
+	test('téléphone, hors ligne : photo du justificatif à la saisie, envoyée au retour du réseau, puis consultée', async ({
+		browser,
+		request
+	}) => {
+		test.setTimeout(3 * 60_000);
+		const agency = await freshAgency(request, `Agence justificatif ${newId().slice(-6)}`);
+		await portfolio(request, agency, 1);
+		const { ctx, page } = await open(browser, phone, agency.director, '/app/depenses');
+		await ctx.setOffline(true);
+		await page.getByTestId('nouvelle-depense').click();
+		await page.getByTestId('depense-montant').fill('12000');
+		await page.getByTestId('depense-description').fill('Remplacement du robinet');
+		await page.getByTestId('justificatif-photo').setInputFiles({ name: 'facture.jpg', mimeType: 'image/jpeg', buffer: PHOTO });
+		await expect(page.getByTestId('justificatif-pieces')).toHaveText('1 pièce');
+		await expectNoHorizontalOverflow(page, 'Nouvelle dépense avec justificatif (téléphone, hors ligne)');
+		await page.getByTestId('enregistrer-depense').click();
+		await expect(page.getByTestId('formulaire-depense')).toHaveCount(0);
+		await expect(page.getByTestId('depense')).toHaveCount(1);
+		await expect(page.getByTestId('justificatif-en-attente')).toBeVisible();
+		await expectNoHorizontalOverflow(page, 'Dépense, justificatif en attente (téléphone)');
+		await ctx.setOffline(false);
+		await synced(page, 20_000);
+		// La dépense part par la synchronisation, le justificatif par sa file : fiche, fichier, réception, rattachement.
+		await expect
+			.poll(
+				async () =>
+					(await get<{ items: { documentId: string | null }[] }>(request, agency.headers, '/expenses')).items[0]?.documentId ?? null,
+				{
+					timeout: 45_000
+				}
+			)
+			.not.toBeNull();
+		const [expense] = (await get<{ items: { id: string; documentId: string }[] }>(request, agency.headers, '/expenses')).items;
+		const doc = await get<{ type: string; status: string; mimeType: string }>(request, agency.headers, `/documents/${expense!.documentId}`);
+		expect(doc).toMatchObject({ type: 'expense_receipt', status: 'active', mimeType: 'application/pdf' });
+		await page.getByTestId('voir-justificatif').click({ timeout: 20_000 });
+		expect(await openedFileHead(request, page)).toBe('%PDF-');
+		await ctx.close();
+	});
+
+	for (const [label, options] of devices) {
+		test(`gestion, ${label} : justificatif ajouté après coup (PDF), une seule fois ; le profil lecture le voit joint`, async ({
+			browser,
+			request
+		}) => {
+			test.setTimeout(3 * 60_000);
+			const agency = await freshAgency(request, `Agence justificatif ${newId().slice(-6)}`);
+			const manager = await addMember(request, agency, 'manager', 'Gestionnaire des dépenses');
+			const viewer = await addMember(request, agency, 'viewer', 'Lecture des dépenses');
+			const { propertyId } = await portfolio(request, agency, 1);
+			const id = newId();
+			await post(request, agency.headers, '/expenses', {
+				id,
+				propertyId,
+				spentOn: today,
+				category: 'carpentry',
+				description: 'Porte du placard',
+				amount: 5000,
+				paidBy: 'organization',
+				borneBy: 'owner',
+				recovery: 'owner_statement'
+			});
+			const { ctx, page } = await open(browser, options, manager, '/app/depenses');
+			await expect(page.getByTestId('depense')).toHaveCount(1, { timeout: 20_000 });
+			await page.getByTestId('ajouter-justificatif').click();
+			await expect(page.getByTestId('formulaire-justificatif')).toBeVisible();
+			await page
+				.getByTestId('formulaire-justificatif')
+				.getByTestId('justificatif-fichiers')
+				.setInputFiles([
+					{ name: 'devis.jpg', mimeType: 'image/jpeg', buffer: PHOTO },
+					{ name: 'facture.pdf', mimeType: 'application/pdf', buffer: await onePagePdf() }
+				]);
+			await expect(page.getByTestId('formulaire-justificatif').getByTestId('justificatif-pieces')).toHaveText('2 pièces');
+			await expectNoHorizontalOverflow(page, `Justificatif d’une dépense (gestion, ${label})`);
+			await page.getByTestId('enregistrer-justificatif').click();
+			await expect(page.getByTestId('formulaire-justificatif')).toHaveCount(0);
+			await expect(page.getByTestId('voir-justificatif')).toBeVisible({ timeout: 45_000 });
+			await expect(page.getByTestId('ajouter-justificatif')).toHaveCount(0);
+			const expense = await get<{ documentId: string }>(request, agency.headers, `/expenses/${id}`);
+			expect(expense.documentId).not.toBeNull();
+			await page.getByTestId('voir-justificatif').click();
+			expect(await openedFileHead(request, page)).toBe('%PDF-');
+			await expectNoHorizontalOverflow(page, `Dépenses avec justificatif (gestion, ${label})`);
+			await ctx.close();
+
+			const reader = await open(browser, options, viewer, '/app/depenses');
+			await expect(reader.page.getByTestId('justificatif-etat')).toContainText('Justificatif joint', { timeout: 20_000 });
+			await expect(reader.page.getByTestId('voir-justificatif')).toHaveCount(0);
+			await expect(reader.page.getByTestId('ajouter-justificatif')).toHaveCount(0);
+			await reader.ctx.close();
+		});
+	}
 });
 
 test.describe('Relevés propriétaires', () => {

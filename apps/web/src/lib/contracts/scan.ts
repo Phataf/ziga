@@ -40,12 +40,15 @@ export function placeOnPage(
 	return { page, x: (page[0] - w) / 2, y: (page[1] - h) / 2, width: w, height: h };
 }
 
-/** Un seul PDF, dans l'ordre des pièces ; titre et producteur neutres (aucune donnée personnelle dans les métadonnées). */
-export async function assembleScanPdf(parts: readonly ScanPart[]): Promise<Uint8Array> {
+/**
+ * Un seul PDF, dans l'ordre des pièces ; titre et producteur neutres (aucune donnée personnelle dans les métadonnées).
+ * Sert aussi au justificatif d'une dépense (lot 10 bis, étape 0), avec son propre titre.
+ */
+export async function assembleScanPdf(parts: readonly ScanPart[], title = 'Contrat signé (scan)'): Promise<Uint8Array> {
 	if (!parts.length) fail('EMPTY');
 	const { PDFDocument } = await import('pdf-lib');
 	const out = await PDFDocument.create();
-	out.setTitle('Contrat signé (scan)');
+	out.setTitle(title);
 	out.setProducer('Ziga');
 	out.setCreator('Ziga');
 	for (const part of parts) {
