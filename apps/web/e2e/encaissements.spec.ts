@@ -166,8 +166,8 @@ for (const [label, options] of devices) {
 			await settings.getByTestId('prefixe-recus').fill('agx');
 			await settings.getByTestId('premier-numero').fill('124');
 			await expect(settings.getByTestId('exemple-numero')).toHaveText(`Exemple : AGX-${year}-000124`);
-			await settings.getByText('58 mm').click();
-			await settings.getByRole('button', { name: 'Enregistrer' }).click();
+			await settings.getByRole('radio', { name: '58 mm' }).check();
+			await settings.getByRole('button', { name: 'Mettre à jour les réglages des reçus' }).click();
 			await expect(settings.getByText('Réglages des reçus enregistrés.')).toBeVisible();
 			await expectNoHorizontalOverflow(page, `Réglages des reçus (${label})`);
 

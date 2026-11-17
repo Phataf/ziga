@@ -113,9 +113,23 @@
 				<legend class="text-base font-medium">{t.ticketWidth}</legend>
 				<div class="flex flex-wrap gap-2">
 					{#each [58, 80] as const as w (w)}
-						<label class="flex min-h-11 items-center gap-2 rounded-lg border-2 px-3 has-checked:border-primary">
-							<input type="radio" name="largeur-ticket" value={w} bind:group={ticketWidth} disabled={!editable} />
-							{t.ticketWidths[w]}
+						<!-- Le bouton radio couvre toute l'étiquette (48 px) : la cible tactile est le bouton lui-même ; le rond est dessiné. -->
+						<label
+							class="relative flex min-h-12 cursor-pointer items-center gap-3 rounded-lg border-2 border-input px-3 has-checked:border-primary has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-70"
+						>
+							<input
+								type="radio"
+								name="largeur-ticket"
+								value={w}
+								bind:group={ticketWidth}
+								disabled={!editable}
+								class="peer absolute inset-0 size-full cursor-pointer appearance-none rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed"
+							/>
+							<span
+								class="size-5 shrink-0 rounded-full border-2 border-input peer-checked:border-[6px] peer-checked:border-primary"
+								aria-hidden="true"
+							></span>
+							<span class="text-base">{t.ticketWidths[w]}</span>
 						</label>
 					{/each}
 				</div>

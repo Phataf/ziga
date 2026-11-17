@@ -1410,7 +1410,7 @@ export const fr = {
 		ticketWidth: 'Largeur du ticket',
 		ticketWidths: { 58: '58 mm', 80: '80 mm' } as Record<string, string>,
 		example: (n: string) => `Exemple : ${n}`,
-		saveSettings: 'Enregistrer',
+		saveSettings: 'Mettre à jour les réglages des reçus',
 		settingsSaved: 'Réglages des reçus enregistrés.'
 	},
 	receiptPublic: {
