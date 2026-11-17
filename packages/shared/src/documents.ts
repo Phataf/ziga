@@ -28,7 +28,9 @@ export const DOCUMENT_TYPES = [
 	'contract_draft',
 	'signed_amendment_scan',
 	'contract_legalization',
-	'contract_registration'
+	'contract_registration',
+	// Lot 10 : justificatif d'une dépense (facture, reçu du prestataire), rattaché au bien ou à l'unité.
+	'expense_receipt'
 ] as const;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 
@@ -115,7 +117,10 @@ export const DOCUMENT_ACCESS: Record<DocumentType, DocumentAccessRule> = {
 	// « Contrat signé, annexes, avenants » : comme le bail signé.
 	signed_amendment_scan: { staff: STAFF, fieldAgent: 'never', owner: 'own', tenant: 'own' },
 	contract_legalization: { staff: STAFF, fieldAgent: 'never', owner: 'own', tenant: 'own' },
-	contract_registration: { staff: STAFF, fieldAgent: 'never', owner: 'own', tenant: 'own' }
+	contract_registration: { staff: STAFF, fieldAgent: 'never', owner: 'own', tenant: 'own' },
+	// Lot 10 : comme « Justificatifs retenus sur la caution » de la matrice ; le locataire ne verra que ceux des dépenses
+	// qui lui sont réclamées (lot 10 ter).
+	expense_receipt: { staff: STAFF, fieldAgent: 'never', owner: 'own', tenant: 'own' }
 };
 
 /** Documents du bail : rattachés au bail ou au locataire (module leases, lot 08). */

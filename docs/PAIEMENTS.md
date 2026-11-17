@@ -106,6 +106,14 @@ Elle est réservée au directeur (`payment.cancel`), avec un motif obligatoire, 
 - **Reçu** : `cancelled`. Il garde son numéro (aucun trou). La page de vérification affiche « annulé », et le PDF est régénéré avec « ANNULÉ » en tête et en filigrane.
 - **Encaissement en attente** : il n'a rien d'imputé. Il est seulement annulé, et son reçu provisoire aussi.
 
+## 5 bis. Encaissement d'une dépense réclamée au locataire (lot 10, option A du porteur)
+
+- Objet `expense` : l'encaissement vise une dépense réclamée au locataire de ce bail (`expenses.recovery = 'claimed_from_tenant'`), non annulée (`PAYMENT_EXPENSE_NOT_CLAIMED`, `PAYMENT_EXPENSE_CANCELLED`). La dépense **est** la créance : aucune copie (règle 16).
+- Imputation exacte sur cette dépense (cible `expense`), jamais en crédit ni sur une échéance (`ALLOCATION_PURPOSE`), jamais au-delà de son montant, tous encaissements confondus (`EXPENSE_OVERPAID`).
+- Contre-écriture comme pour un loyer ; une dépense en partie remboursée, ou dont un encaissement attend sa validation, ne s'annule pas (`EXPENSE_CLAIM_RECOVERED`, `EXPENSE_CLAIM_PENDING`).
+- L'argent revient à l'organisation qui a avancé la dépense : il n'entre jamais dans le relevé du propriétaire.
+- Reçu « Remboursement de dépense » (objet `expense` accepté par la base) ; routes et écran à l'étape 3 du lot 10.
+
 ## 6. Doublon Mobile Money
 
 - **Règle** : une même référence de transaction chez le même opérateur ne se saisit pas deux fois dans une organisation, sauf si le paiement précédent est annulé.

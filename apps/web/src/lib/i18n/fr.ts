@@ -839,7 +839,8 @@ export const fr = {
 			contract_draft: 'Projet de contrat',
 			signed_amendment_scan: 'Avenant signé (scan)',
 			contract_legalization: 'Preuve de légalisation',
-			contract_registration: 'Preuve d’enregistrement'
+			contract_registration: 'Preuve d’enregistrement',
+			expense_receipt: 'Justificatif de dépense'
 		},
 		file: 'Fichier (PDF ou image, 10 Mo au plus)',
 		restricted: 'Réservé à la direction',

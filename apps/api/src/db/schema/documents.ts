@@ -27,7 +27,8 @@ export const documents = pgTable('documents', {
 			'contract_draft',
 			'signed_amendment_scan',
 			'contract_legalization',
-			'contract_registration'
+			'contract_registration',
+			'expense_receipt'
 		]
 	}).notNull(),
 	ownerId: uuid('owner_id'),
