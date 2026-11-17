@@ -42,6 +42,8 @@ streams:
   # sur l'appareil à partir des baux.
   # Lot 09 : encaissements, imputations et reçus (sans les jetons, les compteurs ni les clés des PDF, qui restent sur le
   # serveur) ; direction, gestion et profil lecture.
+  # Lot 10 : relances et leurs réglages, dépenses, relevés propriétaires (sans la clé du PDF ni les jetons des liens),
+  # éléments consommés par les relevés émis, reversements.
   managed_properties:
     auto_subscribe: true
     with:
@@ -63,9 +65,15 @@ streams:
       - SELECT id, organization_id, lease_id, period_start, period_end, due_on, rent, charges, amount_due, amount_paid, status, prorated, is_advance, lease_version, created_at, updated_at FROM rent_dues WHERE organization_id IN managed_organizations
       - SELECT id, organization_id, lease_id, type, agreed_amount, agreed_months, holder, status, created_at, updated_at FROM deposit_accounts WHERE organization_id IN managed_organizations
       - SELECT id, organization_id, account_id, type, amount, previous_holder, new_holder, reason, occurred_on, document_id, agreement_id, inspection_item_id, payment_id, created_by, created_at FROM deposit_movements WHERE organization_id IN managed_organizations
-      - SELECT id, organization_id, kind, reverses_payment_id, lease_id, tenant_id, purpose, deposit_account_id, amount, method, operator, transaction_reference, paid_on, status, provider, provider_reference, note, recorded_by, confirmed_at, confirmed_by, cancellation_reason, cancelled_at, cancelled_by, created_at, updated_at FROM payments WHERE organization_id IN managed_organizations
-      - SELECT id, organization_id, payment_id, lease_id, target, rent_due_id, deposit_account_id, direction, amount, created_by, created_at FROM payment_allocations WHERE organization_id IN managed_organizations
+      - SELECT id, organization_id, kind, reverses_payment_id, lease_id, tenant_id, purpose, deposit_account_id, expense_id, amount, method, operator, transaction_reference, paid_on, status, provider, provider_reference, note, recorded_by, confirmed_at, confirmed_by, cancellation_reason, cancelled_at, cancelled_by, created_at, updated_at FROM payments WHERE organization_id IN managed_organizations
+      - SELECT id, organization_id, payment_id, lease_id, target, rent_due_id, deposit_account_id, expense_id, direction, amount, created_by, created_at FROM payment_allocations WHERE organization_id IN managed_organizations
       - SELECT id, organization_id, payment_id, lease_id, purpose, provisional_number, number, year, sequence, status, issued_on, issued_at, snapshot, logo_id, cancelled_at, created_at, updated_at FROM receipts WHERE organization_id IN managed_organizations
+      - SELECT id, organization_id, tenant_id, rent_due_ids, expense_ids, channel, template_level, note, sent_at, sent_by, created_at FROM reminders WHERE organization_id IN managed_organizations
+      - SELECT organization_id AS id, organization_id, template_1, template_2, template_3, offset_1, offset_2, offset_3, updated_at FROM reminder_settings WHERE organization_id IN managed_organizations
+      - SELECT id, organization_id, property_id, unit_id, lease_id, spent_on, category, description, supplier, amount, document_id, paid_by, borne_by, recovery, status, cancellation_reason, cancelled_at, cancelled_by, recorded_by, created_at, updated_at FROM expenses WHERE organization_id IN managed_organizations
+      - SELECT id, organization_id, owner_id, month, version, corrects_statement_id, status, revision, rent_collected, charges_collected, collected, rent_collected_by_owner, charges_collected_by_owner, commission, expenses, carried_balance, net, snapshot, logo_id, generated_at, generated_by, issued_on, issued_at, issued_by, pdf_generated_at, created_at, updated_at FROM owner_statements WHERE organization_id IN managed_organizations
+      - SELECT id, organization_id, statement_id, kind, role, allocation_id, expense_id, mandate_id, fee_month, lease_id, carried_statement_id, item_key, created_at FROM owner_statement_lines WHERE organization_id IN managed_organizations
+      - SELECT id, organization_id, kind, reverses_payout_id, owner_id, statement_id, amount, paid_on, method, reference, note, reason, recorded_by, created_at FROM owner_payouts WHERE organization_id IN managed_organizations
 
   # Agent de terrain : seulement les unités qui lui sont affectées, leur bien, leurs photos et leurs portées. Une unité
   # non affectée ne descend jamais sur son téléphone ; une unité désaffectée en est effacée à la synchronisation
@@ -73,6 +81,8 @@ streams:
   # Lot 08 : baux, versions et échéances de ses unités ; locataires de ces baux, avec leurs coordonnées seulement (ni
   # état civil, ni pièce d'identité, ni notes) ; aucune caution.
   # Lot 09 : encaissements, imputations et reçus des loyers de ses unités ; jamais un versement de caution.
+  # Lot 10 : les relances des locataires de ses unités ; ni dépenses, ni relevés, ni reversements, ni encaissement d'une
+  # dépense (seules les imputations sur échéance ou en crédit descendent).
   assigned_units:
     auto_subscribe: true
     with:
@@ -123,9 +133,10 @@ streams:
       - SELECT id, organization_id, lease_id, version, rent, charges, rent_effective_from, starts_on, ends_on, dues_start_on, due_day, billing_mode, periodicity, advance_months, status, changed_by, recorded_at FROM lease_versions WHERE lease_id IN my_unit_leases
       - SELECT id, organization_id, lease_id, period_start, period_end, due_on, rent, charges, amount_due, amount_paid, status, prorated, is_advance, lease_version, created_at, updated_at FROM rent_dues WHERE lease_id IN my_unit_leases
       - SELECT id, organization_id, civility, full_name, phone, secondary_phone, emergency_contact_name, emergency_contact_phone, status, archived_at, created_at, updated_at FROM tenants WHERE id IN my_unit_tenants
-      - SELECT id, organization_id, kind, reverses_payment_id, lease_id, tenant_id, purpose, deposit_account_id, amount, method, operator, transaction_reference, paid_on, status, provider, provider_reference, note, recorded_by, confirmed_at, confirmed_by, cancellation_reason, cancelled_at, cancelled_by, created_at, updated_at FROM payments WHERE lease_id IN my_unit_leases AND purpose = 'rent'
-      - SELECT id, organization_id, payment_id, lease_id, target, rent_due_id, deposit_account_id, direction, amount, created_by, created_at FROM payment_allocations WHERE lease_id IN my_unit_leases AND target != 'deposit_account'
+      - SELECT id, organization_id, kind, reverses_payment_id, lease_id, tenant_id, purpose, deposit_account_id, expense_id, amount, method, operator, transaction_reference, paid_on, status, provider, provider_reference, note, recorded_by, confirmed_at, confirmed_by, cancellation_reason, cancelled_at, cancelled_by, created_at, updated_at FROM payments WHERE lease_id IN my_unit_leases AND purpose = 'rent'
+      - SELECT id, organization_id, payment_id, lease_id, target, rent_due_id, deposit_account_id, expense_id, direction, amount, created_by, created_at FROM payment_allocations WHERE lease_id IN my_unit_leases AND target != 'deposit_account' AND target != 'expense'
       - SELECT id, organization_id, payment_id, lease_id, purpose, provisional_number, number, year, sequence, status, issued_on, issued_at, snapshot, logo_id, cancelled_at, created_at, updated_at FROM receipts WHERE lease_id IN my_unit_leases AND purpose = 'rent'
+      - SELECT id, organization_id, tenant_id, rent_due_ids, expense_ids, channel, template_level, note, sent_at, sent_by, created_at FROM reminders WHERE tenant_id IN my_unit_tenants
 
   # Documents privés (D22) : métadonnées seulement, jamais la clé de stockage ni le fichier (URL signée de 5 minutes,
   # en ligne). Matrice des types du lot 07 : direction et gestion ; un document restreint à la direction ne descend que

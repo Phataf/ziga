@@ -507,6 +507,7 @@ export const SYNCED_TABLES = {
 		tenant_id: 'text',
 		purpose: 'text',
 		deposit_account_id: 'text',
+		expense_id: 'text',
 		amount: 'integer',
 		method: 'text',
 		operator: 'text',
@@ -533,6 +534,7 @@ export const SYNCED_TABLES = {
 		target: 'text',
 		rent_due_id: 'text',
 		deposit_account_id: 'text',
+		expense_id: 'text',
 		direction: 'text',
 		amount: 'integer',
 		created_by: 'text',
@@ -556,6 +558,116 @@ export const SYNCED_TABLES = {
 		cancelled_at: 'text',
 		created_at: 'text',
 		updated_at: 'text'
+	},
+	/**
+	 * Lot 10 : relances, en ajout seul (échéances et dépenses visées en texte JSON). Agent de terrain : celles des
+	 * locataires de ses unités.
+	 */
+	reminders: {
+		organization_id: 'text',
+		tenant_id: 'text',
+		rent_due_ids: 'text',
+		expense_ids: 'text',
+		channel: 'text',
+		template_level: 'integer',
+		note: 'text',
+		sent_at: 'text',
+		sent_by: 'text',
+		created_at: 'text'
+	},
+	/** Lot 10 : modèles et seuils des relances de l'organisation (identifiant = organisation). */
+	reminder_settings: {
+		organization_id: 'text',
+		template_1: 'text',
+		template_2: 'text',
+		template_3: 'text',
+		offset_1: 'integer',
+		offset_2: 'integer',
+		offset_3: 'integer',
+		updated_at: 'text'
+	},
+	/** Lot 10 : dépenses (règle 16), ajout seul ; direction, gestion et profil lecture. */
+	expenses: {
+		organization_id: 'text',
+		property_id: 'text',
+		unit_id: 'text',
+		lease_id: 'text',
+		spent_on: 'text',
+		category: 'text',
+		description: 'text',
+		supplier: 'text',
+		amount: 'integer',
+		document_id: 'text',
+		paid_by: 'text',
+		borne_by: 'text',
+		recovery: 'text',
+		status: 'text',
+		cancellation_reason: 'text',
+		cancelled_at: 'text',
+		cancelled_by: 'text',
+		recorded_by: 'text',
+		created_at: 'text',
+		updated_at: 'text'
+	},
+	/** Lot 10 : relevés propriétaires (brouillons et émis), sans la clé du PDF ni les jetons des liens. */
+	owner_statements: {
+		organization_id: 'text',
+		owner_id: 'text',
+		month: 'text',
+		version: 'integer',
+		corrects_statement_id: 'text',
+		status: 'text',
+		revision: 'text',
+		rent_collected: 'integer',
+		charges_collected: 'integer',
+		collected: 'integer',
+		rent_collected_by_owner: 'integer',
+		charges_collected_by_owner: 'integer',
+		commission: 'integer',
+		expenses: 'integer',
+		carried_balance: 'integer',
+		net: 'integer',
+		snapshot: 'text',
+		logo_id: 'text',
+		generated_at: 'text',
+		generated_by: 'text',
+		issued_on: 'text',
+		issued_at: 'text',
+		issued_by: 'text',
+		pdf_generated_at: 'text',
+		created_at: 'text',
+		updated_at: 'text'
+	},
+	/** Lot 10 : éléments consommés par un relevé émis (un élément n'entre qu'une fois). */
+	owner_statement_lines: {
+		organization_id: 'text',
+		statement_id: 'text',
+		kind: 'text',
+		role: 'text',
+		allocation_id: 'text',
+		expense_id: 'text',
+		mandate_id: 'text',
+		fee_month: 'text',
+		lease_id: 'text',
+		carried_statement_id: 'text',
+		item_key: 'text',
+		created_at: 'text'
+	},
+	/** Lot 10 : reversements enregistrés et leurs contre-écritures, ajout seul. */
+	owner_payouts: {
+		organization_id: 'text',
+		kind: 'text',
+		reverses_payout_id: 'text',
+		owner_id: 'text',
+		statement_id: 'text',
+		amount: 'integer',
+		paid_on: 'text',
+		method: 'text',
+		reference: 'text',
+		note: 'text',
+		reason: 'text',
+		recorded_by: 'text',
+		created_at: 'text'
 	}
 } as const satisfies Record<string, Record<string, LocalColumnType>>;
 
@@ -586,5 +698,11 @@ export const ORGANIZATION_SCOPED_TABLES = [
 	'lease_amendments',
 	'payments',
 	'payment_allocations',
-	'receipts'
+	'receipts',
+	'reminders',
+	'reminder_settings',
+	'expenses',
+	'owner_statements',
+	'owner_statement_lines',
+	'owner_payouts'
 ] as const satisfies readonly SyncedTable[];

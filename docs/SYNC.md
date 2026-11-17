@@ -75,6 +75,13 @@ Dans l'ordre, dans le lot qui crée la table :
 | `payments` | 09 | encaissements et contre-écritures, ajout seul ; statut et locataire décidés par le serveur ; agent de terrain : les loyers de ses unités, jamais une caution | création seule, jointe au reçu (jetons et numéro provisoire lus dans la table locale `receipt_drafts`) ; jamais le statut, le montant d'un encaissement enregistré ni le numéro ; validation, rapprochement et annulation en ligne |
 | `payment_allocations` | 09 | imputations, écrites par le serveur seul à la confirmation (ajout seul) ; agent de terrain : sans les imputations de caution | jamais |
 | `receipts` | 09 | reçus : numéro provisoire, puis numéro attribué par la base à la validation ; copie figée (D29) ; **ni** les jetons (empreintes, serveur seul) **ni** les clés des PDF ; agent de terrain : les reçus des loyers de ses unités | jamais (créé avec l'encaissement, étape 3) |
+| `payments`, `payment_allocations` (colonne du lot 10) | 10 | `expense_id` : encaissement d'une dépense réclamée au locataire et son imputation ; jamais chez l'agent de terrain (seules les imputations sur échéance ou en crédit descendent) | comme au lot 09 |
+| `reminders` | 10 | relances, ajout seul (échéances et dépenses visées en texte JSON) ; agent de terrain : celles des locataires de ses unités | création (étape 3) |
+| `reminder_settings` | 10 | trois modèles et trois seuils de l'organisation (identifiant = organisation) ; direction, gestion, lecture | non (réglage du directeur, en ligne) |
+| `expenses` | 10 | dépenses (qui a payé, qui supporte, récupération), ajout seul ; direction, gestion, lecture ; jamais l'agent de terrain | création (étape 3) ; annulation en ligne |
+| `owner_statements` | 10 | relevés (brouillons et émis), totaux et contenu ; **ni** la clé du PDF **ni** les jetons des liens ; direction, gestion, lecture | jamais (génération et émission en ligne) |
+| `owner_statement_lines` | 10 | éléments consommés par un relevé émis (clé de l'élément), écrits par le serveur à l'émission | jamais |
+| `owner_payouts` | 10 | reversements enregistrés et contre-écritures, ajout seul | jamais (en ligne) |
 
 ## 4. Lire dans la base locale (écrans)
 
