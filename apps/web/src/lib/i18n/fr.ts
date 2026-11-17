@@ -1912,7 +1912,7 @@ export const fr = {
 		settingsHint: 'Trois messages, du plus courtois au plus ferme. Variables : {nom}, {montant}, {periode}, {organisation}, {telephone}.',
 		offsets: 'Relance proposée après',
 		offsetUnit: 'jours de retard',
-		saveSettings: 'Enregistrer les modèles',
+		saveSettings: 'Mettre à jour les modèles de relance',
 		settingsSaved: 'Modèles de relance enregistrés.',
 		directorOnly: 'Seule la direction modifie les modèles.'
 	},
