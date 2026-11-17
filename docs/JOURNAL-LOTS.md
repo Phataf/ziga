@@ -1177,3 +1177,69 @@ Une pull request, avant le lot 10 :
 1. **Caution** : la migration `0016_deposit_received_via_payment` ajoute un trigger à l'insertion qui refuse tout nouveau mouvement `received` sans `payment_id` (`DEPOSIT_RECEIPT_VIA_PAYMENT`), pour tous les rôles, propriétaire du schéma compris. Les mouvements du lot 08 sans encaissement restent. Testé sur la base de test (rôle de l'API et propriétaire du schéma) et sur une base du lot 09 migrée (`migration-0016.int.test.ts`). Les tests SQL du lot 08 versent désormais la caution par un encaissement ; un versement « d'avant 0016 » s'écrit en coupant le trigger le temps d'une insertion (`insertLegacyReceived`). Cela lève l'écart « versement de caution reçu avant le lot 09 » noté plus haut.
 2. **Jetons d'un reçu saisi sur un autre appareil** : `POST /receipts/:id/tokens` (permission `payment.read`, en ligne) crée un nouveau jeton de vérification et un nouveau jeton de partage. Plusieurs jetons de vérification restent valables pour un même reçu, le jeton de partage reste révocable, chaque création est journalisée, et le serveur n'en garde que l'empreinte. Sur la fiche du reçu, « Créer le QR code et le lien » les garde sur l'appareil (table locale `receipt_drafts`). Après « Révoquer les liens », l'appareil oublie aussi son propre lien de partage. Testé par l'API (ancien QR toujours valable) et par Playwright. Cela lève l'écart « jeton absent sur un autre appareil ».
 3. **« Plus tard »** sur l'écran « Caution et avance » ouvert après la validation d'un bail : retour à la fiche du bail. Le test `leases.spec.ts` n'ajoute plus de lien à la page.
+
+## Lot 10 — Impayés, relances, dépenses et relevés propriétaires — 17/11/2026
+
+Prompt : `prompts/lot-10-impayes-releves.md`. Règles et calculs : `docs/RELEVES.md`.
+
+### Réponse du porteur au prompt
+- **Commission de gestion** : calculée sur le loyer encaissé seul, hors charges.
+
+### Réponses du porteur au plan
+1. **Trop-perçu** : pas compté au moment du paiement ; section d'information « Trop-perçus détenus pour vos locataires ». Il entre dans le relevé quand il est imputé, partagé par la règle cumulative, et la commission s'applique alors.
+2. **Charges** : dans le net, sans commission.
+3. **Commission en taux** : tronquée vers zéro, par mois et par version de mandat.
+4. **Commission fixe** : `fixed_per_month` au prorata (arrondi inférieur) le premier et le dernier mois, entière sinon ; `fixed_per_operation` = un bail validé dans le mois.
+5. **Confirmation tardive** : sur le relevé suivant, avec une mention ; pas de rectificatif automatique.
+6. **Net négatif** : reporté (« Solde du relevé précédent ») jusqu'à être couvert, testé sur 3 mois. **Quota Découverte** : 2 relevés émis par mois civil ; les rectificatifs ne comptent pas.
+7. **Dépense réclamée au locataire** : option A — l'encaissement porte l'objet « dépense », imputation exacte, reçu « Remboursement de dépense » ; nouvelle migration et service public du module `payments`.
+8. **Agent de terrain** : permission `reminder.record_visit` (visite et appel), sur les locataires de ses unités seulement.
+9. **Données des locataires sur le relevé** (écran, PDF, page `/s`) : le nom seulement ; ni téléphone, ni pièce d'identité, ni autre donnée personnelle. Testé (aucun téléphone de locataire sur `/s`).
+
+Quatre pull requests, chacune aussi envoyée sur `claude/lot10-sauvegarde` :
+- étape 1, fonctions pures : part du loyer et des charges, relevé, commission, impayés, relances, tableau de bord (Phataf/ziga#43) ;
+- étape 2, migrations 0017 et 0018, synchronisation en lecture, tests SQL (Phataf/ziga#44) ;
+- étape 3, API, worker des relevés, encaissement d'une dépense, page publique de l'API, `docs/RELEVES.md` (Phataf/ziga#45) ;
+- étape 4, écrans, page `/s/<jeton>`, Playwright et journal.
+
+### Fait
+- **Fonctions pures** (`packages/shared`) :
+  - `statements.ts` : part du loyer et des charges d'une imputation par la règle cumulative entière (⌊P₁·c/d⌋ − ⌊P₀·c/d⌋), éléments datés par le paiement, l'imputation d'un crédit ou l'annulation, paires neutralisées, commission (taux, fixe mensuel au prorata, fixe par opération), dépenses du propriétaire, solde reporté, trop-perçus et cautions en information seulement (jamais dans le net), document du relevé (le même à l'écran, dans le PDF et sur `/s`), cadre du net (« Net à vous reverser », « Rien à reverser », « Solde en faveur de … » avec son explication, jamais un grand montant négatif), émission, quota, reversements, jetons ;
+  - `expenses.ts` (six combinaisons de la règle 16), `collections.ts` (impayés groupés, tranches, suggestion J+5, J+15, J+30), `reminders.ts` (trois modèles, lien `wa.me`), `dashboard.ts`.
+- **Base** : migration `0017_collections` (relances, réglages des relances, dépenses, relevés, éléments consommés, jetons des liens, reversements ; objet « dépense » des encaissements) et `0018_statement_organizations` ; organisation, RLS, clés composites, ajout seul ; synchronisation en lecture (l'agent de terrain ne reçoit que les relances des locataires de ses unités ; jamais un jeton ni la clé d'un PDF).
+- **API et worker** : impayés, relances, modèles, dépenses, brouillon, émission avec empreinte, rectificatif, PDF par BullMQ, lien partagé et révocation, reversements et contre-écriture, page publique avec limite de débit ; tâche du 1er du mois (brouillons du mois écoulé). Relances et dépenses écrites depuis l'appareil (hors ligne).
+- **Web** :
+  - **Accueil** par profil et par appareil (`docs/UX.md` §4), lu sur l'appareil : loyers encaissés et attendus du mois, taux d'encaissement, impayés, échéances du jour, relevés à émettre (agence) ; téléphone : cartes et bouton Encaisser ; tablette : trois indicateurs et tableau ; ordinateur : quatre indicateurs, tableau et « plus anciens retards ». Agent de terrain : « Ma tournée » (retards et échéances du jour de ses unités).
+  - **Impayés** : filtres (tranche, quartier, propriétaire, agent), cartes sur téléphone, tableau ailleurs ; Relancer, Encaisser, Appeler, Noter une visite. Sur ordinateur : sélection multiple et **relances en série** (un message par locataire, progression « 3 sur 5 », « Le message est-il parti ? » au retour, relance enregistrée sur l'appareil).
+  - **Modèles de relance** et seuils dans « Organisation » (direction ; en ligne), sous l'interrupteur.
+  - **Dépenses** : liste, saisie hors ligne avec les combinaisons en clair (« Avancée par nous pour le propriétaire : déduite de son relevé »…), annulation motivée par la direction en ligne.
+  - **Relevés** : mois en pastilles (téléphone) ou en liste, propriétaires sous mandat et état du relevé ; « Préparer le relevé » ; fiche du relevé (document, émission, PDF, envoi par WhatsApp au propriétaire, copie et révocation des liens, rectificatif, reversements et leur annulation). La fiche lit l'API tant que l'appareil n'a pas reçu la dernière version.
+  - **Page `/s/<jeton>`** : rendue par le serveur, sans JavaScript ; PDF par redirection vers une URL signée ; invitation à créer son compte. Navigation : Dépenses (agence et bailleur), Relevés propriétaires (agence), plus de marque « lot » sur l'accueil et les impayés.
+
+### Tests attendus par le prompt
+- [x] **Accès croisé A/B** sur `reminders`, `expenses`, `owner_statements`, `owner_payouts` (et les tables liées), en SQL (`collections-db.int.test.ts`), par l'API (`collections.int.test.ts`) et dans le flux du vrai PowerSync (`collections.spec.ts`) ; un jeton de A ne donne rien de B ; jeton révoqué ou expiré refusé.
+- [x] **Totaux d'un relevé** : plusieurs unités, paiement partiel, paiement annulé dans le mois, dépenses supportées par le locataire ou l'organisation exclues, dépense avancée pour le propriétaire incluse une seule fois, commission en taux et fixe (`statements.test.ts`, `collections.int.test.ts`).
+- [x] **Relevé émis non modifiable** (base et API) ; le rectificatif référence l'original.
+- [x] **Quota Découverte** : 2 relevés émis par mois civil, rectificatif non compté.
+- [x] **Lien WhatsApp encodé** (accents, montant formaté, retours à la ligne) : `reminders.test.ts` et Playwright (5 liens vérifiés, sans « + »).
+- [x] **Interrupteur `collections.reminders_whatsapp_link` coupé** : API refusée (`collections.int.test.ts`), bouton et modèles absents (Playwright).
+- [x] **Playwright sur les trois appareils** (`impayes-releves.spec.ts`) : accueil, impayés, relance, dépenses, relevés, modèles, sans débordement horizontal ; agent de terrain hors ligne ; dépense hors ligne puis annulée ; relevé préparé, émis, partagé, reversé ; profil lecture.
+
+### Critères d'acceptation
+- [x] **5 relances en moins de 2 minutes depuis l'accueil** : gestionnaire, ordinateur, de l'accueil à la cinquième relance enregistrée ; mesuré par Playwright (quelques secondes).
+- [x] **Relevé ouvert depuis le lien WhatsApp, sans compte, en 3G, en moins de 3 secondes** : Playwright avec le profil 3G (1,6 Mbit/s, 300 ms de latence, cache vide) sur téléphone : 669 ms à la dernière mesure ; aucune requête de script.
+- [x] **Totaux égaux aux reçus valides de la période** : test de rapprochement (`collections.int.test.ts`).
+- [x] **Journal des lots mis à jour.**
+
+### Écarts par rapport au prompt
+- **Clé du PDF et jeton dans `owner_statements`** : la clé du PDF est dans la table mais jamais synchronisée ; les jetons sont dans `owner_statement_tokens` (empreinte seulement, plusieurs liens par relevé).
+- **Justificatif d'une dépense** : la base le prévoit (ajouté une seule fois) et l'API l'accepte à la création (`documentId`) ; l'écran ne propose pas encore de le déposer.
+- **Indicateur « relevés à émettre »** : sur téléphone et ordinateur ; la tablette garde trois indicateurs (disposition du plan), le nombre reste visible dans « Relevés propriétaires ».
+
+### Dette technique
+- **Un paiement annulé avant d'entrer dans un relevé** peut déplacer 1 FCFA entre loyer et charges sur cette échéance (règle cumulative appliquée à la paire neutralisée) ; le total reste exact.
+- **Page `/s`** : le serveur web lit l'API par `PUBLIC_API_URL` ; derrière un mandataire inverse devant l'API, la limite de débit verrait l'adresse du serveur web. À régler au déploiement (adresse interne de l'API et mandataire de confiance).
+- **PDF du relevé** : polices standard de pdf-lib (U+00A0 au lieu de U+202F, signe moins remplacé par un trait d'union).
+
+### Questions ouvertes pour le porteur
+Aucune.

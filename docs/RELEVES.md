@@ -93,6 +93,7 @@ Enregistrés, jamais exécutés par la plateforme : relevé émis, net positif, 
 
 - Jeton de 256 bits ; la base n'en garde que l'empreinte SHA-256 ; 90 jours au plus ; révocable.
 - `GET /public/statements/shared/:token` : le relevé émis en lecture seule. Limite de débit par adresse IP (`STATEMENT_PUBLIC_RATE_PER_MINUTE`, 30 par défaut), `Cache-Control: no-store`, `X-Robots-Tag: noindex, nofollow`, `Referrer-Policy: no-referrer`. Lien expiré, révoqué ou inconnu : introuvable (`STATEMENT_LINK_INVALID`).
+- **Page `/s/<jeton>`** (interface) : rendue par le serveur, **sans JavaScript** (`csr = false`), pour s'ouvrir vite depuis WhatsApp en 3G (mesurée par Playwright : 1,6 Mbit/s, 300 ms de latence, cache vide, moins de 3 s). Le serveur web lit l'API en transmettant l'adresse du visiteur (`X-Forwarded-For`), pour que la limite de débit compte le visiteur. Le PDF passe par `/s/<jeton>/pdf`, qui redirige vers une URL signée de 5 minutes. Mêmes en-têtes que l'API. Le contenu est celui de l'écran et du PDF (`statementDocument`) : un locataire n'y apparaît que par son nom, jamais par son téléphone ni sa pièce d'identité (testé).
 
 ## 9. Routes
 
