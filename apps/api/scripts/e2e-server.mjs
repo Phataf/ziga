@@ -51,6 +51,8 @@ const env = {
 	JOBS_DASHBOARD: 'false',
 	API_PUBLIC_URL: `http://localhost:${base.E2E_API_PORT || '3100'}`,
 	CORS_ORIGINS: base.E2E_WEB_ORIGIN || 'http://localhost:4173',
+	// Liens partagés (reçus, relevés) vers l'interface de test, quelle que soit l'adresse du fichier .env.
+	WEB_PUBLIC_URL: base.E2E_WEB_ORIGIN || 'http://localhost:4173',
 	AUTH_JWT_KEYS: '',
 	AUTH_OTP_SECRET: 'secret-des-codes-pour-les-tests-de-bout-en-bout',
 	SMS_DRIVER: 'file',
