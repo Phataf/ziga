@@ -63,6 +63,19 @@ describe('architecture', () => {
 		expect(readFileSync(join(src, 'db/schema/index.ts'), 'utf8')).not.toContain('owners');
 	});
 
+	it('seul le module collections lit et écrit les relances, les dépenses, les relevés et les reversements (lot 10)', () => {
+		const tables =
+			/\b(from|join|update|into)\s+(reminders|reminder_settings|expenses|owner_statements|owner_statement_lines|owner_statement_tokens|owner_payouts)\b/i;
+		const offenders = all.filter(
+			(f) =>
+				!f.path.startsWith('modules/collections/') &&
+				f.path !== 'db/schema/collections.ts' &&
+				(imports(f.code).some((i) => /schema\/collections(\.js)?$/.test(i)) || tables.test(f.code))
+		);
+		expect(offenders.map((f) => f.path)).toEqual([]);
+		expect(readFileSync(join(src, 'db/schema/index.ts'), 'utf8')).not.toContain('collections');
+	});
+
 	it('seul le module properties lit et écrit les biens, les unités et les photos (lot 07)', () => {
 		const tables = /\b(from|join|update|into)\s+(properties|units|media)\b/i;
 		const offenders = all.filter(

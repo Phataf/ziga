@@ -86,7 +86,38 @@ const RULES: Record<string, { status: number; message: string }> = {
 	RECEIPT_FIRST_NUMBER_LOCKED: { status: 409, message: 'Un reçu a déjà été émis : le premier numéro ne se fixe plus.' },
 	RECEIPT_FIRST_NUMBER_ALREADY_SET: { status: 409, message: 'Le premier numéro a déjà été fixé ; il ne se fixe qu’une fois.' },
 	RECEIPT_FIRST_NUMBER_INVALID: { status: 400, message: 'Le premier numéro vaut 1 au moins.' },
-	RECEIPT_TOKEN_REVOKED: { status: 409, message: 'Ce lien est déjà révoqué.' }
+	RECEIPT_TOKEN_REVOKED: { status: 409, message: 'Ce lien est déjà révoqué.' },
+	// Lot 10 : relances, dépenses, relevés, reversements (migrations 0017 et 0018).
+	REMINDER_SUBJECT_INVALID: { status: 409, message: 'Une échéance ou une dépense visée n’est pas celle de ce locataire.' },
+	EXPENSE_IMMUTABLE: { status: 409, message: 'Une dépense enregistrée ne se modifie pas : corrigez par une annulation.' },
+	EXPENSE_DATE_IN_FUTURE: { status: 400, message: 'La date de la dépense est dans le futur.' },
+	EXPENSE_COMBINATION_UNSUPPORTED: { status: 400, message: 'Cette combinaison n’est pas prise en charge.' },
+	EXPENSE_LEASE_MISMATCH: { status: 409, message: 'Le bail n’est pas celui de ce bien ou de cette unité.' },
+	EXPENSE_CLAIM_RECOVERED: {
+		status: 409,
+		message: 'Une dépense déjà remboursée en partie ne s’annule pas : annulez d’abord ses encaissements.'
+	},
+	EXPENSE_CLAIM_PENDING: { status: 409, message: 'Un encaissement de cette dépense attend sa validation.' },
+	EXPENSE_OVERPAID: { status: 409, message: 'Le remboursement dépasse le montant de la dépense.' },
+	PAYMENT_EXPENSE_NOT_CLAIMED: { status: 409, message: 'Cette dépense n’est pas réclamée au locataire de ce bail.' },
+	PAYMENT_EXPENSE_CANCELLED: { status: 409, message: 'Cette dépense est annulée.' },
+	STATEMENT_IMMUTABLE: { status: 409, message: 'Un relevé émis est figé : corrigez par un rectificatif.' },
+	STATEMENT_LANDLORD: { status: 409, message: 'Un bailleur particulier n’a pas de relevé propriétaire.' },
+	STATEMENT_RECTIFICATION_INVALID: { status: 409, message: 'Un rectificatif suit la dernière version émise du même mois.' },
+	STATEMENT_RECTIFICATION_NOT_LATEST: { status: 409, message: 'Un rectificatif ne vise que le dernier relevé émis.' },
+	STATEMENT_PERIOD_NOT_ENDED: { status: 409, message: 'Le mois n’est pas terminé.' },
+	STATEMENT_ALREADY_ISSUED: { status: 409, message: 'Le relevé de ce mois est déjà émis : faites un rectificatif.' },
+	STATEMENT_OUT_OF_ORDER: { status: 409, message: 'Un relevé plus récent est déjà émis pour ce propriétaire.' },
+	STATEMENT_ISSUED_BY: { status: 409, message: 'Une émission a son auteur.' },
+	STATEMENT_LINES_AT_ISSUE: { status: 409, message: 'Les éléments d’un relevé s’écrivent à son émission.' },
+	STATEMENT_LINE_INVALID: { status: 409, message: 'Cet élément n’entre pas dans le relevé de ce propriétaire.' },
+	STATEMENT_NOT_ISSUED: { status: 409, message: 'Ce relevé n’est pas émis.' },
+	STATEMENT_TOKEN_REVOKED: { status: 409, message: 'Ce lien est déjà révoqué.' },
+	PAYOUT_OWNER_MISMATCH: { status: 409, message: 'Le reversement va au propriétaire du relevé.' },
+	PAYOUT_REVERSAL_INVALID: { status: 409, message: 'Une contre-écriture compense un reversement à l’identique.' },
+	PAYOUT_DATE_IN_FUTURE: { status: 400, message: 'La date du reversement est dans le futur.' },
+	PAYOUT_NOTHING_DUE: { status: 409, message: 'Rien à reverser sur ce relevé.' },
+	PAYOUT_EXCEEDS_NET: { status: 409, message: 'Le total reversé dépasserait le net du relevé.' }
 };
 
 /** Contraintes nommées traduites en refus métier (le reste : CONFLICT). */
@@ -125,7 +156,15 @@ const CONSTRAINTS: Record<string, { code: string; status: number; message: strin
 		message: 'Cette référence Mobile Money est déjà enregistrée chez cet opérateur. Vérifiez la transaction.'
 	},
 	payments_reversed_once: { code: 'PAYMENT_ALREADY_CANCELLED', status: 409, message: 'Cet encaissement est déjà annulé.' },
-	receipts_one_per_payment: { code: 'RECEIPT_EXISTS', status: 409, message: 'Cet encaissement a déjà son reçu.' }
+	receipts_one_per_payment: { code: 'RECEIPT_EXISTS', status: 409, message: 'Cet encaissement a déjà son reçu.' },
+	// Lot 10 : la base tranche en dernier ressort (deux émissions, deux reversements simultanés).
+	owner_statement_lines_once: {
+		code: 'STATEMENT_ITEM_TAKEN',
+		status: 409,
+		message: 'Un élément de ce relevé est déjà repris dans un autre relevé.'
+	},
+	owner_statements_version_unique: { code: 'STATEMENT_EXISTS', status: 409, message: 'Ce relevé existe déjà.' },
+	owner_payouts_reversed_once: { code: 'PAYOUT_ALREADY_CANCELLED', status: 409, message: 'Ce reversement est déjà annulé.' }
 };
 
 /** Clés étrangères composites : la ligne visée n'existe pas dans l'organisation (règle 1). */
@@ -138,7 +177,16 @@ const FOREIGN_KEYS: Record<string, { code: string; message: string }> = {
 	deposit_movements_account_fk: { code: 'DEPOSIT_ACCOUNT_NOT_FOUND', message: 'Compte de caution introuvable.' },
 	payments_lease_fk: { code: 'LEASE_NOT_FOUND', message: 'Bail introuvable.' },
 	payments_deposit_account_fk: { code: 'DEPOSIT_ACCOUNT_NOT_FOUND', message: 'Compte de caution introuvable.' },
-	payment_allocations_due_fk: { code: 'RENT_DUE_NOT_FOUND', message: 'Échéance introuvable.' }
+	payment_allocations_due_fk: { code: 'RENT_DUE_NOT_FOUND', message: 'Échéance introuvable.' },
+	// Lot 10.
+	payments_expense_fk: { code: 'EXPENSE_NOT_FOUND', message: 'Dépense introuvable.' },
+	reminders_tenant_fk: { code: 'TENANT_NOT_FOUND', message: 'Locataire introuvable.' },
+	expenses_property_fk: { code: 'PROPERTY_NOT_FOUND', message: 'Bien introuvable.' },
+	expenses_unit_fk: { code: 'UNIT_NOT_FOUND', message: 'Unité introuvable.' },
+	expenses_lease_fk: { code: 'LEASE_NOT_FOUND', message: 'Bail introuvable.' },
+	expenses_document_fk: { code: 'DOCUMENT_NOT_FOUND', message: 'Justificatif introuvable.' },
+	owner_statements_owner_fk: { code: 'OWNER_NOT_FOUND', message: 'Propriétaire introuvable.' },
+	owner_payouts_statement_fk: { code: 'STATEMENT_NOT_FOUND', message: 'Relevé introuvable.' }
 };
 
 interface PgLike {

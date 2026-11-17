@@ -95,3 +95,29 @@ export interface ReceiptPdfJobData {
 	organizationId: string;
 	receiptId: string;
 }
+
+/**
+ * Relevés propriétaires (lot 10) : PDF d'un relevé émis, et brouillons du mois écoulé, le 1er de chaque mois à 01:00 UTC
+ * (heure de Ouagadougou). Un brouillon n'est qu'un calcul : rejouée, la tâche le recalcule sans rien émettre.
+ */
+export const STATEMENTS_QUEUE = 'owner-statements';
+export const STATEMENT_PDF_JOB = 'statement-pdf';
+export const STATEMENTS_MONTHLY_SCHEDULER = 'owner-statements-monthly';
+export const STATEMENTS_MONTHLY_JOB = 'monthly-drafts';
+export const STATEMENTS_MONTHLY_PATTERN = '0 1 1 * *';
+
+export interface StatementPdfJobData {
+	organizationId: string;
+	statementId: string;
+}
+
+export interface StatementsMonthlyJobData {
+	/** Mois des brouillons imposé (tests) ; sinon le mois écoulé. */
+	month?: string;
+}
+
+export interface StatementsMonthlyJobResult {
+	month: string;
+	organizations: number;
+	drafts: number;
+}

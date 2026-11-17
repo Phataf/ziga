@@ -1150,3 +1150,63 @@ export function statementDocument(s: StatementSnapshot): StatementDocument {
 		info
 	};
 }
+
+// ---------------------------------------------------------------- vues (API et appareil)
+
+export interface PayoutView {
+	id: string;
+	kind: 'payout' | 'reversal';
+	reversesPayoutId: string | null;
+	ownerId: string;
+	statementId: string;
+	amount: Fcfa;
+	paidOn: string;
+	method: PayoutMethod;
+	reference: string | null;
+	note: string | null;
+	reason: string | null;
+	recordedBy: string | null;
+	createdAt: string;
+}
+
+export interface StatementSummaryView {
+	id: string;
+	ownerId: string;
+	ownerName: string;
+	month: StatementMonth;
+	version: number;
+	correctsStatementId: string | null;
+	status: StatementStatus;
+	revision: string;
+	totals: StatementTotals;
+	issuedOn: string | null;
+	issuedAt: string | null;
+	pdfAvailable: boolean;
+}
+
+export interface StatementDetailView extends StatementSummaryView {
+	document: StatementDocument;
+	payouts: PayoutView[];
+	/** Total reversé (contre-écritures déduites). */
+	paidOut: Fcfa;
+	/** Reste à reverser sur ce relevé. */
+	remaining: Fcfa;
+}
+
+/** Page partagée `/s/<jeton>` : le relevé émis, en lecture seule ; aucune donnée personnelle de locataire. */
+export interface SharedStatementView {
+	document: StatementDocument;
+	issuedOn: string | null;
+	pdfAvailable: boolean;
+}
+
+export interface StatementShareLinkView {
+	token: string;
+	url: string;
+	expiresAt: string;
+}
+
+/** Total reversé sur un relevé : reversements moins contre-écritures. */
+export function payoutsTotal(payouts: readonly Pick<PayoutView, 'kind' | 'amount'>[]): Fcfa {
+	return payouts.reduce((s, p) => s + (p.kind === 'payout' ? p.amount : -p.amount), 0);
+}

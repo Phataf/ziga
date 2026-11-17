@@ -7,6 +7,7 @@ import { DatabaseModule } from './db/database.module.js';
 import { ContractsWorkerModule } from './jobs/contracts-worker.module.js';
 import { JobsModule } from './jobs/jobs.module.js';
 import { PaymentsWorkerModule } from './jobs/receipts.processor.js';
+import { StatementsWorkerModule } from './jobs/statements.processor.js';
 import { AuditModule } from './modules/audit/audit.module.js';
 import { LeaseEventsModule } from './modules/leases/rent-due-events.js';
 import { NotificationsModule } from './modules/notifications/notifications.module.js';
@@ -32,7 +33,8 @@ export class WorkerModule {
 				JobsModule.register('worker'),
 				ContractsWorkerModule,
 				// Lot 09 : PDF des reçus et crédit du bail imputé sur les échéances émises la nuit.
-				PaymentsWorkerModule
+				PaymentsWorkerModule,
+				StatementsWorkerModule
 			]
 		};
 	}

@@ -20,6 +20,7 @@ import { PropertiesModule } from './modules/properties/properties.module.js';
 import { DocumentsModule } from './modules/documents/documents.module.js';
 import { LeasesModule } from './modules/leases/leases.module.js';
 import { LeaseEventsModule } from './modules/leases/rent-due-events.js';
+import { CollectionsModule } from './modules/collections/collections.module.js';
 import { PaymentsModule } from './modules/payments/payments.module.js';
 import { NotificationsModule } from './modules/notifications/notifications.module.js';
 import { RedisModule } from './redis/redis.module.js';
@@ -50,6 +51,7 @@ export class AppModule {
 				LeaseEventsModule,
 				LeasesModule,
 				PaymentsModule,
+				CollectionsModule,
 				AdminModule,
 				SyncModule,
 				...extraModules,

@@ -194,6 +194,18 @@ interface Context {
 	actor: AuditActor;
 }
 
+/** Lot 10 : unité vue par le module collections (relevés, filtres des impayés). */
+export interface CollectionUnit {
+	id: string;
+	/** « Nom du bien · libellé de l'unité ». */
+	label: string;
+	propertyId: string;
+	propertyName: string;
+	ownerId: string;
+	neighborhoodId: string | null;
+	agentId: string | null;
+}
+
 @Injectable()
 export class PropertiesService {
 	constructor(
@@ -585,6 +597,35 @@ export class PropertiesService {
 			after: { assignedAgentId: agentId }
 		});
 		return this.unitViewOf(c, updated!);
+	}
+	// ---------------------------------------------------------------- lot 10 : impayés et relevés (lecture seule)
+
+	/**
+	 * Unités de l'organisation (ou des biens donnés) avec leur libellé, le nom et le propriétaire du bien, le quartier et
+	 * l'agent affecté : libellés des relevés et filtres des impayés (module collections). Transaction donnée : le worker
+	 * des relevés n'a pas de requête.
+	 */
+	async collectionUnits(tx: Tx, filter: { propertyIds?: readonly string[]; unitIds?: readonly string[] } = {}): Promise<CollectionUnit[]> {
+		if ((filter.propertyIds && !filter.propertyIds.length) || (filter.unitIds && !filter.unitIds.length)) return [];
+		const rows = await tx
+			.select({
+				id: units.id,
+				label: units.label,
+				propertyId: units.propertyId,
+				propertyName: properties.name,
+				ownerId: properties.ownerId,
+				neighborhoodId: properties.neighborhoodId,
+				agentId: units.assignedAgentId
+			})
+			.from(units)
+			.innerJoin(properties, and(eq(properties.organizationId, units.organizationId), eq(properties.id, units.propertyId)))
+			.where(
+				and(
+					filter.propertyIds ? inArray(units.propertyId, [...filter.propertyIds]) : undefined,
+					filter.unitIds ? inArray(units.id, [...filter.unitIds]) : undefined
+				)
+			);
+		return rows.map((r) => ({ ...r, label: `${r.propertyName} · ${r.label}` }));
 	}
 }
 

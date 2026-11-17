@@ -17,6 +17,7 @@ import {
 	isManagementMandate,
 	mandateTermsSchema,
 	ownerSchema,
+	type Commission,
 	type CommissionColumns,
 	type CreateMandateData,
 	type CreateMandateScopeData,
@@ -146,6 +147,21 @@ function ownerData(o: OwnerRow): OwnerData {
 
 const LANDLORD_ONLY_SELF = () =>
 	new AppError('LANDLORD_SELF_MANAGED', 'Un bailleur particulier gère lui-même ses logements : ni autre propriétaire, ni mandat.', 403);
+
+/** Lot 10 : mandat vu par les relevés (module collections). */
+export interface StatementMandateRow {
+	id: string;
+	ownerId: string;
+	ownerName: string;
+	type: 'rental_management' | 'letting' | 'sale' | 'self_managed' | 'other';
+	startsOn: string;
+	/** Dernier jour en vigueur (révocation ou fin), ou null sans fin. */
+	inForceUntil: string | null;
+	/** Versions dans l'ordre ; `from` : date de l'enregistrement de la version (la première vaut dès le début). */
+	versions: { version: number; from: string; commission: Commission | null; canCollectFunds: boolean }[];
+	unitIds: string[];
+	propertyIds: string[];
+}
 
 @Injectable()
 export class OwnersService {
@@ -689,5 +705,58 @@ export class OwnersService {
 				version: 1
 			}
 		});
+	}
+	// ---------------------------------------------------------------- lot 10 : relevés (lecture seule)
+
+	/**
+	 * Mandats de l'organisation (ou d'un propriétaire) pour les relevés : dates de vigueur, versions (commission et
+	 * autorisation d'encaisser, avec leur date d'enregistrement) et unités couvertes. Lecture seule, pour le module
+	 * collections ; transaction donnée (worker des relevés). Le dernier jour en vigueur est la date de révocation, ou la
+	 * date de fin.
+	 */
+	async statementMandates(tx: Tx, filter: { ownerId?: string } = {}): Promise<StatementMandateRow[]> {
+		const rows = await tx
+			.select({ mandate: mandates, ownerName: owners.name })
+			.from(mandates)
+			.innerJoin(owners, and(eq(owners.organizationId, mandates.organizationId), eq(owners.id, mandates.ownerId)))
+			.where(filter.ownerId ? eq(mandates.ownerId, filter.ownerId) : undefined);
+		if (!rows.length) return [];
+		const ids = rows.map((r) => r.mandate.id);
+		const versions = await tx
+			.select()
+			.from(mandateVersions)
+			.where(inArray(mandateVersions.mandateId, ids))
+			.orderBy(asc(mandateVersions.version));
+		const scopes = await tx.select().from(mandateScopes).where(inArray(mandateScopes.mandateId, ids));
+		return rows.map(({ mandate: m, ownerName }) => {
+			const own = versions.filter((v) => v.mandateId === m.id);
+			const asVersion = (v: typeof m | (typeof versions)[number], version: number, from: string) => ({
+				version,
+				from,
+				commission: commissionFromColumns({
+					commission_basis: v.commissionBasis,
+					commission_rate_bp: v.commissionRateBp,
+					commission_amount: v.commissionAmount
+				}),
+				canCollectFunds: v.canCollectFunds
+			});
+			return {
+				id: m.id,
+				ownerId: m.ownerId,
+				ownerName,
+				type: m.type,
+				startsOn: m.startsOn,
+				inForceUntil: m.revokedAt ? toIsoDate(m.revokedAt) : m.endsOn,
+				versions: own.length ? own.map((v) => asVersion(v, v.version, toIsoDate(v.recordedAt))) : [asVersion(m, m.version, m.startsOn)],
+				unitIds: [...new Set(scopes.filter((sc) => sc.mandateId === m.id && sc.unitId).map((sc) => sc.unitId!))],
+				propertyIds: [...new Set(scopes.filter((sc) => sc.mandateId === m.id).map((sc) => sc.propertyId))]
+			};
+		});
+	}
+
+	/** Nom d'un propriétaire de l'organisation (relevé), ou null. */
+	async ownerName(tx: Tx, ownerId: string): Promise<string | null> {
+		const [row] = await tx.select({ name: owners.name }).from(owners).where(eq(owners.id, ownerId)).limit(1);
+		return row?.name ?? null;
 	}
 }

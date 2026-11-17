@@ -290,6 +290,34 @@ export interface PaymentTarget {
 }
 
 /** Lot 09 : une échéance vue par l'imputation (packages/shared, DueForAllocation et RentDueForStatus). */
+/** Lot 10 : baux, échéances et cautions lus par le module collections (impayés, relances, relevés). */
+export interface CollectionLeases {
+	leases: {
+		id: string;
+		unitId: string;
+		tenantId: string;
+		tenantName: string;
+		tenantPhone: string | null;
+		status: LeaseRow['status'];
+		startsOn: string;
+		validatedOn: string | null;
+	}[];
+	dues: {
+		id: string;
+		leaseId: string;
+		periodStart: string;
+		periodEnd: string;
+		dueOn: string;
+		rent: number;
+		charges: number;
+		amountDue: number;
+		amountPaid: number;
+		waived: boolean;
+		overdueFrom: string;
+	}[];
+	deposits: { leaseId: string; type: AccountRow['type']; holder: AccountRow['holder']; balance: number }[];
+}
+
 export interface DueForPayment {
 	id: string;
 	dueOn: string;
@@ -1237,5 +1265,78 @@ export class LeasesService {
 	async outstandingOf(leaseId: string, today: string, tx: Tx = RequestContext.tx()): Promise<number> {
 		const dues = await this.duesForAllocation(leaseId, tx);
 		return outstandingBalance(dues, today);
+	}
+	// ---------------------------------------------------------------- lot 10 : impayés et relevés (lecture seule)
+
+	/**
+	 * Baux des unités données (toutes celles de l'organisation sans filtre), avec le nom et le téléphone du locataire, la
+	 * date de validation (première version), leurs échéances et leurs cautions. Lecture seule, pour le module collections
+	 * (impayés, relances, relevés) ; transaction donnée : le worker des relevés n'a pas de requête.
+	 */
+	async collectionLeases(tx: Tx, filter: { unitIds?: readonly string[] } = {}): Promise<CollectionLeases> {
+		if (filter.unitIds && !filter.unitIds.length) return { leases: [], dues: [], deposits: [] };
+		const leaseRows = await tx
+			.select({
+				id: leases.id,
+				unitId: leases.unitId,
+				tenantId: leases.tenantId,
+				status: leases.status,
+				startsOn: leases.startsOn,
+				tenantName: tenants.fullName,
+				tenantPhone: tenants.phone
+			})
+			.from(leases)
+			.innerJoin(tenants, and(eq(tenants.organizationId, leases.organizationId), eq(tenants.id, leases.tenantId)))
+			.where(and(ne(leases.status, 'draft'), filter.unitIds ? inArray(leases.unitId, [...filter.unitIds]) : undefined));
+		if (!leaseRows.length) return { leases: [], dues: [], deposits: [] };
+		const ids = leaseRows.map((l) => l.id);
+		const firstVersions = await tx
+			.select({ leaseId: leaseVersions.leaseId, recordedAt: leaseVersions.recordedAt })
+			.from(leaseVersions)
+			.where(and(inArray(leaseVersions.leaseId, ids), eq(leaseVersions.version, 1)));
+		const validated = new Map(firstVersions.map((v) => [v.leaseId, toIsoDate(v.recordedAt)]));
+		const startsOn = new Map(leaseRows.map((l) => [l.id, l.startsOn]));
+		const dueRows = await tx
+			.select()
+			.from(rentDues)
+			.where(inArray(rentDues.leaseId, ids))
+			.orderBy(asc(rentDues.dueOn), asc(rentDues.periodStart), asc(rentDues.id));
+		const accounts = await tx.select().from(depositAccounts).where(inArray(depositAccounts.leaseId, ids));
+		const movements = accounts.length
+			? await tx
+					.select({ accountId: depositMovements.accountId, type: depositMovements.type, amount: depositMovements.amount })
+					.from(depositMovements)
+					.where(
+						inArray(
+							depositMovements.accountId,
+							accounts.map((a) => a.id)
+						)
+					)
+			: [];
+		return {
+			leases: leaseRows.map((l) => ({ ...l, validatedOn: validated.get(l.id) ?? null })),
+			dues: dueRows.map((r) => ({
+				id: r.id,
+				leaseId: r.leaseId,
+				periodStart: r.periodStart,
+				periodEnd: r.periodEnd,
+				dueOn: r.dueOn,
+				rent: r.rent,
+				charges: r.charges,
+				amountDue: r.amountDue,
+				amountPaid: r.amountPaid,
+				waived: r.status === 'waived',
+				overdueFrom: rentDueOverdueFrom(r, startsOn.get(r.leaseId)!)
+			})),
+			deposits: accounts.map((a) => ({
+				leaseId: a.leaseId,
+				type: a.type,
+				holder: a.holder,
+				balance: depositBalances(
+					a.agreedAmount,
+					movements.filter((m) => m.accountId === a.id)
+				).held
+			}))
+		};
 	}
 }

@@ -113,6 +113,8 @@ export const envSchema = z
 		WEB_PUBLIC_URL: optional(z.url()),
 		/** Pages publiques des reçus (vérification, lien partagé) : demandes par adresse IP et par minute. */
 		RECEIPT_PUBLIC_RATE_PER_MINUTE: z.coerce.number().int().min(1).default(30),
+		/** Lot 10 : page publique d'un relevé (/s/<jeton>) : demandes par adresse IP et par minute. */
+		STATEMENT_PUBLIC_RATE_PER_MINUTE: z.coerce.number().int().min(1).default(30),
 
 		SENTRY_DSN: z.union([z.url(), z.literal('')]).default(''),
 		SENTRY_ENVIRONMENT: z.string().default('development'),
