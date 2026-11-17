@@ -12,7 +12,6 @@ import {
 	createLeaseSchema,
 	createTenantWithIdentitySchema,
 	depositHolderChangeSchema,
-	depositReceiptSchema,
 	pageQuerySchema,
 	rentChangeSchema,
 	updateDepositAccountSchema,
@@ -23,7 +22,7 @@ import {
 import { z } from 'zod';
 import { Creation } from '../features/feature.guards.js';
 import { Can, OrganizationScoped } from '../organizations/organization-context.js';
-import { LeasesService } from './leases.service.js';
+import { DEPOSIT_RECEIPT_VIA_PAYMENT, LeasesService } from './leases.service.js';
 
 const optionalId = idSchema.optional();
 
@@ -172,12 +171,15 @@ export class DepositAccountsController {
 		return this.leases.updateDepositAgreed(idSchema.parse(id), updateDepositAccountSchema.parse(body));
 	}
 
-	/** Versement reçu, éventuellement en plusieurs fois. */
+	/**
+	 * Lot 09 : retirée. Un versement de caution est un encaissement comme un autre, avec son reçu (POST /payments) ;
+	 * l'ancienne route répond par un refus nommé (réponse du porteur, point 3). Les mouvements déjà saisis restent.
+	 */
 	@Post(':id/receipts')
 	@Can('deposit.receive')
 	@HttpCode(201)
-	receive(@Param('id') id: string, @Body() body: unknown) {
-		return this.leases.receiveDeposit(depositReceiptSchema.parse({ ...(body as object), accountId: idSchema.parse(id) }));
+	receive() {
+		throw DEPOSIT_RECEIPT_VIA_PAYMENT();
 	}
 
 	/** Changement de détenteur : un mouvement motivé, jamais une modification du compte. */

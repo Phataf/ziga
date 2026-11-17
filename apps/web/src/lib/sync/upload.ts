@@ -18,25 +18,50 @@ export interface CrudEntry {
 /** Organisation d'une ligne locale (null si la ligne n'existe plus sur l'appareil). */
 export type OrganizationLookup = (table: string, id: string) => Promise<string | null>;
 
+/** Lot 09 : reçu créé avec un encaissement sur l'appareil (table locale), joint à l'envoi de cet encaissement. */
+export type ReceiptLookup = (paymentId: string) => Promise<NonNullable<SyncOperation['receipt']> | null>;
+
 const SCOPED = new Set<string>(ORGANIZATION_SCOPED_TABLES);
 
-export async function toOperations(entries: CrudEntry[], databaseId: string, organizationOf: OrganizationLookup): Promise<SyncOperation[]> {
+export async function toOperations(
+	entries: CrudEntry[],
+	databaseId: string,
+	organizationOf: OrganizationLookup,
+	receiptOf: ReceiptLookup = async () => null
+): Promise<SyncOperation[]> {
 	const operations: SyncOperation[] = [];
 	for (const entry of entries) {
 		const data = entry.opData ?? null;
 		const column = data?.organization_id;
 		const organizationId =
 			typeof column === 'string' ? column : SCOPED.has(entry.table) ? await organizationOf(entry.table, entry.id) : null;
+		// Un encaissement créé sur l'appareil part avec son reçu (numéro provisoire et jetons) : le serveur n'en garde que
+		// l'empreinte des jetons.
+		const receipt = entry.table === 'payments' && entry.op === 'PUT' ? await receiptOf(entry.id) : null;
 		operations.push({
 			key: `${databaseId}:${entry.clientId}`,
 			op: entry.op,
 			table: entry.table,
 			id: entry.id,
 			data,
-			...(organizationId ? { organizationId } : {})
+			...(organizationId ? { organizationId } : {}),
+			...(receipt ? { receipt } : {})
 		});
 	}
 	return operations;
+}
+
+/** Reçu local d'un encaissement (table `receipt_drafts`). */
+export function localReceiptLookup(db: { getOptional<T>(sql: string, params?: unknown[]): Promise<T | null> }): ReceiptLookup {
+	return async (paymentId) => {
+		const row = await db.getOptional<{ id: string; provisional_number: string; verification_token: string; share_token: string }>(
+			`SELECT id, provisional_number, verification_token, share_token FROM receipt_drafts WHERE payment_id = ?`,
+			[paymentId]
+		);
+		return row
+			? { id: row.id, provisionalNumber: row.provisional_number, verificationToken: row.verification_token, shareToken: row.share_token }
+			: null;
+	};
 }
 
 /** Lecture de l'organisation d'une ligne dans la base locale ; seules les tables d'organisation sont lues. */

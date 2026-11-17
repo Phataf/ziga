@@ -1081,3 +1081,93 @@ Six pull requests, chacune aussi envoyée sur `claude/lot08bis-sauvegarde` :
 ### Questions ouvertes pour le porteur
 1. **Juriste** : relecture du modèle par défaut (bail et avenant), dont les articles cités, le préavis du bailleur et la case du propriétaire signataire.
 2. **Agence pilote** : date de mise en place de son modèle Word, pour vérifier le critère des 2 minutes sur le modèle réel.
+
+## Lot 09 — Encaissements, imputations et reçus — 17/11/2026
+
+Prompt : `prompts/lot-09-encaissements-recus.md`.
+
+### Réponses du porteur aux questions du prompt
+1. **Numéro des reçus** : un préfixe par organisation, de 2 à 6 lettres majuscules (`AGX-2027-000124`). La direction peut fixer, une seule fois et avant le premier reçu, le premier numéro de l'année en cours (suite d'un carnet papier). Numérotation continue par organisation et par année ; chaque réglage est journalisé.
+2. **Titre** : toujours « Reçu de paiement », jamais « quittance ». L'article 4 du modèle de bail par défaut est corrigé dans une nouvelle version (version 3 des modèles de la plateforme), avec un test.
+3. **Mentions du reçu** : nom, adresse, RCCM, IFU et logo de l'organisation ; numéro ; date d'émission ; locataire ; unité et adresse ; objet (périodes de loyer, ou caution et son détenteur) ; montant en chiffres et en lettres ; moyen et référence ; solde restant dû ; nom de la personne qui a encaissé ; QR code ; « ANNULÉ » une fois annulé. Les données de l'organisation sont figées à l'émission (D29).
+
+### Réponses du porteur au plan
+1. La permission `receipt.cancel` devient `payment.cancel` (directeur).
+2. Annulation d'un versement de caution : mouvement `received_cancelled` ; refusée si le solde descendrait sous les sorties déjà faites (testé).
+3. La route « versement reçu » du lot 08 est retirée (refus `DEPOSIT_RECEIPT_VIA_PAYMENT`, par l'API et à la synchronisation) : un versement de caution est un encaissement. Les mouvements `received` déjà enregistrés restent tels quels.
+4. Un seul objet par encaissement (loyer ou caution). À la signature, l'écran propose « Caution et avance » : une seule saisie, deux encaissements, deux reçus.
+5. Deux jetons par reçu (vérification et partage), 32 octets tirés par `crypto.getRandomValues` ; le serveur ne garde que leur empreinte SHA-256 et cherche par empreinte. Pages publiques limitées en débit par adresse IP, `X-Robots-Tag: noindex`, `Cache-Control: no-store` (jamais en cache chez Cloudflare) ; testé.
+6. Reçu provisoire jusqu'à la confirmation. Un lien ouvert avant la synchronisation affiche « Reçu en cours d'enregistrement ».
+7. Validation, rapprochement et annulation : en ligne seulement.
+8. Préfixe par défaut : les initiales de l'organisation, modifiable par la direction jusqu'au premier reçu, figé ensuite ; changement exceptionnel par le back-office seulement, avec motif et audit.
+9. Ticket de 58 ou 80 mm, réglage de l'organisation, 80 mm par défaut.
+10. Une annulation ne réimpute pas les autres encaissements. Le crédit déjà imputé sur une échéance suivante est contrepassé aussi ; un crédit n'est jamais négatif (test dédié).
+11. **Décision** : l'avance est due à la signature, mais une échéance n'est en retard qu'à partir de la date de début du bail (`rentDueOverdueFrom`). Règle mise à jour et testée.
+12. Bibliothèque `uqr` 0.1.3 (MIT, sans dépendance) pour la matrice du QR code, validée. Côté web, seul le composant du QR code l'importe (reçu dans `/app` et page du reçu partagé `/recu`) ; aucune page d'annonces de la vitrine ne la charge.
+
+Quatre pull requests, chacune aussi envoyée sur `claude/lot09-sauvegarde` :
+- étape 1, machine d'états, imputation, crédit, reçus et permissions en fonctions pures (Phataf/ziga#38) ;
+- étape 2, migration 0015 (encaissements, imputations, reçus, compteurs, jetons) et synchronisation en lecture (Phataf/ziga#39) ;
+- étape 3, API, worker PDF, pages publiques, réglages des reçus, `docs/PAIEMENTS.md` (Phataf/ziga#40) ;
+- étape 4, écrans, retrait de la route « versement reçu », Playwright et journal.
+
+### Fait
+- **Fonctions pures** (`packages/shared`) :
+  - `payments.ts` : moyens, opérateurs, statuts, transitions autorisées (toute autre est refusée), statut de saisie selon le rôle et le moyen, moyens proposés selon le réglage D18 et le rôle, référence Mobile Money normalisée et doublon, jetons, numéro provisoire, schémas Zod ;
+  - `allocation.ts` : imputation sur les échéances les plus anciennes, trop-perçu en crédit du bail, crédit imputé sur les échéances émises ensuite, écritures inverses ; test de propriété sur 1 500 scénarios (somme des imputations = montant) ;
+  - `receipts.ts` : numéro, préfixe par défaut, réglages, contenu du reçu (même ordre à l'écran et dans le PDF), vues publiques ;
+  - `leases.ts` : `received_cancelled`, échéance en retard à partir du début du bail.
+- **Base** (`0015_payments`) :
+  - `payments`, `payment_allocations`, `receipts`, `receipt_counters`, `receipt_tokens` : organisation, RLS, clés composites, ajout seul (triggers sur le montant, `DELETE` et `TRUNCATE`, même au propriétaire du schéma) ;
+  - transitions vérifiées par la base ; jamais confirmé sans preuve ; doublon Mobile Money refusé par un index unique sur la référence normalisée, par organisation ;
+  - le montant payé d'une échéance suit les imputations, jamais saisi ; une échéance ne reçoit jamais plus que son montant ; contraintes différées : un encaissement confirmé impute exactement son montant ;
+  - numéro attribué par la base à la validation du reçu, compteur verrouillé ; premier numéro et préfixe figés au premier reçu, sauf par `app_admin` ;
+  - versement de caution : mouvement `received` lié à son encaissement ; annulation : `received_cancelled` ;
+  - synchronisation en lecture : direction, gestion et lecture reçoivent tout ; l'agent de terrain reçoit les loyers de ses unités, jamais une caution. Jamais un jeton, un compteur ni une clé de PDF dans un flux.
+- **API et worker** : encaisser (idempotent), valider ou rapprocher (unitaire ou groupé, un refus n'arrête pas les autres), annuler par contre-écriture, PDF A6 et ticket par BullMQ (pdf-lib, QR code dessiné), URL signées, jetons de partage révocables, réglages des reçus, pages publiques `/public/receipts/verify/:token` et `/public/receipts/shared/:token`, interface `PaymentProvider` et prestataire `manual` (`docs/PAIEMENTS.md`).
+- **Web** :
+  - **Encaisser** en 3 gestes, hors ligne : locataire trouvé par nom, téléphone ou logement (ponctuation ignorée) ; montant pré-rempli avec le reste dû moins ce qui attend déjà validation ; moyen et référence ; « Valider 80 000 FCFA » ouvre le reçu. Côte à côte sur tablette en paysage et ordinateur ; nom puis Entrée sur ordinateur. Doublon Mobile Money signalé dès l'appareil.
+  - **Reçu** : reçu provisoire calculé sur l'appareil (imputation prévisionnelle, mêmes mentions), QR code et lien partagé créés sur l'appareil ; partage natif, WhatsApp, copie du lien, impression (seul le reçu sort sur le papier), PDF A6 et ticket en ligne ; valider, annuler avec motif.
+  - **Encaissements** (filtres, cartes sur téléphone, tableau sur tablette et ordinateur) et **À valider** (validation groupée).
+  - **Pages publiques** `/r/<jeton>` (vérification : organisation, numéro, date, montant, statut) et `/recu/<jeton>` (reçu partagé, invitation à créer son compte), sans cache ni indexation.
+  - **Réglages des reçus** dans « Organisation » (direction ; lecture pour la gestion).
+  - **Fiche bail et assistant** : « Encaisser la caution » et « Encaisser un loyer » ouvrent l'écran d'encaissement ; à la validation du bail, l'assistant ouvre « Caution et avance ».
+  - Table locale `receipt_drafts` (jamais envoyée telle quelle) : jetons et numéro provisoire joints à l'encaissement à l'envoi.
+
+### Tests attendus par le prompt
+- [x] **Accès croisé A/B** sur chaque table, en SQL (`payments-db.int.test.ts`), par l'API (`payments.int.test.ts`) et dans le flux du vrai PowerSync (`payments.spec.ts`) ; un jeton de vérification de A ne révèle rien de B.
+- [x] **`UPDATE` du montant et `DELETE` refusés** sur `payments`, `payment_allocations`, `receipts`, même au propriétaire du schéma.
+- [x] **Imputation** : exact, partiel, trop-perçu, plusieurs retards, plusieurs paiements pour une échéance ; test de propriété.
+- [x] **Numérotation** : 1 000 reçus validés en parallèle par plusieurs connexions, dont des transactions annulées puis rejouées, sans trou ni doublon.
+- [x] **Hors ligne rejoué deux fois** : un seul paiement, un seul reçu.
+- [x] **Agent de terrain** : `to_validate`, ne confirme pas, le gestionnaire valide (API et Playwright).
+- [x] **Annulation** : directeur seul, motif obligatoire, échéances ressoldées, reçu « ANNULÉ » (API et Playwright).
+- [x] **Transition interdite refusée** (`to_reconcile` → `failed`).
+- [x] **Moyen non accepté** : absent de l'écran, refusé par l'API.
+- [x] **Caution en deux fois** : deux reçus, deux mouvements `received`, solde juste.
+- [x] **Montant en lettres** sur 0, 1, 80 000, 1 250 000, 21 000 000.
+- [x] **Point b** : même opérateur et même référence refusés en ligne et à la synchronisation ; deux appareils hors ligne : le second est rangé dans « Modifications non acceptées » (Playwright).
+- [x] **Avance** : dette de bout en bout, due à la signature, en retard seulement au début du bail ; encaissée à la signature, jamais en retard.
+- [x] **Playwright sur les trois appareils** (`encaissements.spec.ts`) : direction, gestion, agent de terrain et bailleur particulier ; réglages, encaissement, validation groupée, numéro, impression, QR code vers `/r` (en-têtes vérifiés), annulation, lien partagé, sans débordement horizontal.
+
+### Critères d'acceptation
+- [x] **3 gestes et moins de 20 secondes, hors ligne** : mesuré par Playwright sur téléphone (agent de terrain, réseau coupé), de la recherche au reçu affiché.
+- [x] **Le QR code d'un reçu imprimé ouvre la page de vérification** : QR code décodé dans le PDF (API) et adresse suivie à l'écran (Playwright).
+- [x] **`docs/PAIEMENTS.md`** décrit l'interface d'adaptateur et la machine d'états.
+- [x] **Journal des lots mis à jour.**
+
+### Écarts par rapport au prompt
+- **Versement de caution reçu avant le lot 09** : la base n'exige pas qu'un nouveau mouvement `received` soit lié à un encaissement (la contrainte aurait réécrit les tests SQL du lot 08). L'API et la synchronisation le refusent (`DEPOSIT_RECEIPT_VIA_PAYMENT`).
+- **Tableau de bord** de la direction, de la tournée et du bailleur : pas construit (l'entrée reste marquée pour un lot suivant).
+- **Jeton absent sur un autre appareil** : le serveur ne garde que l'empreinte des jetons ; un reçu saisi sur un autre appareil s'affiche sans QR code, et « Nouveau lien » en crée un en ligne.
+- **Dépendance `uqr`** ajoutée, validée par le porteur (point 12).
+
+### Note pour le lot 10
+- Une échéance qui a des encaissements à valider ou à rapprocher ne doit pas être relancée.
+
+### Dette technique
+- **PDF du reçu** : polices standard de pdf-lib (U+00A0 au lieu de U+202F, comme au lot 08 bis).
+- **Logo** sur le PDF seulement ; le reçu affiché à l'écran n'a pas le logo.
+
+### Questions ouvertes pour le porteur
+Aucune.

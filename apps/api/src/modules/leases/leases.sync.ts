@@ -18,7 +18,6 @@ import {
 	createLeaseSchema,
 	createTenantSchema,
 	depositHolderChangeSchema,
-	depositReceiptSchema,
 	rentChangeSchema,
 	updateDepositAccountSchema,
 	updateLeaseDraftSchema,
@@ -30,7 +29,7 @@ import { AppError } from '../../common/app-error.js';
 import { RequestContext } from '../../common/request-context.js';
 import { assertCan } from '../organizations/organization-context.js';
 import { organizationOfRow, SyncRegistry } from '../sync/sync-registry.js';
-import { LeasesService } from './leases.service.js';
+import { DEPOSIT_RECEIPT_VIA_PAYMENT, LeasesService } from './leases.service.js';
 
 /** Colonnes de la base locale → champs des schémas partagés. */
 const TENANT_COLUMNS = {
@@ -299,18 +298,8 @@ export class LeasesSyncHandlers implements OnModuleInit {
 					'reason',
 					'occurred_on'
 				]);
-				if (data.type === 'received') {
-					await this.leases.receiveDeposit(
-						depositReceiptSchema.parse({
-							id: op.id,
-							accountId: data.account_id,
-							amount: data.amount,
-							occurredOn: data.occurred_on,
-							reason: text(data.reason)
-						})
-					);
-					return;
-				}
+				// Lot 09 : un versement de caution s'encaisse (table payments, avec son reçu), jamais en mouvement direct.
+				if (data.type === 'received') throw DEPOSIT_RECEIPT_VIA_PAYMENT();
 				if (data.type === 'holder_changed') {
 					assertCan(RequestContext.organization().role, 'lease.update');
 					await this.leases.changeDepositHolder(

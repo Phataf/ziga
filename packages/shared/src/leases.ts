@@ -591,16 +591,6 @@ export const createDepositAccountSchema = z.object({
 });
 export type CreateDepositAccountData = z.output<typeof createDepositAccountSchema>;
 
-/** Versement reçu (au lot 08, saisi à la main ; relié à un encaissement avec reçu au lot 09). */
-export const depositReceiptSchema = z.object({
-	id: idSchema,
-	accountId: idSchema,
-	amount: fcfaSchema.min(1, { error: 'Indiquez le montant.' }),
-	occurredOn: isoDate,
-	reason: optionalText(500)
-});
-export type DepositReceiptData = z.output<typeof depositReceiptSchema>;
-
 /** Changement de détenteur en cours de bail : un mouvement, jamais une modification du compte. */
 export const depositHolderChangeSchema = z.object({
 	id: idSchema,

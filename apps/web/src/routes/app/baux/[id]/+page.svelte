@@ -16,7 +16,6 @@
 	import {
 		cancelLeaseSchema,
 		depositHolderChangeSchema,
-		depositReceiptSchema,
 		outstandingBalance,
 		rentChangeSchema,
 		type DepositAccountView,
@@ -53,7 +52,7 @@
 	import { toDocument, toUnit } from '#lib/properties/views.ts';
 	import { LOCAL_QUERIES } from '#lib/sync/queries.ts';
 	import { sync } from '#lib/sync/sync.svelte.ts';
-	import { cancelLease, changeDepositHolder, changeRent, recordDepositReceipt, requestLeaseValidation } from '#lib/sync/writes.ts';
+	import { cancelLease, changeDepositHolder, changeRent, requestLeaseValidation } from '#lib/sync/writes.ts';
 
 	type Row = Record<string, unknown>;
 	const t = fr.leases;
@@ -75,7 +74,7 @@
 	let loaded = $state(false);
 	let message = $state<string | null>(null);
 	let saved = $state<string | null>(null);
-	let panel = $state<'cancel' | 'rent' | `receive:${string}` | `holder:${string}` | null>(null);
+	let panel = $state<'cancel' | 'rent' | `holder:${string}` | null>(null);
 	let form = $state<Record<string, string>>({});
 
 	onMount(() => {
@@ -218,21 +217,6 @@
 				currentVersion: lease.version
 			})
 		);
-	}
-
-	async function receive(event: SubmitEvent, account: DepositAccountView) {
-		event.preventDefault();
-		const org = organizations.activeId;
-		if (!org) return;
-		const parsed = depositReceiptSchema.safeParse({
-			id: newId(),
-			accountId: account.id,
-			amount: parseFcfa(form.amount ?? ''),
-			occurredOn: form.date ?? today
-		});
-		if (!parsed.success) return void (message = parsed.error.issues[0]!.message);
-		if (parsed.data.amount > account.balances.remainingDue) return void (message = t.receivedTooMuch);
-		await run(async () => recordDepositReceipt(await db(), org, parsed.data));
 	}
 
 	async function holder(event: SubmitEvent, account: DepositAccountView) {
@@ -428,6 +412,12 @@
 			<div class="flex flex-wrap items-center justify-between gap-2">
 				<h2 class="text-lg font-semibold">{t.schedule}</h2>
 				{#if dues.length}<span class="text-base tabular-nums">{t.outstanding} : <strong>{formatFcfa(outstanding)}</strong></span>{/if}
+				<!-- Lot 09 : encaisser un loyer de ce bail (écran « Encaisser », locataire déjà choisi). -->
+				{#if can(role, 'payment.record_cash') && lease && ['signed', 'active', 'notice'].includes(lease.status)}
+					<Button href={resolve(`/app/encaisser?bail=${id}`)} data-testid="encaisser-loyer"
+						><HandCoins aria-hidden="true" />{fr.payments.collect}</Button
+					>
+				{/if}
 			</div>
 			{#if !dues.length && preview.length}
 				<FormAlert message={t.preview} tone="info" />
@@ -531,33 +521,16 @@
 						{/if}
 						<div class="flex flex-wrap gap-2">
 							{#if canReceive && a.balances.remainingDue > 0 && a.status !== 'closed'}
-								<Button variant="outline" onclick={() => open(`receive:${a.id}`)}><HandCoins aria-hidden="true" />{t.receive}</Button>
+								<!-- Lot 09 : un versement de caution s'encaisse, avec son reçu (réponse du porteur, point 3). -->
+								<Button variant="outline" href={resolve(`/app/encaisser?bail=${id}&objet=caution`)} data-testid="encaisser-caution"
+									><HandCoins aria-hidden="true" />{t.receive}</Button
+								>
 							{/if}
 							{#if canUpdate && organizations.active?.type !== 'landlord' && a.status !== 'closed'}
 								<Button variant="outline" onclick={() => open(`holder:${a.id}`)}><Repeat2 aria-hidden="true" />{t.changeHolder}</Button>
 							{/if}
 						</div>
-						{#if panel === `receive:${a.id}`}
-							<form class="space-y-3 rounded-lg border p-3" onsubmit={(e) => receive(e, a)} novalidate data-testid="formulaire-versement">
-								<div class="grid gap-3 sm:grid-cols-2">
-									<div class="space-y-1">
-										<label for={`montant-${a.id}`} class="block font-medium">{t.receiveAmount}</label><Input
-											id={`montant-${a.id}`}
-											inputmode="numeric"
-											bind:value={form.amount}
-										/>
-									</div>
-									<div class="space-y-1">
-										<label for={`date-${a.id}`} class="block font-medium">{t.receiveDate}</label><Input
-											id={`date-${a.id}`}
-											type="date"
-											bind:value={form.date}
-										/>
-									</div>
-								</div>
-								<Button type="submit">{t.receiveSubmit}</Button>
-							</form>
-						{:else if panel === `holder:${a.id}`}
+						{#if panel === `holder:${a.id}`}
 							<form class="space-y-3 rounded-lg border p-3" onsubmit={(e) => holder(e, a)} novalidate>
 								<p class="text-base">{t.holders[a.holder]} → {t.holders[a.holder === 'owner' ? 'organization' : 'owner']}</p>
 								<label for={`motif-${a.id}`} class="block font-medium">{t.changeHolderReason}</label>

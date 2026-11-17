@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { localOrganizationLookup, toOperations, type CrudEntry } from './upload';
+import { localOrganizationLookup, localReceiptLookup, toOperations, type CrudEntry } from './upload';
 
 const ORG = '0195f3a0-0000-7000-8000-00000000000a';
 
@@ -56,5 +56,39 @@ describe('opérations envoyées par le connecteur (lots 05 et 06)', () => {
 	it('une entrée sans données (DELETE) garde data à null', async () => {
 		const entry: CrudEntry = { clientId: 4, op: 'DELETE', table: 'organizations', id: ORG, opData: null };
 		expect((await toOperations([entry], 'b', async () => null))[0]).toMatchObject({ data: null });
+	});
+
+	it('lot 09 : un encaissement créé sur l’appareil part avec son reçu (numéro provisoire et jetons) ; rien d’autre ne le porte', async () => {
+		const receipt = { id: 'r1', provisionalNumber: 'PROV-ABCDEF', verificationToken: 'v'.repeat(43), shareToken: 's'.repeat(43) };
+		const asked: string[] = [];
+		const ops = await toOperations(
+			[
+				{ clientId: 5, op: 'PUT', table: 'payments', id: 'p1', opData: { organization_id: ORG, amount: 80000 } },
+				{ clientId: 6, op: 'PUT', table: 'owners', id: 'o1', opData: { organization_id: ORG, name: 'Issa' } }
+			],
+			'base',
+			async () => null,
+			async (id) => {
+				asked.push(id);
+				return receipt;
+			}
+		);
+		expect(ops[0]).toMatchObject({ table: 'payments', receipt });
+		expect(ops[1]).not.toHaveProperty('receipt');
+		expect(asked).toEqual(['p1']);
+	});
+
+	it('lot 09 : le reçu est lu dans la table locale de l’appareil, par l’encaissement', async () => {
+		const queries: unknown[][] = [];
+		const lookup = localReceiptLookup({
+			getOptional: async <T>(sql: string, params?: unknown[]) => {
+				queries.push([sql, params]);
+				return { id: 'r1', provisional_number: 'PROV-ABCDEF', verification_token: 'v', share_token: 's' } as T;
+			}
+		});
+		expect(await lookup('p1')).toEqual({ id: 'r1', provisionalNumber: 'PROV-ABCDEF', verificationToken: 'v', shareToken: 's' });
+		expect(queries).toEqual([
+			['SELECT id, provisional_number, verification_token, share_token FROM receipt_drafts WHERE payment_id = ?', ['p1']]
+		]);
 	});
 });

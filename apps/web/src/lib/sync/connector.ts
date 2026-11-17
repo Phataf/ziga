@@ -12,7 +12,7 @@
 import type { AbstractPowerSyncDatabase, PowerSyncBackendConnector, PowerSyncCredentials } from '@powersync/web';
 import { SYNC_BATCH_MAX, type SyncOperation, type SyncOperationResult, type SyncUploadResponse } from '@ziga/shared/sync';
 import { auth } from '../auth/auth.svelte';
-import { localOrganizationLookup, toOperations } from './upload';
+import { localOrganizationLookup, localReceiptLookup, toOperations } from './upload';
 
 /**
  * Opérations refusées par le serveur, avec ce qui avait été envoyé (liste « Modifications non acceptées », étape 4).
@@ -37,7 +37,12 @@ export class ZigaConnector implements PowerSyncBackendConnector {
 		if (!batch) return;
 		const clientId = await database.getClientId();
 		// Chaque opération porte sa clé d'idempotence et, pour une table d'organisation, l'organisation de la ligne.
-		const operations: SyncOperation[] = await toOperations(batch.crud, clientId, localOrganizationLookup(database));
+		const operations: SyncOperation[] = await toOperations(
+			batch.crud,
+			clientId,
+			localOrganizationLookup(database),
+			localReceiptLookup(database)
+		);
 		const { results } = await auth.request<SyncUploadResponse>('POST', '/sync/upload', { operations });
 		const rejected = results
 			.map((result, i) => ({ operation: operations[i]!, result }))

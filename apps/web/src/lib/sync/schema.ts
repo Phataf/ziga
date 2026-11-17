@@ -5,6 +5,7 @@
  */
 import { column, Schema, Table } from '@powersync/web';
 import { SYNCED_TABLES, type LocalColumnType } from '@ziga/shared/sync-schema';
+import { RECEIPT_DRAFT_COLUMNS, RECEIPT_DRAFTS_TABLE } from '../payments/views';
 import { REJECTION_COLUMNS, REJECTIONS_TABLE } from './rejections';
 
 const TYPES = { text: column.text, integer: column.integer, real: column.real } satisfies Record<LocalColumnType, unknown>;
@@ -20,13 +21,16 @@ function table(columns: Record<string, LocalColumnType>): Table {
 
 /**
  * Tables de l'appareil seulement (`localOnly`) : jamais envoyées ni reçues, vidées avec le reste à la déconnexion
- * (`disconnectAndClear`). Ici : les modifications refusées par le serveur (étape 4).
+ * (`disconnectAndClear`). Ici : les modifications refusées par le serveur (étape 4), et les reçus créés sur l'appareil
+ * avec leurs jetons (lot 09) : le connecteur les joint à l'envoi de l'encaissement ; ils restent sur l'appareil pour
+ * réafficher le QR code et repartager le lien, même hors ligne.
  */
+const localOnly = (columns: Record<string, LocalColumnType>, indexes: Record<string, string[]>) =>
+	new Table(Object.fromEntries(Object.entries(columns).map(([name, type]) => [name, TYPES[type]])), { localOnly: true, indexes });
+
 const LOCAL_ONLY_TABLES = {
-	[REJECTIONS_TABLE]: new Table(Object.fromEntries(Object.entries(REJECTION_COLUMNS).map(([name, type]) => [name, TYPES[type]])), {
-		localOnly: true,
-		indexes: { by_organization: ['organization_id'] }
-	})
+	[REJECTIONS_TABLE]: localOnly(REJECTION_COLUMNS, { by_organization: ['organization_id'] }),
+	[RECEIPT_DRAFTS_TABLE]: localOnly(RECEIPT_DRAFT_COLUMNS, { by_payment: ['payment_id'] })
 };
 
 export const AppSchema = new Schema({

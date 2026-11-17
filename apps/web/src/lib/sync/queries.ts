@@ -102,6 +102,36 @@ export const LOCAL_QUERIES = {
 	contractDocuments: `SELECT * FROM documents WHERE organization_id = ? AND lease_contract_id = ? ORDER BY created_at DESC, id`,
 	/** Aperçus des modèles (documents « projet de contrat » rattachés à un modèle). */
 	templateDocuments: `SELECT * FROM documents WHERE organization_id = ? AND contract_template_id IS NOT NULL ORDER BY created_at DESC, id`,
+	/**
+	 * Lot 09 : baux que l'on peut encaisser (signés, en vigueur ou en préavis), avec le locataire et l'unité, pour la
+	 * recherche de l'écran « Encaisser » (l'agent de terrain ne reçoit que ceux de ses unités).
+	 */
+	paymentTargets: `SELECT l.id, l.tenant_id, l.status, t.full_name AS tenant_name, t.phone AS tenant_phone, u.label AS unit_label,
+		p.name AS property_name FROM leases l
+		JOIN tenants t ON t.organization_id = l.organization_id AND t.id = l.tenant_id
+		LEFT JOIN units u ON u.organization_id = l.organization_id AND u.id = l.unit_id
+		LEFT JOIN properties p ON p.organization_id = u.organization_id AND p.id = u.property_id
+		WHERE l.organization_id = ? AND l.status IN ('signed', 'active', 'notice') ORDER BY t.full_name COLLATE NOCASE, l.id`,
+	/** Encaissements de l'organisation (les contre-écritures à part), les plus récents d'abord. */
+	payments: `SELECT * FROM payments WHERE organization_id = ? AND (kind IS NULL OR kind = 'payment') ORDER BY paid_on DESC, id DESC`,
+	payment: `SELECT * FROM payments WHERE organization_id = ? AND id = ?`,
+	/** Liste des encaissements, avec le locataire, l'unité et le numéro du reçu (provisoire tant qu'il n'est pas émis). */
+	paymentsList: `SELECT p.*, t.full_name AS tenant_name, u.label AS unit_label, r.number AS receipt_number,
+		coalesce(r.provisional_number, d.provisional_number) AS receipt_provisional FROM payments p
+		LEFT JOIN leases l ON l.organization_id = p.organization_id AND l.id = p.lease_id
+		LEFT JOIN tenants t ON t.organization_id = l.organization_id AND t.id = l.tenant_id
+		LEFT JOIN units u ON u.organization_id = l.organization_id AND u.id = l.unit_id
+		LEFT JOIN receipts r ON r.organization_id = p.organization_id AND r.payment_id = p.id
+		LEFT JOIN receipt_drafts d ON d.payment_id = p.id
+		WHERE p.organization_id = ? AND (p.kind IS NULL OR p.kind = 'payment') ORDER BY p.paid_on DESC, p.id DESC`,
+	leasePayments: `SELECT * FROM payments WHERE organization_id = ? AND lease_id = ? AND (kind IS NULL OR kind = 'payment') ORDER BY paid_on DESC, id DESC`,
+	receipts: `SELECT * FROM receipts WHERE organization_id = ?`,
+	paymentReceipt: `SELECT * FROM receipts WHERE organization_id = ? AND payment_id = ?`,
+	/** Reçus créés sur cet appareil (table locale) : jetons du QR code et du lien partagé. */
+	receiptDrafts: `SELECT * FROM receipt_drafts WHERE organization_id = ?`,
+	paymentDraft: `SELECT * FROM receipt_drafts WHERE organization_id = ? AND payment_id = ?`,
+	/** Tous les membres, retirés compris (nom de la personne qui a encaissé). */
+	allMembers: `SELECT * FROM organization_members WHERE organization_id = ? ORDER BY display_name`,
 	/** Modifications refusées par le serveur (table locale de l'appareil), de l'organisation, les plus récentes d'abord. */
 	rejections: `SELECT * FROM sync_rejections WHERE organization_id = ? ORDER BY rejected_at DESC, id DESC`,
 	rejectionCount: `SELECT count(*) AS n FROM sync_rejections WHERE organization_id = ?`

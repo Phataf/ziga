@@ -24,7 +24,6 @@ import {
 	canTransitionLease,
 	depositAboveLegalCap,
 	depositBalances,
-	depositMovementBlocker,
 	isLeaseInForce,
 	leaseAlerts,
 	leaseCreationBlockers,
@@ -41,9 +40,7 @@ import {
 	type CreateTenantData,
 	type DepositAccountView,
 	type DepositHolderChangeData,
-	type DepositMovementBlocker,
 	type DepositMovementView,
-	type DepositReceiptData,
 	type LeaseCreationBlocker,
 	type LeaseDetailView,
 	type LeaseTerms,
@@ -93,6 +90,9 @@ const iso = (d: Date | null) => (d ? d.toISOString() : null);
 const TENANT_NOT_FOUND = () => new AppError('TENANT_NOT_FOUND', 'Locataire introuvable.', 404);
 const LEASE_NOT_FOUND = () => new AppError('LEASE_NOT_FOUND', 'Bail introuvable.', 404);
 const ACCOUNT_NOT_FOUND = () => new AppError('DEPOSIT_ACCOUNT_NOT_FOUND', 'Compte de caution introuvable.', 404);
+/** Lot 09 : un versement de caution est un encaissement, avec son reçu (réponse du porteur, point 3). */
+export const DEPOSIT_RECEIPT_VIA_PAYMENT = () =>
+	new AppError('DEPOSIT_RECEIPT_VIA_PAYMENT', 'Un versement de caution s’encaisse, avec son reçu : passez par « Encaisser ».', 409);
 
 const BLOCKER_MESSAGES: Record<LeaseCreationBlocker, string> = {
 	NO_MANAGEMENT_MANDATE: 'Aucun mandat de gestion en vigueur ne couvre cette unité.',
@@ -1126,47 +1126,6 @@ export class LeasesService {
 		});
 		const warnings = await this.capWarning(c, updated!, lease);
 		return { data: await this.accountViewOf(c, id), warnings };
-	}
-
-	/** Versement reçu, saisi à la main au lot 08 (relié à un encaissement avec reçu au lot 09) ; en plusieurs fois. */
-	async receiveDeposit(input: DepositReceiptData): Promise<DepositAccountView> {
-		const c = this.context();
-		const account = await this.accountRow(c, input.accountId, true);
-		await this.leaseRow(c, account.leaseId);
-		const movements = await c.tx
-			.select()
-			.from(depositMovements)
-			.where(and(eq(depositMovements.organizationId, c.organizationId), eq(depositMovements.accountId, account.id)));
-		const blocker = depositMovementBlocker(account, depositBalances(account.agreedAmount, movements), {
-			type: 'received',
-			amount: input.amount
-		});
-		if (blocker) {
-			const messages = {
-				DEPOSIT_OVERPAID: 'Ce versement dépasse le montant convenu de la caution.',
-				DEPOSIT_OUTFLOW_EXCEEDS_RECEIVED: 'Les sorties ne dépassent jamais la caution reçue.',
-				DEPOSIT_ACCOUNT_CLOSED: 'Ce compte de caution est soldé.',
-				DEPOSIT_CANCELLATION_BELOW_OUTFLOWS: 'Annuler ce versement ferait passer la caution reçue sous les sorties déjà faites.'
-			} as const satisfies Record<DepositMovementBlocker, string>;
-			throw new AppError(blocker, messages[blocker], 409);
-		}
-		await this.insertMovement(c, {
-			id: input.id,
-			accountId: account.id,
-			type: 'received',
-			amount: input.amount,
-			occurredOn: input.occurredOn,
-			reason: input.reason
-		});
-		await this.audit.record(c.tx, {
-			actor: c.actor,
-			organizationId: c.organizationId,
-			action: 'deposit.receive',
-			objectType: 'deposit_account',
-			objectId: account.id,
-			after: { movementId: input.id, amount: input.amount, occurredOn: input.occurredOn, reason: input.reason }
-		});
-		return this.accountViewOf(c, account.id);
 	}
 
 	/** Changement de détenteur en cours de bail : un mouvement motivé, jamais une modification du compte. */

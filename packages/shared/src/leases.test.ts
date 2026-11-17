@@ -12,7 +12,6 @@ import {
 	depositBalances,
 	depositHolderChangeSchema,
 	depositMovementBlocker,
-	depositReceiptSchema,
 	LEASE_STATUSES,
 	leaseAlerts,
 	leaseCreationBlockers,
@@ -283,8 +282,6 @@ describe('compte de caution', () => {
 		expect(createDepositAccountSchema.safeParse(base).success).toBe(true);
 		expect(createDepositAccountSchema.safeParse({ ...base, holder: undefined }).success).toBe(false);
 		expect(createDepositAccountSchema.safeParse({ ...base, agreedAmount: 150_000.5 }).success).toBe(false);
-		expect(depositReceiptSchema.safeParse({ id: ID, accountId: ID2, amount: -1, occurredOn: TODAY }).success).toBe(false);
-		expect(depositReceiptSchema.safeParse({ id: ID, accountId: ID2, amount: 50_000, occurredOn: TODAY }).success).toBe(true);
 		expect(depositHolderChangeSchema.safeParse({ id: ID, accountId: ID2, newHolder: 'owner', occurredOn: TODAY, reason: '' }).success).toBe(
 			false
 		);

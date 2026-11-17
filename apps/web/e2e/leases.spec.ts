@@ -31,7 +31,23 @@ const desktop = { viewport: { width: 1440, height: 900 }, isMobile: false, hasTo
 const PDF = Buffer.from('%PDF-1.7\n% bail signé, scanné\n%%EOF\n');
 
 /** Assistant, de l'unité jusqu'à l'étape 5 : nouveau locataire, conditions, caution, avance. */
-async function wizardToDocuments(page: Page, propertyId: string, opts: { tenant: string; received?: string; advance?: string }) {
+/**
+ * Lot 09 : après la validation, l'assistant ouvre « Caution et avance » ; on revient au bail par le routeur de
+ * l'application (un lien suivi sur place), hors connexion compris.
+ */
+async function backToLease(page: Page, leaseId: string) {
+	await expect(page).toHaveURL(`/app/encaisser?bail=${leaseId}&objet=signature`);
+	await page.evaluate((href) => {
+		const a = document.createElement('a');
+		a.href = href;
+		document.body.append(a);
+		a.click();
+		a.remove();
+	}, `/app/baux/${leaseId}`);
+	await expect(page).toHaveURL(`/app/baux/${leaseId}`);
+}
+
+async function wizardToDocuments(page: Page, propertyId: string, opts: { tenant: string; advance?: string }) {
 	await page.goto(`/app/biens/${propertyId}`);
 	await page.getByTestId('creer-bail').click();
 	await expect(page.getByTestId('assistant-bail')).toHaveAttribute('data-etape', '1');
@@ -45,7 +61,6 @@ async function wizardToDocuments(page: Page, propertyId: string, opts: { tenant:
 	await expect(page.getByLabel('Caution · Montant convenu (FCFA)')).toHaveValue('150000');
 	// Détenteur proposé selon le mandat : il autorise l'organisation à encaisser.
 	await expect(page.getByLabel('Détenteur')).toHaveValue('organization');
-	if (opts.received) await page.getByLabel('Versé aujourd’hui (FCFA, facultatif)').fill(opts.received);
 	await page.getByRole('button', { name: 'Enregistrer et continuer' }).click();
 	await expect(page.getByTestId('assistant-bail')).toHaveAttribute('data-etape', '4');
 	if (opts.advance) await page.getByLabel('Avance (mois de loyer payés d’avance)').fill(opts.advance);
@@ -67,7 +82,7 @@ test.describe('Création d’un bail sur téléphone (critère d’acceptation d
 		await synced(page);
 		const started = Date.now();
 
-		const leaseId = await wizardToDocuments(page, propertyId, { tenant: 'Salif Traoré', received: '75 000', advance: '2' });
+		const leaseId = await wizardToDocuments(page, propertyId, { tenant: 'Salif Traoré', advance: '2' });
 		await expectNoHorizontalOverflow(page, 'assistant, étape 5 (téléphone)');
 		// Bail scanné : en ligne, une fois le brouillon synchronisé.
 		await synced(page);
@@ -77,7 +92,16 @@ test.describe('Création d’un bail sur téléphone (critère d’acceptation d
 		await page.getByRole('button', { name: 'Envoyer le document' }).click();
 		await expect(page.getByTestId('document').filter({ hasText: 'Bail signé.pdf' })).toContainText('En vigueur', { timeout: 15_000 });
 		await page.getByTestId('valider').click();
-		await expect(page).toHaveURL(`/app/baux/${leaseId}`);
+		// Lot 09 : à la signature, « Caution et avance » en une seule saisie, deux encaissements et deux reçus (point 4).
+		await expect(page).toHaveURL(new RegExp(`/app/encaisser\\?bail=${leaseId}&objet=signature`));
+		await expect(page.getByTestId('locataire-choisi')).toHaveText('Salif Traoré');
+		await expect(page.getByLabel('Caution et avance')).toBeChecked();
+		await page.getByTestId('montant-caution').fill('75 000');
+		await page.getByTestId('montant').fill('160 000');
+		await page.getByTestId('moyen-cash').click();
+		await page.getByTestId('valider-encaissement').click();
+		await expect(page.getByTestId('fiche-encaissement')).toBeVisible();
+		await page.goto(`/app/baux/${leaseId}`);
 		await synced(page);
 		// Confirmé par le serveur : plus « en attente », et l'échéancier du serveur remplace l'aperçu de l'appareil.
 		await expect(page.getByTestId('attente-synchro')).toHaveCount(0, { timeout: 20_000 });
@@ -86,7 +110,8 @@ test.describe('Création d’un bail sur téléphone (critère d’acceptation d
 		const elapsed = Date.now() - started;
 		expect(elapsed, `${Math.round(elapsed / 1000)} s`).toBeLessThan(3 * 60_000);
 
-		// Côté serveur : bail validé, échéances générées, caution et détenteur, versement, bail scanné, aucune alerte.
+		// Côté serveur : bail validé, échéances générées, caution et détenteur, versement encaissé avec son reçu, bail
+		// scanné, aucune alerte.
 		const lease = await get<{
 			status: string;
 			tenantId: string;
@@ -146,7 +171,7 @@ test.describe('Deux appareils hors ligne, un bail chacun sur la même unité (r�
 		const first = await wizardToDocuments(one.page, propertyId, { tenant: 'Premier locataire' });
 		await expect(one.page.getByText('Les documents privés se déposent en ligne, une fois le bail synchronisé.')).toBeVisible();
 		await one.page.getByTestId('valider').click();
-		await expect(one.page).toHaveURL(`/app/baux/${first}`);
+		await backToLease(one.page, first);
 		// Hors ligne : aperçu de l'échéancier, calculé par la même fonction que le serveur.
 		await expect(one.page.getByTestId('echeance').first()).toBeVisible();
 		const preview = await one.page.getByTestId('echeance').count();
@@ -155,7 +180,7 @@ test.describe('Deux appareils hors ligne, un bail chacun sur la même unité (r�
 
 		const second = await wizardToDocuments(two.page, propertyId, { tenant: 'Second locataire' });
 		await two.page.getByTestId('valider').click();
-		await expect(two.page).toHaveURL(`/app/baux/${second}`);
+		await backToLease(two.page, second);
 
 		// Le premier appareil revient : son bail est validé par le serveur, l'aperçu devient l'échéancier du serveur.
 		await one.context.setOffline(false);

@@ -208,7 +208,12 @@ export async function availableUnit(request: APIRequestContext, agency: Agency, 
 }
 
 /** Un bail validé, créé par l'API, avec un locataire dont l'état civil est saisi. */
-export async function leaseViaApi(request: APIRequestContext, agency: Agency, unitId: string) {
+export async function leaseViaApi(
+	request: APIRequestContext,
+	agency: Agency,
+	unitId: string,
+	lessorType: 'owner' | 'organization' = 'owner'
+) {
 	const tenantId = newId();
 	await post(request, agency.headers, '/tenants', {
 		id: tenantId,
@@ -224,7 +229,7 @@ export async function leaseViaApi(request: APIRequestContext, agency: Agency, un
 		startsOn: today,
 		rent: 75000,
 		charges: 5000,
-		lessorType: 'owner'
+		lessorType
 	});
 	await post(request, agency.headers, '/deposit-accounts', {
 		id: newId(),

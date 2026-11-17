@@ -15,6 +15,7 @@ import { NestFactory } from '@nestjs/core';
 import { addDays, addMonths, monthDay, toIsoDate } from '@ziga/shared/dates';
 import type { DocumentView } from '@ziga/shared/documents';
 import { newId } from '@ziga/shared/ids';
+import { newReceiptToken, provisionalReceiptNumber } from '@ziga/shared/payments';
 import type { DepositAccountView, LeaseDetailView, Page, TenantDetailView, TenantView, WithWarnings } from '@ziga/shared/leases';
 import type { MandateView, OwnerView } from '@ziga/shared/owners';
 import type { PropertyView, UnitView } from '@ziga/shared/properties';
@@ -452,27 +453,41 @@ describe('caution (règle 14, D15)', () => {
 				201
 			)
 		).data;
-		const one = await call<DepositAccountView>(
-			manager,
-			'POST',
-			`/deposit-accounts/${account.id}/receipts`,
-			{ id: newId(), amount: 100_000, occurredOn: today },
-			201
-		);
-		expect(one).toMatchObject({ status: 'partially_received', balances: { received: 100_000, remainingDue: 50_000, held: 100_000 } });
+		// Lot 09 : la route « versement reçu » du lot 08 est retirée ; un versement de caution est un encaissement, avec son
+		// reçu (réponse du porteur, point 3).
 		expect(
-			(await manager.call('POST', `/deposit-accounts/${account.id}/receipts`, { id: newId(), amount: 50_001, occurredOn: today })).body
-		).toMatchObject({
-			code: 'DEPOSIT_OVERPAID'
+			(await manager.call('POST', `/deposit-accounts/${account.id}/receipts`, { id: newId(), amount: 100_000, occurredOn: today })).body
+		).toMatchObject({ code: 'DEPOSIT_RECEIPT_VIA_PAYMENT' });
+		const depositPayment = (amount: number) => {
+			const receiptId = newId();
+			return {
+				payments: [
+					{
+						id: newId(),
+						leaseId: l.id,
+						purpose: 'deposit',
+						depositAccountId: account.id,
+						amount,
+						method: 'cash',
+						paidOn: today,
+						receiptId,
+						provisionalNumber: provisionalReceiptNumber(receiptId),
+						verificationToken: newReceiptToken(),
+						shareToken: newReceiptToken()
+					}
+				]
+			};
+		};
+		const accountOf = async () =>
+			(await call<LeaseDetailView>(manager, 'GET', `/leases/${l.id}`)).deposits!.find((x) => x.id === account.id)!;
+		await call(manager, 'POST', '/payments', depositPayment(100_000), 201);
+		expect(await accountOf()).toMatchObject({
+			status: 'partially_received',
+			balances: { received: 100_000, remainingDue: 50_000, held: 100_000 }
 		});
-		const two = await call<DepositAccountView>(
-			manager,
-			'POST',
-			`/deposit-accounts/${account.id}/receipts`,
-			{ id: newId(), amount: 50_000, occurredOn: today },
-			201
-		);
-		expect(two).toMatchObject({ status: 'held', balances: { received: 150_000, remainingDue: 0 } });
+		expect((await manager.call('POST', '/payments', depositPayment(50_001))).body).toMatchObject({ code: 'DEPOSIT_OVERPAID' });
+		await call(manager, 'POST', '/payments', depositPayment(50_000), 201);
+		expect(await accountOf()).toMatchObject({ status: 'held', balances: { received: 150_000, remainingDue: 0 } });
 		const moved = await call<DepositAccountView>(
 			manager,
 			'POST',
@@ -493,6 +508,7 @@ describe('caution (règle 14, D15)', () => {
 		expect(
 			(await agent.call('POST', `/deposit-accounts/${account.id}/receipts`, { id: newId(), amount: 1, occurredOn: today })).status
 		).toBe(403);
+		expect((await agent.call('POST', '/payments', depositPayment(1))).body).toMatchObject({ code: 'FORBIDDEN_ACTION' });
 		const tenantSeen = await call<TenantDetailView>(agent, 'GET', `/tenants/${l.tenantId}`);
 		expect(tenantSeen.identity).toBeNull();
 	});
@@ -605,7 +621,7 @@ describe('synchronisation depuis l’appareil', () => {
 		expect((await call<LeaseDetailView>(a.director, 'GET', `/leases/${l.id}`)).rent).toBe(85_000);
 	});
 
-	it('locataire, état civil, compte de caution et versement créés hors ligne ; agent de terrain refusé', async () => {
+	it('locataire, état civil et compte de caution créés hors ligne ; versement de caution refusé (lot 09) ; agent de terrain refusé', async () => {
 		const p = await place(a.director);
 		const tenantId = newId();
 		const leaseOp = leasePut(p.unit.id, tenantId);
@@ -641,13 +657,15 @@ describe('synchronisation depuis l’appareil', () => {
 				data: { organization_id: a.id, account_id: accountId, type: 'received', amount: 75_000, occurred_on: today }
 			}
 		]);
-		expect(results.map((r) => r.status)).toEqual(['applied', 'applied', 'applied', 'applied', 'applied']);
+		// Lot 09 : un versement de caution ne s'écrit plus en mouvement depuis l'appareil ; il s'encaisse, avec son reçu.
+		expect(results.map((r) => r.status)).toEqual(['applied', 'applied', 'applied', 'applied', 'rejected']);
+		expect(results[4]).toMatchObject({ code: 'DEPOSIT_RECEIPT_VIA_PAYMENT' });
 		expect((await call<TenantDetailView>(manager, 'GET', `/tenants/${tenantId}`)).identity).toMatchObject({
 			idType: 'passport',
 			idNumber: 'P0001'
 		});
 		const detail = await call<LeaseDetailView>(manager, 'GET', `/leases/${leaseOp.id}`);
-		expect(detail.deposits![0]).toMatchObject({ status: 'partially_received', balances: { received: 75_000, remainingDue: 75_000 } });
+		expect(detail.deposits![0]).toMatchObject({ status: 'pending', balances: { received: 0, remainingDue: 150_000 } });
 		const denied = await upload(agent, [
 			{ key: key(), op: 'PUT', table: 'tenants', id: newId(), data: { organization_id: a.id, full_name: 'Intrus' } },
 			{ key: key(), op: 'PATCH', table: 'tenant_identities', id: tenantId, organizationId: a.id, data: { id_number: 'X' } }

@@ -7,13 +7,13 @@
 import type { PowerSyncDatabase } from '@powersync/web';
 import type { UpdateOrganizationOutput as OrganizationSettings } from '@ziga/shared/organizations';
 import { newId } from '@ziga/shared/ids';
+import type { PaymentEntryData } from '@ziga/shared/payments';
 import { commissionColumns, type CreateMandateData, type MandateTerms, type OwnerData } from '@ziga/shared/owners';
 import type {
 	CreateDepositAccountData,
 	CreateLeaseData,
 	CreateTenantData,
 	DepositHolderChangeData,
-	DepositReceiptData,
 	LeaseTerms,
 	TenantData,
 	TenantIdentity
@@ -546,21 +546,6 @@ export async function saveDepositAgreed(
 	);
 }
 
-/** Versement reçu : un mouvement en ajout seul. */
-export async function recordDepositReceipt(db: PowerSyncDatabase, organizationId: string, r: DepositReceiptData): Promise<void> {
-	await db.writeTransaction((tx) =>
-		insert(tx, 'deposit_movements', {
-			id: r.id,
-			organization_id: organizationId,
-			account_id: r.accountId,
-			type: 'received',
-			amount: r.amount,
-			occurred_on: r.occurredOn,
-			reason: r.reason
-		})
-	);
-}
-
 /** Changement de détenteur : un mouvement motivé, jamais une modification du compte. */
 export async function changeDepositHolder(
 	db: PowerSyncDatabase,
@@ -580,4 +565,41 @@ export async function changeDepositHolder(
 			reason: c.reason
 		})
 	);
+}
+
+// ---------------------------------------------------------------- lot 09 : encaissements
+
+/**
+ * Encaissement saisi sur l'appareil, hors ligne compris : l'encaissement (ni statut, ni locataire, ni numéro : le
+ * serveur les décide, règles 6 et 9) et son reçu provisoire avec ses deux jetons (table locale, jamais synchronisée ;
+ * le connecteur le joint à l'envoi). « Caution et avance » : deux encaissements dans une même transaction locale.
+ */
+export async function recordPayments(db: PowerSyncDatabase, organizationId: string, entries: PaymentEntryData[]): Promise<void> {
+	const now = new Date().toISOString();
+	await db.writeTransaction(async (tx) => {
+		for (const e of entries) {
+			await insert(tx, 'payments', {
+				id: e.id,
+				organization_id: organizationId,
+				lease_id: e.leaseId,
+				purpose: e.purpose,
+				deposit_account_id: e.depositAccountId,
+				amount: e.amount,
+				method: e.method,
+				operator: e.operator,
+				transaction_reference: e.transactionReference,
+				paid_on: e.paidOn,
+				note: e.note
+			});
+			await insert(tx, 'receipt_drafts', {
+				id: e.receiptId,
+				organization_id: organizationId,
+				payment_id: e.id,
+				provisional_number: e.provisionalNumber,
+				verification_token: e.verificationToken,
+				share_token: e.shareToken,
+				created_at: now
+			});
+		}
+	});
 }

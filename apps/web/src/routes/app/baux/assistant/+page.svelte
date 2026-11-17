@@ -24,7 +24,6 @@
 		createTenantSchema,
 		defaultDepositHolder,
 		depositAboveLegalCap,
-		depositReceiptSchema,
 		LEGAL_LEASE_DEFAULTS,
 		leaseTermsSchema,
 		RENEWAL_MODES,
@@ -56,7 +55,6 @@
 		createDepositAccount,
 		createLeaseDraft,
 		createTenant,
-		recordDepositReceipt,
 		requestLeaseValidation,
 		saveDepositAgreed,
 		saveLeaseDraft
@@ -104,7 +102,6 @@
 	let depositMonths = $state('');
 	let holder = $state<DepositHolder | ''>('');
 	let utilities = $state('');
-	let receivedNow = $state('');
 	// Étape 4
 	let advance = $state('');
 
@@ -387,17 +384,6 @@
 				if (!parsed.success) Object.assign(errs, { [type]: parsed.error.issues[0]!.message });
 				else {
 					plan.push(() => createDepositAccount(database, org, parsed.data));
-					if (type === 'security_deposit' && receivedNow.trim()) {
-						const receipt = depositReceiptSchema.safeParse({
-							id: newId(),
-							accountId: parsed.data.id,
-							amount: parseFcfa(receivedNow),
-							occurredOn: today
-						});
-						if (!receipt.success) errs.receivedNow = receipt.error.issues[0]!.message;
-						else if (receipt.data.amount > parsed.data.agreedAmount) errs.receivedNow = t.receivedTooMuch;
-						else plan.push(() => recordDepositReceipt(database, org, receipt.data));
-					}
 				}
 			}
 			errors = errs;
@@ -431,6 +417,12 @@
 		if (!org || !lease) return;
 		await run(async () => {
 			if (validate) await requestLeaseValidation(await db(), org, lease.id, lease.startsOn, today);
+			// Lot 09 : à la signature, la caution et l'avance s'encaissent en une seule saisie, avec leurs reçus (point 4).
+			if (validate && can(organizations.active?.role, 'payment.record')) {
+				const objet = accountRows.some((a) => a.type === 'security_deposit') ? 'signature' : 'loyer';
+				await goto(resolve(`/app/encaisser?bail=${lease.id}&objet=${objet}`));
+				return;
+			}
 			await goto(resolve('/app/baux/[id]', { id: lease.id }));
 		});
 	}
@@ -727,11 +719,6 @@
 									{#each holders as h (h)}<option value={h}>{t.holders[h]}</option>{/each}
 								</select>
 								<p class="text-sm text-muted-foreground">{t.holderProposed}</p>
-							</div>
-							<div class={field}>
-								<label for="verse" class={labelClass}>{w.receivedNow}</label>
-								<Input id="verse" inputmode="numeric" bind:value={receivedNow} />
-								{#if errors.receivedNow}<p class="text-base text-destructive">{errors.receivedNow}</p>{/if}
 							</div>
 							<div class={field}>
 								<label for="garantie" class={labelClass}>{t.depositTypes.utilities_guarantee}</label>
