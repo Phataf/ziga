@@ -113,7 +113,21 @@ export function amountInFrenchWords(amount: Fcfa): string {
 	return `${words} ${endsWithNoun ? 'de ' : ''}francs CFA`;
 }
 
-const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+/** Noms des mois, en minuscules (« mars »). */
+export const FRENCH_MONTHS = [
+	'janvier',
+	'février',
+	'mars',
+	'avril',
+	'mai',
+	'juin',
+	'juillet',
+	'août',
+	'septembre',
+	'octobre',
+	'novembre',
+	'décembre'
+];
 
 /**
  * Date d'un document (contrats) : « 1er janvier 2027 », « 15 décembre 2026 ». Les écrans gardent « jj/mm/aaaa »
@@ -121,7 +135,7 @@ const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet'
  */
 export function dateInFrenchWords(iso: string): string {
 	const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.slice(0, 10));
-	const month = m ? MONTHS[Number(m[2]) - 1] : undefined;
+	const month = m ? FRENCH_MONTHS[Number(m[2]) - 1] : undefined;
 	if (!m || !month || Number(m[3]) < 1 || Number(m[3]) > 31) throw new RangeError(`Date invalide : ${iso}`);
 	const day = Number(m[3]);
 	return `${day === 1 ? '1er' : day}\u00a0${month} ${m[1]}`;

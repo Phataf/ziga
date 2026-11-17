@@ -60,6 +60,24 @@ export function formatFcfaForPdf(amount: Fcfa): string {
 	return formatFcfa(amount).replaceAll(THIN_NBSP, NBSP);
 }
 
+/** Signe moins typographique (U+2212), pour les montants à déduire d'un relevé. */
+export const MINUS_SIGN = '\u2212';
+
+/**
+ * Montant signé d'un relevé (lot 10) : « 75 000 FCFA », « −15 000 FCFA » (signe moins U+2212). Une somme négative
+ * n'est jamais stockée telle quelle dans un registre (règle 2) : elle n'apparaît qu'à l'affichage d'un total calculé.
+ */
+export function formatSignedFcfa(amount: number): string {
+	if (!Number.isSafeInteger(amount)) throw new InvalidAmountError(amount);
+	return amount < 0 ? `${MINUS_SIGN}${formatFcfa(-amount)}` : formatFcfa(amount);
+}
+
+/** Même chose pour un PDF de pdf-lib : sans U+202F ni U+2212 (absents de WinAnsi), un trait d'union à la place. */
+export function formatSignedFcfaForPdf(amount: number): string {
+	if (!Number.isSafeInteger(amount)) throw new InvalidAmountError(amount);
+	return amount < 0 ? `-${formatFcfaForPdf(-amount)}` : formatFcfaForPdf(amount);
+}
+
 /**
  * Lit un montant saisi (« 75 000 », « 75000 », « 75 000 FCFA ») et renvoie un entier,
  * ou `null` si la saisie n'est pas un entier positif ou nul : « 75 000,50 » et « -5 000 » sont refusés.
