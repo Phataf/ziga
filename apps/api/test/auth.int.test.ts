@@ -469,6 +469,9 @@ describe('garde global', () => {
 			'GET /public/receipts/verify/:token',
 			'GET /public/receipts/shared/:token',
 			'GET /public/receipts/shared/:token/pdf',
+			// Lot 10 : lien d'un relevé propriétaire (jeton de 256 bits, empreinte seule, 90 jours, révocable, limite de débit).
+			'GET /public/statements/shared/:token',
+			'GET /public/statements/shared/:token/pdf',
 			'GET /storage/local/:token'
 		]);
 		const listed = new Set(routes.map((r) => `${r.method} ${r.path}`));
