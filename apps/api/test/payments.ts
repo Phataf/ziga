@@ -201,3 +201,27 @@ export async function insertToken(
 	]);
 	return token;
 }
+
+/**
+ * Versement de caution (lot 09) : un encaissement de caution confirmé, imputé sur le compte ; la base crée le mouvement
+ * `received` lié à cet encaissement (migration 0016 : jamais sans). Renvoie l'identifiant du mouvement.
+ */
+export async function receiveDeposit(c: pg.Client, organizationId: string, accountId: string, amount: number): Promise<string> {
+	const account = await c.query<{ lease_id: string }>(`select lease_id from deposit_accounts where id = $1`, [accountId]);
+	const leaseId = account.rows[0]!.lease_id;
+	const director = await c.query<{ user_id: string }>(
+		`select user_id from organization_members where organization_id = $1 and role = 'director' limit 1`,
+		[organizationId]
+	);
+	const paymentId = await insertPayment(c, organizationId, leaseId, {
+		purpose: 'deposit',
+		depositAccountId: accountId,
+		amount,
+		confirmedBy: director.rows[0]?.user_id ?? null
+	});
+	await allocate(c, organizationId, paymentId, leaseId, [{ target: 'deposit_account', depositAccountId: accountId, amount }]);
+	const movement = await c.query<{ id: string }>(`select id from deposit_movements where payment_id = $1 and type = 'received'`, [
+		paymentId
+	]);
+	return movement.rows[0]!.id;
+}

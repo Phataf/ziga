@@ -603,3 +603,31 @@ export async function recordPayments(db: PowerSyncDatabase, organizationId: stri
 		}
 	});
 }
+
+/**
+ * Jetons d'un reçu saisi sur un autre appareil, créés en ligne par le serveur (POST /receipts/:id/tokens) : gardés sur
+ * cet appareil seulement (table locale `receipt_drafts`, jamais envoyée), pour afficher le QR code et le lien hors ligne.
+ */
+export async function saveReceiptTokens(
+	db: PowerSyncDatabase,
+	organizationId: string,
+	t: { receiptId: string; paymentId: string; provisionalNumber: string; verificationToken: string; shareToken: string }
+): Promise<void> {
+	await db.writeTransaction(async (tx) => {
+		await tx.execute(`DELETE FROM receipt_drafts WHERE organization_id = ? AND payment_id = ?`, [organizationId, t.paymentId]);
+		await insert(tx, 'receipt_drafts', {
+			id: t.receiptId,
+			organization_id: organizationId,
+			payment_id: t.paymentId,
+			provisional_number: t.provisionalNumber,
+			verification_token: t.verificationToken,
+			share_token: t.shareToken,
+			created_at: new Date().toISOString()
+		});
+	});
+}
+
+/** Liens de partage révoqués : l'appareil oublie le sien (le QR code de vérification reste). */
+export async function forgetShareToken(db: PowerSyncDatabase, organizationId: string, paymentId: string): Promise<void> {
+	await db.execute(`UPDATE receipt_drafts SET share_token = '' WHERE organization_id = ? AND payment_id = ?`, [organizationId, paymentId]);
+}

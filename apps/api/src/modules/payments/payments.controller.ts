@@ -97,6 +97,14 @@ export class ReceiptsController {
 		return this.payments.receiptPdfUrl(idSchema.parse(id), formatSchema.parse(query).format);
 	}
 
+	/** Nouveaux jetons (vérification et partage) d'un reçu saisi sur un autre appareil : quiconque lit le reçu. */
+	@Post(':id/tokens')
+	@Can('payment.read')
+	@HttpCode(201)
+	tokens(@Param('id') id: string) {
+		return this.payments.newReceiptTokens(idSchema.parse(id));
+	}
+
 	@Post(':id/share-token')
 	@Can('receipt.share')
 	@HttpCode(201)

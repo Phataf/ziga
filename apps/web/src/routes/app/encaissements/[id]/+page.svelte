@@ -8,14 +8,14 @@
 	 * Téléphone : le reçu, puis les boutons ; tablette et ordinateur : le reçu et un panneau d'actions à droite.
 	 */
 	import { onMount } from 'svelte';
-	import { Ban, CircleCheck, Copy, FileDown, Link2, MessageCircle, Printer, Share2 } from '@lucide/svelte';
+	import { Ban, CircleCheck, Copy, FileDown, Link2, MessageCircle, Printer, QrCode as QrIcon, Share2 } from '@lucide/svelte';
 	import { page } from '$app/state';
 	import { toIsoDate } from '@ziga/shared/dates';
 	import { formatFcfa } from '@ziga/shared/money';
 	import { cancelPaymentSchema } from '@ziga/shared/payments';
 	import { can } from '@ziga/shared/permissions';
 	import { formatPhone } from '@ziga/shared/phone';
-	import type { PaymentValidationResult, ReceiptFormat, ReceiptOrganizationSnapshot } from '@ziga/shared/receipts';
+	import type { PaymentValidationResult, ReceiptFormat, ReceiptOrganizationSnapshot, ReceiptTokensView } from '@ziga/shared/receipts';
 	import FormAlert from '#lib/components/auth/FormAlert.svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
 	import ReceiptDocumentView from '#lib/components/payments/ReceiptDocumentView.svelte';
@@ -47,6 +47,7 @@
 	import { GEOGRAPHY_QUERIES, LOCAL_QUERIES } from '#lib/sync/queries.ts';
 	import { sync } from '#lib/sync/sync.svelte.ts';
 	import { toOrganizationView } from '#lib/sync/views.ts';
+	import { forgetShareToken, saveReceiptTokens } from '#lib/sync/writes.ts';
 	import { cn } from '#lib/utils.ts';
 
 	type Row = Record<string, unknown>;
@@ -184,7 +185,7 @@
 			: null
 	);
 	const doc = $derived(receiptToShow(receipt, draft, local, origin));
-	const shareToken = $derived(draft?.shareToken ?? onlineShareToken);
+	const shareToken = $derived(draft?.shareToken || onlineShareToken);
 	const link = $derived(shareToken ? shareUrl(origin, shareToken) : null);
 	const awaiting = $derived(payment?.status === 'to_validate' || payment?.status === 'to_reconcile');
 	const canValidate = $derived(can(role, 'payment.validate') && awaiting);
@@ -234,7 +235,15 @@
 		online(async () => {
 			await organizations.call('POST', `/receipts/${receipt!.id}/share-token/revoke`);
 			onlineShareToken = null;
+			if (draft) await forgetShareToken(sync.db ?? (await sync.start()), organizations.activeId!, id);
 		}, t.linksRevoked);
+
+	/** Reçu saisi sur un autre appareil : nouveaux jetons (en ligne), gardés sur cet appareil ; l'ancien QR reste valable. */
+	const newTokens = () =>
+		online(async () => {
+			const r = await organizations.call<ReceiptTokensView>('POST', `/receipts/${receipt!.id}/tokens`);
+			await saveReceiptTokens(sync.db ?? (await sync.start()), organizations.activeId!, r);
+		}, t.tokensCreated);
 
 	const pdf = (format: ReceiptFormat) =>
 		online(async () => {
@@ -289,6 +298,12 @@
 			</div>
 
 			<aside class={cn('space-y-2', side && device.isDesktop && 'sticky top-20')} aria-label={t.receipt}>
+				{#if receipt && !draft}
+					<p class="text-sm text-muted-foreground">{t.shareNeedsDevice}</p>
+					<Button class={action} variant="outline" onclick={newTokens} disabled={busy || !sync.online} data-testid="creer-jetons"
+						><QrIcon class="size-5" aria-hidden="true" />{t.newTokens}</Button
+					>
+				{/if}
 				{#if canShare}
 					{#if link}
 						<Button class={action} onclick={share} data-testid="partager"><Share2 class="size-5" aria-hidden="true" />{t.share}</Button>
@@ -302,8 +317,7 @@
 						>
 						<Button class={action} variant="outline" onclick={copy}><Copy class="size-5" aria-hidden="true" />{t.copyLink}</Button>
 						<p class="text-sm break-all text-muted-foreground" data-testid="lien-recu">{link}</p>
-					{:else if receipt}
-						<p class="text-sm text-muted-foreground">{t.shareNeedsDevice}</p>
+					{:else if receipt && draft}
 						<Button class={action} variant="outline" onclick={newLink} disabled={busy || !sync.online}
 							><Link2 class="size-5" aria-hidden="true" />{t.newLink}</Button
 						>

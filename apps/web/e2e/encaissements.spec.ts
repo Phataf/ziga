@@ -259,7 +259,10 @@ for (const [label, options] of devices) {
 test.describe('Gestion (tablette)', () => {
 	test.use(tablet);
 
-	test('valide un encaissement, ne l’annule jamais ; la liste « À valider » se vide', async ({ browser, request }) => {
+	test('valide un encaissement, ne l’annule jamais ; crée le QR code et le lien d’un reçu saisi ailleurs ; la liste « À valider » se vide', async ({
+		browser,
+		request
+	}) => {
 		test.setTimeout(3 * 60_000);
 		const agency = await freshAgency(request, `Agence gestion ${newId().slice(-6)}`);
 		const manager = await addMember(request, agency, 'manager', 'Gestionnaire validatrice');
@@ -279,7 +282,29 @@ test.describe('Gestion (tablette)', () => {
 		await expect(page.getByTestId('statut-encaissement')).toHaveText('Confirmé', { timeout: 20_000 });
 		await expect(page.getByTestId('numero-recu')).toHaveText(new RegExp(`^N° [A-Z]{2,6}-${year}-000001$`));
 		await expect(page.getByTestId('annuler')).toHaveCount(0);
+		await expect(page.getByTestId('recu').getByRole('img', { name: 'Vérifiez ce reçu' })).toHaveCount(0);
 		await expectNoHorizontalOverflow(page, 'Reçu (gestion, tablette)');
+
+		// QR code et lien pour cet appareil, créés en ligne ; le QR code de l'appareil d'origine reste valable.
+		await page.getByTestId('creer-jetons').click();
+		await expect(page.getByText('QR code et lien créés pour cet appareil.')).toBeVisible();
+		await expect(page.getByTestId('recu').getByRole('img', { name: 'Vérifiez ce reçu' })).toBeVisible();
+		await expect(page.getByTestId('lien-recu')).toHaveText(/^http:\/\/localhost:4173\/recu\/[A-Za-z0-9_-]{43}$/);
+		await expect(page.getByTestId('creer-jetons')).toHaveCount(0);
+		const number = (await page.getByTestId('numero-recu').textContent())!.replace('N° ', '');
+		const visitor = await (await context(browser, tablet)).newPage();
+		for (const link of [await verificationLink(page), `http://localhost:4173/r/${cash.verificationToken}`]) {
+			await visitor.goto(link);
+			await expect(visitor.getByTestId('statut-verification')).toHaveText(/Reçu valide/);
+			await expect(visitor.getByTestId('numero-verifie')).toHaveText(number);
+		}
+		await visitor.goto((await page.getByTestId('lien-recu').textContent())!.trim());
+		await expect(visitor.getByTestId('recu-partage').getByTestId('numero-recu')).toHaveText(`N° ${number}`);
+		await visitor.context().close();
+		// Après un rechargement, l'appareil garde son QR code.
+		await page.reload();
+		await expect(page.getByTestId('recu').getByRole('img', { name: 'Vérifiez ce reçu' })).toBeVisible({ timeout: 20_000 });
+
 		await page.goto('/app/a-valider');
 		await expect(page.getByText('Rien à valider')).toBeVisible();
 		await ctx.close();

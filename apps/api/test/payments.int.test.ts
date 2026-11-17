@@ -22,7 +22,13 @@ import type { LeaseDetailView, Page, TenantView } from '@ziga/shared/leases';
 import type { OwnerView } from '@ziga/shared/owners';
 import { newReceiptToken, provisionalReceiptNumber, type PaymentEntryInput, type PaymentView } from '@ziga/shared/payments';
 import type { PropertyView, UnitView } from '@ziga/shared/properties';
-import type { PaymentDetailView, PaymentValidationResult, ReceiptVerificationView, SharedReceiptView } from '@ziga/shared/receipts';
+import type {
+	PaymentDetailView,
+	PaymentValidationResult,
+	ReceiptTokensView,
+	ReceiptVerificationView,
+	SharedReceiptView
+} from '@ziga/shared/receipts';
 import type { SyncOperationResult } from '@ziga/shared/sync';
 import { Queue, QueueEvents } from 'bullmq';
 import pg from 'pg';
@@ -35,6 +41,7 @@ import { WorkerModule } from '../src/worker.module.js';
 import { Client, newPhone, startApp, type TestApp } from './http.js';
 import { addMember, createOrg, type Member, type Org } from './orgs.js';
 import { inspectPdf } from './pdf-inspect.js';
+import { sha256 } from './payments.js';
 
 let t: TestApp;
 let a: Org;
@@ -607,6 +614,77 @@ describe('reçu : PDF, QR code et pages publiques', () => {
 			expect((await visitor().call<SharedReceiptView>('GET', `/public/receipts/shared/${tok}`)).body).toEqual({ state: 'pending' });
 		}
 		expect((await visitor().call('GET', '/public/receipts/verify/court')).status).toBe(404);
+	});
+
+	it('nouveaux jetons d’un reçu saisi ailleurs : quiconque le lit, en ligne ; l’ancien QR code reste valable ; partage révocable ; audit', async () => {
+		const l = await lease(manager);
+		const e = entry(l.id);
+		await upload(manager, [syncOp(a.id, e)]);
+		const receiptId = (await owner.query(`select id from receipts where payment_id = $1`, [e.id])).rows[0].id as string;
+		const verify = (token: string) => visitor().call<ReceiptVerificationView>('GET', `/public/receipts/verify/${token}`);
+		const printed = await verify(e.verificationToken);
+		expect(printed.status).toBe(200);
+
+		// Le profil lecture n'a que la lecture du reçu : il obtient un QR code et un lien pour son appareil.
+		const fresh = await call<ReceiptTokensView>(viewer, 'POST', `/receipts/${receiptId}/tokens`, undefined, 201);
+		expect(fresh).toMatchObject({ receiptId, paymentId: e.id, provisionalNumber: e.provisionalNumber });
+		expect(fresh.verificationToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+		expect(fresh.shareToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+		expect(fresh.verificationToken).not.toBe(e.verificationToken);
+		// Deux QR codes valables pour le même reçu : l'imprimé et le nouveau.
+		for (const token of [e.verificationToken, fresh.verificationToken]) {
+			const v = await verify(token);
+			expect(v.status).toBe(200);
+			expect(v.body).toEqual(printed.body);
+		}
+		expect((await visitor().call<SharedReceiptView>('GET', `/public/receipts/shared/${fresh.shareToken}`)).body).toMatchObject({
+			state: 'available'
+		});
+		// Une seconde demande ajoute encore un jeton de vérification, sans retirer les autres.
+		const again = await call<ReceiptTokensView>(manager, 'POST', `/receipts/${receiptId}/tokens`, undefined, 201);
+		// Le partage se révoque ; aucun QR code ne cesse de marcher.
+		await call(manager, 'POST', `/receipts/${receiptId}/share-token/revoke`);
+		for (const token of [fresh.shareToken, again.shareToken, e.shareToken]) {
+			expect((await visitor().call<SharedReceiptView>('GET', `/public/receipts/shared/${token}`)).body).toEqual({ state: 'pending' });
+		}
+		for (const token of [e.verificationToken, fresh.verificationToken, again.verificationToken]) {
+			expect((await verify(token)).body).toEqual(printed.body);
+		}
+
+		// Le serveur ne garde que l'empreinte de chaque jeton.
+		const stored = await owner.query<{ kind: string; token_hash: Buffer; revoked: boolean; created_by: string | null }>(
+			`select kind, token_hash, revoked_at is not null as revoked, created_by from receipt_tokens where receipt_id = $1 order by created_at, kind`,
+			[receiptId]
+		);
+		// Celui de l'appareil (envoyé par la gestionnaire) et les deux nouveaux ; celui du PDF, créé par la tâche de fond, n'a pas d'auteur.
+		const created = stored.rows.filter(
+			(r) => r.kind === 'verification' && (r.created_by === viewer.userId || r.created_by === manager.userId)
+		);
+		expect(created).toHaveLength(3);
+		expect(stored.rows.filter((r) => r.kind === 'verification').every((r) => !r.revoked)).toBe(true);
+		expect(stored.rows.filter((r) => r.kind === 'share').every((r) => r.revoked)).toBe(true);
+		const hashes = stored.rows.map((r) => r.token_hash.toString('hex'));
+		for (const token of [fresh.verificationToken, fresh.shareToken, again.verificationToken, again.shareToken]) {
+			expect(hashes).toContain(sha256(token).toString('hex'));
+		}
+		const columns = await owner.query(`select column_name from information_schema.columns where table_name = 'receipt_tokens'`);
+		expect(columns.rows.map((r) => r.column_name)).not.toContain('token');
+
+		// Chaque création est journalisée, avec son auteur.
+		const audit = await owner.query(
+			`select action, actor_user_id from audit_log where object_id = $1 and action in ('receipt.verification_token', 'receipt.share_link') order by occurred_at, action`,
+			[receiptId]
+		);
+		expect(audit.rows).toEqual([
+			{ action: 'receipt.share_link', actor_user_id: viewer.userId },
+			{ action: 'receipt.verification_token', actor_user_id: viewer.userId },
+			{ action: 'receipt.share_link', actor_user_id: manager.userId },
+			{ action: 'receipt.verification_token', actor_user_id: manager.userId }
+		]);
+
+		// B ne crée rien sur le reçu de A ; sans connexion, rien non plus.
+		expect((await b.director.call('POST', `/receipts/${receiptId}/tokens`)).status).toBe(404);
+		expect((await visitor().call('POST', `/receipts/${receiptId}/tokens`)).status).toBe(401);
 	});
 
 	it('limite de débit par adresse IP sur les pages publiques', async () => {

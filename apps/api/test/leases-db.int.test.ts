@@ -13,9 +13,9 @@ import { newId } from '@ziga/shared/ids';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type TestApp } from './http.js';
-import { insertDepositAccount, insertDue, insertLease, insertMovement, insertTenant } from './leases.js';
+import { insertDepositAccount, insertDue, insertLease, insertLegacyReceived, insertMovement, insertTenant } from './leases.js';
 import { apiSql, createOrg, inContext, sqlError, type Org } from './orgs.js';
-import { allocate, insertPayment } from './payments.js';
+import { allocate, insertPayment, receiveDeposit } from './payments.js';
 import { propertyWithUnit } from './properties.js';
 
 let t: TestApp;
@@ -89,7 +89,7 @@ describe('accès croisé A/B en SQL (règle 1)', () => {
 			const lease = await insertLease(c, b.id, unit, tenant);
 			await insertDue(c, b.id, lease, '2026-01-01');
 			const account = await insertDepositAccount(c, b.id, lease);
-			await insertMovement(c, b.id, account, 'received', 50_000);
+			await receiveDeposit(c, b.id, account, 50_000);
 			return { unit, tenant, lease, account };
 		});
 		mine = await unitAndTenant(a.id);
@@ -136,7 +136,15 @@ describe('accès croisé A/B en SQL (règle 1)', () => {
 				[() => insertLease(api, a.id, mine.unit, inB.tenant, { status: 'draft' }), 'leases_tenant_fk'],
 				[() => insertDue(api, a.id, inB.lease, '2026-02-01'), 'rent_dues_lease_fk'],
 				[() => insertDepositAccount(api, a.id, inB.lease), 'deposit_accounts_lease_fk'],
-				[() => insertMovement(api, a.id, inB.account, 'received', 1_000), 'deposit_movements_account_fk']
+				[
+					() =>
+						insertMovement(api, a.id, inB.account, 'holder_changed', 0, {
+							previousHolder: 'organization',
+							newHolder: 'owner',
+							reason: 'Transfert'
+						}),
+					'deposit_movements_account_fk'
+				]
 			];
 			for (const [run, constraint] of cases) {
 				await api.query('SAVEPOINT attendu');
@@ -521,15 +529,13 @@ describe('comptes de caution (règle 14)', () => {
 			const account = await insertDepositAccount(api, a.id, active, { agreed: 150_000 });
 			const status = async () => (await api.query(`select status from deposit_accounts where id = $1`, [account])).rows[0].status as string;
 			expect(await status()).toBe('pending');
-			await insertMovement(api, a.id, account, 'received', 100_000);
+			await receiveDeposit(api, a.id, account, 100_000);
 			expect(await status()).toBe('partially_received');
-			const over = await sqlError(
-				api,
-				`insert into deposit_movements (id, organization_id, account_id, type, amount, occurred_on) values ($1, $2, $3, 'received', 50001, current_date)`,
-				[newId(), a.id, account]
-			);
-			expect(over.message).toContain('DEPOSIT_OVERPAID');
-			await insertMovement(api, a.id, account, 'received', 50_000);
+			await api.query('SAVEPOINT au_dela');
+			const over = await receiveDeposit(api, a.id, account, 50_001).catch((error: Error) => error);
+			await api.query('ROLLBACK TO SAVEPOINT au_dela');
+			expect((over as Error).message).toContain('DEPOSIT_OVERPAID');
+			await receiveDeposit(api, a.id, account, 50_000);
 			expect(await status()).toBe('held');
 			const sums = await api.query(
 				`select coalesce(sum(amount) filter (where type = 'received'), 0)::bigint as received from deposit_movements where account_id = $1`,
@@ -539,10 +545,51 @@ describe('comptes de caution (règle 14)', () => {
 		});
 	});
 
+	it('versement sans encaissement : refusé au rôle de l’API et au propriétaire du schéma ; les versements du lot 08 restent', async () => {
+		const place = await unitAndTenant(a.id);
+		const account = await seed(a.id, async (c) => {
+			const lease = await insertLease(c, a.id, place.unit, place.tenant);
+			return insertDepositAccount(c, a.id, lease, { agreed: 150_000 });
+		});
+		const received = `insert into deposit_movements (id, organization_id, account_id, type, amount, occurred_on) values ($1, $2, $3, 'received', 10000, current_date)`;
+		await inContext(api, { organizationId: a.id }, async () => {
+			const e = await sqlError(api, received, [newId(), a.id, account]);
+			expect(e).toMatchObject({ code: 'P0001', message: expect.stringContaining('DEPOSIT_RECEIPT_VIA_PAYMENT') });
+		});
+		await owner.query('BEGIN');
+		try {
+			await owner.query(`select set_config('app.organization_id', $1, true)`, [a.id]);
+			const e = await sqlError(owner, received, [newId(), a.id, account]);
+			expect(e).toMatchObject({ code: 'P0001', message: expect.stringContaining('DEPOSIT_RECEIPT_VIA_PAYMENT') });
+		} finally {
+			await owner.query('ROLLBACK');
+		}
+		// Un versement enregistré avant la migration 0016, sans encaissement, reste ; un encaissement complète la caution.
+		const legacy = await insertLegacyReceived(owner, a.id, account, 100_000);
+		await inContext(api, { organizationId: a.id }, async () => {
+			const linked = await receiveDeposit(api, a.id, account, 50_000);
+			const rows = await api.query(
+				`select id, type, amount::int, payment_id from deposit_movements where account_id = $1 order by created_at`,
+				[account]
+			);
+			expect(rows.rows).toEqual([
+				{ id: legacy, type: 'received', amount: 100_000, payment_id: null },
+				{ id: linked, type: 'received', amount: 50_000, payment_id: expect.any(String) }
+			]);
+			expect((await api.query(`select status from deposit_accounts where id = $1`, [account])).rows[0].status).toBe('held');
+			// Les autres mouvements ne sont pas concernés.
+			await insertMovement(api, a.id, account, 'holder_changed', 0, {
+				previousHolder: 'organization',
+				newHolder: 'owner',
+				reason: 'Transfert'
+			});
+		});
+	});
+
 	it('sorties plafonnées au reçu ; retenue sans état des lieux ni justificatif, imputation sans accord : refusées', async () => {
 		await inContext(api, { organizationId: a.id }, async () => {
 			const account = await insertDepositAccount(api, a.id, active);
-			await insertMovement(api, a.id, account, 'received', 40_000);
+			await receiveDeposit(api, a.id, account, 40_000);
 			const refund = await sqlError(
 				api,
 				`insert into deposit_movements (id, organization_id, account_id, type, amount, occurred_on) values ($1, $2, $3, 'refunded', 40001, current_date)`,
@@ -567,7 +614,7 @@ describe('comptes de caution (règle 14)', () => {
 
 	it('mouvements en ajout seul : ni modification ni suppression, même par le propriétaire du schéma', async () => {
 		const account = await seed(a.id, (c) => insertDepositAccount(c, a.id, active, { type: 'utilities_guarantee', agreed: 20_000 }));
-		const movement = await seed(a.id, (c) => insertMovement(c, a.id, account, 'received', 20_000));
+		const movement = await seed(a.id, (c) => receiveDeposit(c, a.id, account, 20_000));
 		await inContext(api, { organizationId: a.id }, async () => {
 			expect((await sqlError(api, `update deposit_movements set amount = 1 where id = $1`, [movement])).code).toBe('42501');
 			expect((await sqlError(api, `delete from deposit_movements where id = $1`, [movement])).code).toBe('42501');
@@ -611,10 +658,14 @@ describe('comptes de caution (règle 14)', () => {
 	});
 
 	it('montant convenu : modifiable tant que le bail est un brouillon, figé ensuite', async () => {
+		// Un bail brouillon ne reçoit jamais d'encaissement : seul un versement saisi avant la migration 0016 (lot 08) peut
+		// encore exister sur son compte de caution.
+		const draftAccount = await seed(a.id, async (c) => {
+			const draft = await insertLease(c, a.id, unitDraft.unit, unitDraft.tenant, { status: 'draft' });
+			return insertDepositAccount(c, a.id, draft, { agreed: 100_000 });
+		});
+		await insertLegacyReceived(owner, a.id, draftAccount, 100_000);
 		await inContext(api, { organizationId: a.id }, async () => {
-			const draft = await insertLease(api, a.id, unitDraft.unit, unitDraft.tenant, { status: 'draft' });
-			const draftAccount = await insertDepositAccount(api, a.id, draft, { agreed: 100_000 });
-			await insertMovement(api, a.id, draftAccount, 'received', 100_000);
 			expect((await api.query(`select status from deposit_accounts where id = $1`, [draftAccount])).rows[0].status).toBe('held');
 			await api.query(`update deposit_accounts set agreed_amount = 150000, agreed_months = 2 where id = $1`, [draftAccount]);
 			expect((await api.query(`select status from deposit_accounts where id = $1`, [draftAccount])).rows[0].status).toBe(

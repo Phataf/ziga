@@ -63,6 +63,10 @@ const RULES: Record<string, { status: number; message: string }> = {
 		status: 409,
 		message: 'Annuler ce versement ferait passer la caution reçue sous les sorties déjà faites (règle 14).'
 	},
+	DEPOSIT_RECEIPT_VIA_PAYMENT: {
+		status: 409,
+		message: 'Un versement de caution s’encaisse, avec son reçu : passez par « Encaisser ».'
+	},
 	DEPOSIT_CANCELLATION_UNMATCHED: { status: 409, message: 'On n’annule que ce que cet encaissement a versé.' },
 	RECEIPT_PAYMENT_NOT_FOUND: { status: 404, message: 'Encaissement introuvable.' },
 	RECEIPT_ON_REVERSAL: { status: 409, message: 'Une contre-écriture n’a pas de reçu.' },

@@ -126,3 +126,23 @@ export async function insertMovement(
 	);
 	return id;
 }
+
+/**
+ * Mouvement `received` saisi avant la migration 0016 (lot 08, sans encaissement), tel qu'il existe encore en base.
+ * Seul moyen d'en écrire un aujourd'hui : le propriétaire du schéma coupe le trigger 0016 le temps de cette insertion,
+ * dans sa propre transaction validée ; les autres règles de la caution s'appliquent.
+ */
+export async function insertLegacyReceived(owner: pg.Client, organizationId: string, accountId: string, amount: number): Promise<string> {
+	await owner.query('BEGIN');
+	try {
+		await owner.query('ALTER TABLE deposit_movements DISABLE TRIGGER deposit_movements_received_needs_payment');
+		await owner.query(`select set_config('app.organization_id', $1, true)`, [organizationId]);
+		const id = await insertMovement(owner, organizationId, accountId, 'received', amount);
+		await owner.query('ALTER TABLE deposit_movements ENABLE TRIGGER deposit_movements_received_needs_payment');
+		await owner.query('COMMIT');
+		return id;
+	} catch (error) {
+		await owner.query('ROLLBACK');
+		throw error;
+	}
+}

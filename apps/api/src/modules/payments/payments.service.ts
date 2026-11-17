@@ -48,6 +48,7 @@ import {
 	type ReceiptSettingsData,
 	type ReceiptSettingsView,
 	type ReceiptSnapshot,
+	type ReceiptTokensView,
 	type ReceiptVerificationView,
 	type ReceiptView,
 	type SharedReceiptView
@@ -733,6 +734,43 @@ export class PaymentsService implements OnModuleInit {
 			contentType: 'application/pdf'
 		});
 		return { url, expiresInSeconds: 300 };
+	}
+
+	/**
+	 * Nouveaux jetons d'un reçu (en ligne), pour quiconque lit ce reçu : un jeton de vérification de plus, sans retirer
+	 * les précédents (un QR code imprimé reste valable), et un jeton de partage, révocable. Les jetons ne sont renvoyés
+	 * qu'ici ; la base n'en garde que l'empreinte. Chaque création est journalisée.
+	 */
+	async newReceiptTokens(receiptId: string): Promise<ReceiptTokensView> {
+		const c = this.context();
+		const [receipt] = await c.tx.select().from(receipts).where(eq(receipts.id, receiptId)).limit(1);
+		if (!receipt) throw RECEIPT_NOT_FOUND();
+		await this.paymentRow(c, receipt.paymentId);
+		const verificationToken = newReceiptToken();
+		const shareToken = newReceiptToken();
+		for (const [kind, token, action] of [
+			['verification', verificationToken, 'receipt.verification_token'],
+			['share', shareToken, 'receipt.share_link']
+		] as const) {
+			const id = newId();
+			await c.tx.insert(receiptTokens).values({
+				id,
+				organizationId: c.organizationId,
+				receiptId,
+				kind,
+				tokenHash: tokenHash(token),
+				createdBy: c.userId
+			});
+			await this.audit.record(c.tx, {
+				actor: c.actor,
+				organizationId: c.organizationId,
+				action,
+				objectType: 'receipt',
+				objectId: receiptId,
+				after: { tokenId: id, kind }
+			});
+		}
+		return { receiptId, paymentId: receipt.paymentId, provisionalNumber: receipt.provisionalNumber, verificationToken, shareToken };
 	}
 
 	/** Nouveau lien de partage (en ligne) : le jeton n'est renvoyé qu'ici, la base n'en garde que l'empreinte. */

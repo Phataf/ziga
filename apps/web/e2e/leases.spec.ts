@@ -32,18 +32,12 @@ const PDF = Buffer.from('%PDF-1.7\n% bail signé, scanné\n%%EOF\n');
 
 /** Assistant, de l'unité jusqu'à l'étape 5 : nouveau locataire, conditions, caution, avance. */
 /**
- * Lot 09 : après la validation, l'assistant ouvre « Caution et avance » ; on revient au bail par le routeur de
- * l'application (un lien suivi sur place), hors connexion compris.
+ * Lot 09 : après la validation, l'assistant ouvre « Caution et avance » ; « Plus tard » revient à la fiche du bail,
+ * hors connexion compris.
  */
-async function backToLease(page: Page, leaseId: string) {
+async function later(page: Page, leaseId: string) {
 	await expect(page).toHaveURL(`/app/encaisser?bail=${leaseId}&objet=signature`);
-	await page.evaluate((href) => {
-		const a = document.createElement('a');
-		a.href = href;
-		document.body.append(a);
-		a.click();
-		a.remove();
-	}, `/app/baux/${leaseId}`);
+	await page.getByTestId('plus-tard').click();
 	await expect(page).toHaveURL(`/app/baux/${leaseId}`);
 }
 
@@ -171,7 +165,7 @@ test.describe('Deux appareils hors ligne, un bail chacun sur la même unité (r�
 		const first = await wizardToDocuments(one.page, propertyId, { tenant: 'Premier locataire' });
 		await expect(one.page.getByText('Les documents privés se déposent en ligne, une fois le bail synchronisé.')).toBeVisible();
 		await one.page.getByTestId('valider').click();
-		await backToLease(one.page, first);
+		await later(one.page, first);
 		// Hors ligne : aperçu de l'échéancier, calculé par la même fonction que le serveur.
 		await expect(one.page.getByTestId('echeance').first()).toBeVisible();
 		const preview = await one.page.getByTestId('echeance').count();
@@ -180,7 +174,7 @@ test.describe('Deux appareils hors ligne, un bail chacun sur la même unité (r�
 
 		const second = await wizardToDocuments(two.page, propertyId, { tenant: 'Second locataire' });
 		await two.page.getByTestId('valider').click();
-		await backToLease(two.page, second);
+		await later(two.page, second);
 
 		// Le premier appareil revient : son bail est validé par le serveur, l'aperçu devient l'échéancier du serveur.
 		await one.context.setOffline(false);

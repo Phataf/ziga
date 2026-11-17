@@ -135,8 +135,9 @@ Elle est réservée au directeur (`payment.cancel`), avec un motif obligatoire, 
 ## 8. Jetons et pages publiques
 
 - **Deux jetons par reçu**, de 256 bits, tirés par `crypto.getRandomValues` sur l'appareil, pour partager hors ligne. La base n'en garde que l'**empreinte SHA-256** (`receipt_tokens`).
-  - **Vérification** : dans le QR code. Le worker en crée aussi un pour chaque PDF. Ce jeton n'est jamais révoqué.
+  - **Vérification** : dans le QR code. Le worker en crée aussi un pour chaque PDF. Un reçu peut en avoir plusieurs, tous valables : un QR code déjà imprimé ne cesse jamais de marcher. Ce jeton n'est jamais révoqué.
   - **Partage** : dans le lien WhatsApp. Il est révocable (`POST /receipts/:id/share-token/revoke`), et un nouveau lien se crée en ligne (`POST /receipts/:id/share-token`).
+  - **Reçu saisi sur un autre appareil** : l'appareil n'a pas ses jetons. `POST /receipts/:id/tokens` (en ligne, toute personne qui lit ce reçu) crée un nouveau jeton de vérification, sans retirer les précédents, et un nouveau jeton de partage ; ils ne sont renvoyés qu'à cette réponse et l'appareil les garde dans sa table locale. Chaque création est journalisée (`receipt.verification_token`, `receipt.share_link`).
 - **`GET /public/receipts/verify/:token`** (page `/r/<jeton>`) : organisation, numéro, date, montant et statut. Aucune autre donnée.
 - **`GET /public/receipts/shared/:token`** (page `/recu/<jeton>`) : le reçu en lecture seule, ou `{ state: 'pending' }`, affiché « Reçu en cours d'enregistrement » tant que le reçu n'est pas synchronisé.
 - **Les deux pages** :
@@ -155,6 +156,7 @@ Elle est réservée au directeur (`payment.cancel`), avec un motif obligatoire, 
 | `POST /payments/:id/cancel` | `payment.cancel` (directeur) |
 | `GET /receipts/:id/pdf?format=a6|ticket` | `payment.read` |
 | `POST /receipts/:id/share-token`, `POST /receipts/:id/share-token/revoke` | `receipt.share` |
+| `POST /receipts/:id/tokens` | `payment.read` (en ligne) |
 | `GET /organization/receipt-settings` | `payment.read` |
 | `PUT /organization/receipt-settings` (préfixe, premier numéro, ticket) | `receipt.settings` (directeur) |
 | `GET /public/receipts/verify/:token`, `GET /public/receipts/shared/:token[/pdf]` | aucune (jeton) |

@@ -6,64 +6,18 @@
  * réglages des reçus par défaut ; nouvelles tables publiées ; un encaissement complète la caution du lot 08 et son
  * annulation la ramène ; migrations rejouées sans doublon.
  */
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import { newId } from '@ziga/shared/ids';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
-import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MIGRATIONS_FOLDER } from '../src/db/migrate.js';
+import { foldersUpTo, inOrganization as inAgency, scratchUrl, serverUrl as server, withClient } from './migrations.js';
 import { allocate, cancelPayment, insertPayment } from './payments.js';
 
 const SCRATCH = 'ziga_lot08bis_for_0015_test';
 const NEW_PUBLISHED = ['payment_allocations', 'payments', 'receipts'];
-
-function urlFor(base: string, database: string): string {
-	const u = new URL(base);
-	u.pathname = `/${database}`;
-	return u.toString();
-}
-
-async function withClient<T>(url: string, fn: (c: pg.Client) => Promise<T>): Promise<T> {
-	const c = new pg.Client({ connectionString: url });
-	await c.connect();
-	try {
-		return await fn(c);
-	} finally {
-		await c.end();
-	}
-}
-
-const server = () => urlFor(process.env.DATABASE_MIGRATION_URL!, 'postgres');
-const scratch = () => urlFor(process.env.DATABASE_MIGRATION_URL!, SCRATCH);
-
-function foldersUpTo(lastTag: string): string {
-	const dir = mkdtempSync(join(tmpdir(), 'ziga-migrations-'));
-	cpSync(MIGRATIONS_FOLDER, dir, { recursive: true });
-	const journalPath = join(dir, 'meta', '_journal.json');
-	const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as { entries: { tag: string }[] };
-	const keep = journal.entries.findIndex((e) => e.tag === lastTag);
-	for (const e of journal.entries.slice(keep + 1)) rmSync(join(dir, `${e.tag}.sql`));
-	journal.entries = journal.entries.slice(0, keep + 1);
-	writeFileSync(journalPath, JSON.stringify(journal));
-	return dir;
-}
-
-/** Dans le contexte de l'agence (la RLS s'applique aussi au propriétaire des tables). */
-async function inAgency<T>(c: pg.Client, agency: string, fn: () => Promise<T>, commit = true): Promise<T> {
-	await c.query('BEGIN');
-	await c.query(`select set_config('app.organization_id', $1, true)`, [agency]);
-	try {
-		const r = await fn();
-		await c.query(commit ? 'COMMIT' : 'ROLLBACK');
-		return r;
-	} catch (error) {
-		await c.query('ROLLBACK');
-		throw error;
-	}
-}
+const scratch = () => scratchUrl(SCRATCH);
 
 describe('migration 0015 sur une base du lot 08 bis', () => {
 	const agency = newId();

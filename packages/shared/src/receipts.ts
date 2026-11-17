@@ -367,6 +367,19 @@ export interface PaymentValidationResult {
  * Lien partagé (`/recu/<jeton>`) : le reçu en lecture seule. `pending` : le jeton n'est pas (encore) connu du serveur,
  * le reçu n'est pas encore synchronisé (« Reçu en cours d'enregistrement », réponse du porteur).
  */
+/**
+ * Nouveaux jetons d'un reçu existant (en ligne), pour un appareil qui ne les a pas (reçu saisi ailleurs) : un jeton de
+ * vérification de plus (les précédents restent valables : un QR code imprimé ne cesse jamais de marcher) et un jeton
+ * de partage (révocable). Le serveur n'en garde que l'empreinte ; ils ne sont renvoyés qu'à cette réponse.
+ */
+export interface ReceiptTokensView {
+	receiptId: string;
+	paymentId: string;
+	provisionalNumber: string;
+	verificationToken: string;
+	shareToken: string;
+}
+
 export type SharedReceiptView =
 	| { state: 'pending' }
 	| {

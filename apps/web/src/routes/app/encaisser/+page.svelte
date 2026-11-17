@@ -9,7 +9,7 @@
 	 * formulaire côte à côte ; sur ordinateur, on tape un nom puis Entrée.
 	 */
 	import { onMount, tick } from 'svelte';
-	import { Banknote, Building, Check, Search, Smartphone } from '@lucide/svelte';
+	import { ArrowLeft, Banknote, Building, Check, Search, Smartphone } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
@@ -74,6 +74,8 @@
 
 	let query = $state('');
 	let leaseId = $state<string | null>(page.url.searchParams.get('bail'));
+	/** Ouvert par l'assistant après la validation du bail : « Plus tard » revient à la fiche du bail. */
+	const signedLease = page.url.searchParams.get('objet') === 'signature' ? page.url.searchParams.get('bail') : null;
 	let purpose = $state<Purpose>(
 		page.url.searchParams.get('objet') === 'caution' ? 'deposit' : page.url.searchParams.get('objet') === 'signature' ? 'both' : 'rent'
 	);
@@ -236,6 +238,14 @@
 		<FormAlert message={fr.app.notFound} />
 	{:else}
 		<FeatureGate key="payments.registry">
+			{#if signedLease}
+				<div class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4" data-testid="apres-signature">
+					<p class="min-w-0 flex-1 text-base">{t.afterSignature}</p>
+					<Button variant="outline" href={resolve('/app/baux/[id]', { id: signedLease })} data-testid="plus-tard"
+						><ArrowLeft class="size-5" aria-hidden="true" />{t.later}</Button
+					>
+				</div>
+			{/if}
 			<FormAlert {message} />
 			<div class={cn('gap-6', twoPane ? 'grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] items-start' : 'space-y-4')}>
 				{#if twoPane || !target}

@@ -1171,3 +1171,9 @@ Quatre pull requests, chacune aussi envoyée sur `claude/lot09-sauvegarde` :
 
 ### Questions ouvertes pour le porteur
 Aucune.
+
+### Corrections après le lot (demande du porteur, 17/11/2026)
+Une pull request, avant le lot 10 :
+1. **Caution** : la migration `0016_deposit_received_via_payment` ajoute un trigger à l'insertion qui refuse tout nouveau mouvement `received` sans `payment_id` (`DEPOSIT_RECEIPT_VIA_PAYMENT`), pour tous les rôles, propriétaire du schéma compris. Les mouvements du lot 08 sans encaissement restent. Testé sur la base de test (rôle de l'API et propriétaire du schéma) et sur une base du lot 09 migrée (`migration-0016.int.test.ts`). Les tests SQL du lot 08 versent désormais la caution par un encaissement ; un versement « d'avant 0016 » s'écrit en coupant le trigger le temps d'une insertion (`insertLegacyReceived`). Cela lève l'écart « versement de caution reçu avant le lot 09 » noté plus haut.
+2. **Jetons d'un reçu saisi sur un autre appareil** : `POST /receipts/:id/tokens` (permission `payment.read`, en ligne) crée un nouveau jeton de vérification et un nouveau jeton de partage. Plusieurs jetons de vérification restent valables pour un même reçu, le jeton de partage reste révocable, chaque création est journalisée, et le serveur n'en garde que l'empreinte. Sur la fiche du reçu, « Créer le QR code et le lien » les garde sur l'appareil (table locale `receipt_drafts`). Après « Révoquer les liens », l'appareil oublie aussi son propre lien de partage. Testé par l'API (ancien QR toujours valable) et par Playwright. Cela lève l'écart « jeton absent sur un autre appareil ».
+3. **« Plus tard »** sur l'écran « Caution et avance » ouvert après la validation d'un bail : retour à la fiche du bail. Le test `leases.spec.ts` n'ajoute plus de lien à la page.
