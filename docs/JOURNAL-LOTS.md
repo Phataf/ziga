@@ -1233,7 +1233,7 @@ Quatre pull requests, chacune aussi envoyée sur `claude/lot10-sauvegarde` :
 
 ### Écarts par rapport au prompt
 - **Clé du PDF et jeton dans `owner_statements`** : la clé du PDF est dans la table mais jamais synchronisée ; les jetons sont dans `owner_statement_tokens` (empreinte seulement, plusieurs liens par relevé).
-- **Justificatif d'une dépense** : la base le prévoit (ajouté une seule fois) et l'API l'accepte à la création (`documentId`) ; l'écran ne propose pas encore de le déposer.
+- **Justificatif d'une dépense** : la base le prévoit (ajouté une seule fois) et l'API l'accepte à la création (`documentId`) ; l'écran ne propose pas encore de le déposer. Levé au lot 10 bis, étape 0.
 - **Indicateur « relevés à émettre »** : sur téléphone et ordinateur ; la tablette garde trois indicateurs (disposition du plan), le nombre reste visible dans « Relevés propriétaires ».
 
 ### Dette technique
@@ -1243,3 +1243,31 @@ Quatre pull requests, chacune aussi envoyée sur `claude/lot10-sauvegarde` :
 
 ### Questions ouvertes pour le porteur
 Aucune.
+
+## Lot 10 bis — Sortie du locataire : préavis, états des lieux, décompte de caution, remise en état, transfert de gestion — en cours
+
+Prompt : `prompts/lot-10bis-sortie-locataire.md`.
+
+### Réponses du porteur aux questions ouvertes du prompt
+1. **Détenteur de la caution** : l'organisation ou le propriétaire, selon le bail (déjà répondu au lot 08). Quand c'est le propriétaire, c'est lui qui restitue : la restitution est **enregistrée** (montant, date, moyen, référence, qui a restitué), jamais exécutée par la plateforme.
+2. **Réparations à la charge du locataire** : liste par défaut, modifiable par chaque organisation, **à valider par le juriste** (le décret prévu à l'article 25 n'est pas disponible) :
+   - clés et serrures perdues ou cassées ;
+   - vitres cassées ;
+   - robinetterie et joints ;
+   - interrupteurs, prises et ampoules ;
+   - débouchage des évacuations ;
+   - peinture abîmée au-delà de l'usure normale ;
+   - portes et placards dégradés.
+
+### Points d'attention du porteur
+- a. **Trop-perçu** (crédit du bail, lot 10) : c'est l'argent du locataire ; au départ, il s'ajoute au montant à restituer ou réduit le complément réclamé.
+- b. **Dépense réclamée au locataire** encore impayée à la sortie : retenue possible sur la caution par une ligne qui pointe vers la dépense elle-même, jamais une copie (règle 16), avec son justificatif ; jamais comptée deux fois (relance et décompte).
+- c. **Retenue** : uniquement vers une ligne d'état des lieux `tenant_damage`, avec montant et justificatif (règle 14), refusée aussi par la synchronisation.
+- d. **Fin de bail** : à la date de sortie, état technique `to_refurbish` automatiquement ; l'unité ne redevient disponible que déclarée `ready` par le gestionnaire (D14) ; relevé du propriétaire juste pour le dernier mois.
+- e. **Transfert de gestion** : rien n'est copié vers une autre organisation (règle 15).
+- f. Une pull request par étape, suivie jusqu'au vert ; suite Playwright complète, puis `pnpm lint`, `pnpm typecheck` et `pnpm test` avant chaque envoi ; sauvegarde sur `claude/lot10bis-sauvegarde`.
+
+### Étape 0 — justificatif d'une dépense (écart du lot 10 levé)
+- **Écran des dépenses** : à la saisie ou après coup (« Ajouter le justificatif »), photos ou PDF réunis en un seul PDF sur l'appareil (même fonction que le scan d'un contrat, lot 08 bis), gardés dans une file de l'appareil (IndexedDB, `receipt-queue.svelte.ts`) et envoyés dès la connexion : fiche « Justificatif de dépense » rattachée au bien, à l'unité et au bail de la dépense, envoi direct au stockage, réception contrôlée (type, taille, empreinte), puis rattachement. Une dépense saisie hors ligne pas encore reçue par le serveur n'est pas un refus : le rattachement est retenté. « Voir le justificatif » (direction, gestion) ouvre une URL signée de 5 minutes, journalisée ; le profil lecture voit « Justificatif joint » sans pouvoir l'ouvrir (matrice D22) ; la file est vidée à la déconnexion.
+- **API** : `POST /expenses/:id/document` (`expense.record`), une seule fois (`EXPENSE_DOCUMENT_ALREADY_SET`, la base le refuse aussi), rejoué sans effet, journalisé (`expense.attach_document`), refusé sur une dépense annulée. Le justificatif, à la saisie comme après coup, doit être un document `expense_receipt` reçu, du même bien et de la même organisation (`EXPENSE_DOCUMENT_INVALID`, `EXPENSE_DOCUMENT_NOT_ACTIVE`), lu par le service public du module documents.
+- **Tests** : `collections.int.test.ts` (rattachement, rejeu, refus, base, consultation journalisée, accès croisé A/B) ; `impayes-releves.spec.ts` (photo prise hors ligne sur téléphone puis envoyée et consultée ; PDF ajouté après coup par la gestion sur les trois appareils ; profil lecture ; sans débordement horizontal).
