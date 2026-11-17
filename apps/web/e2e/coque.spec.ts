@@ -37,6 +37,8 @@ const cases: Case[] = [
 			'Impayés',
 			'Propriétaires',
 			'Locataires',
+			'Dépenses',
+			'Relevés propriétaires',
 			'Contrats',
 			'À valider',
 			'Équipe',
@@ -57,6 +59,8 @@ const cases: Case[] = [
 			'Impayés',
 			'Propriétaires',
 			'Locataires',
+			'Dépenses',
+			'Relevés propriétaires',
 			'Contrats',
 			'À valider',
 			'Équipe'
@@ -76,7 +80,17 @@ const cases: Case[] = [
 		account: 'viewer',
 		path: '/app',
 		tabs: ['Accueil', 'Biens', 'Encaissements', 'Plus'],
-		menu: ['Tableau de bord', 'Biens et unités', 'Encaissements', 'Impayés', 'Propriétaires', 'Locataires', 'À valider'],
+		menu: [
+			'Tableau de bord',
+			'Biens et unités',
+			'Encaissements',
+			'Impayés',
+			'Propriétaires',
+			'Locataires',
+			'Dépenses',
+			'Relevés propriétaires',
+			'À valider'
+		],
 		sections: ['Pilotage', 'Gestion', 'Contrôle']
 	},
 	{
@@ -85,7 +99,17 @@ const cases: Case[] = [
 		org: 'Mes logements',
 		path: '/app',
 		tabs: ['Accueil', 'Logements', 'Loyers', 'Plus'],
-		menu: ['Accueil', 'Mes logements', 'Locataires', 'Contrats', 'Loyers reçus', 'Retards', 'Paramètres de l’organisation', 'Journal'],
+		menu: [
+			'Accueil',
+			'Mes logements',
+			'Locataires',
+			'Contrats',
+			'Loyers reçus',
+			'Retards',
+			'Dépenses',
+			'Paramètres de l’organisation',
+			'Journal'
+		],
 		sections: ['Mes logements']
 	},
 	{
@@ -157,6 +181,8 @@ test.describe('Téléphone (360 × 800)', () => {
 			'Impayés',
 			'Propriétaires',
 			'Locataires',
+			'Dépenses',
+			'Relevés propriétaires',
 			'Contrats',
 			'À valider',
 			'Équipe',
@@ -168,7 +194,7 @@ test.describe('Téléphone (360 × 800)', () => {
 		await expect(more.getByRole('button', { name: 'Se déconnecter' })).toBeVisible();
 		await more.getByRole('link', { name: 'Impayés' }).tap();
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Impayés');
-		await expect(page.getByTestId('ecran-vide')).toContainText('lot 10');
+		await expect(page.getByTestId('impayes')).toBeVisible();
 		// « Plus » reste l'onglet actif sur un écran qu'il a ouvert.
 		await expect(mainNav(page).getByRole('link', { name: 'Plus' })).toHaveAttribute('aria-current', 'page');
 	});
