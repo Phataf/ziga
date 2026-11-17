@@ -17,7 +17,7 @@
  */
 import type { Fcfa } from './money.js';
 
-export const ALLOCATION_TARGETS = ['rent_due', 'deposit_account', 'credit'] as const;
+export const ALLOCATION_TARGETS = ['rent_due', 'deposit_account', 'credit', 'expense'] as const;
 export type AllocationTarget = (typeof ALLOCATION_TARGETS)[number];
 
 export const ALLOCATION_DIRECTIONS = ['allocate', 'reverse'] as const;
@@ -26,7 +26,7 @@ export type AllocationDirection = (typeof ALLOCATION_DIRECTIONS)[number];
 export interface AllocationLine {
 	paymentId: string;
 	target: AllocationTarget;
-	/** Échéance ou compte de caution ; `null` pour le crédit du bail. */
+	/** Échéance, compte de caution ou dépense ; `null` pour le crédit du bail. */
 	targetId: string | null;
 	direction: AllocationDirection;
 	/** Toujours strictement positif. */
@@ -94,6 +94,15 @@ export function allocateRentPayment(paymentId: string, amount: Fcfa, dues: reado
 	}
 	if (left > 0) lines.push({ paymentId, target: 'credit', targetId: null, direction: 'allocate', amount: left });
 	return lines;
+}
+
+/**
+ * Remboursement d'une dépense réclamée au locataire (lot 10, option A du porteur) : une seule ligne, imputée exactement
+ * sur la dépense, jamais en crédit. Le plafond (reste dû sur la dépense) est contrôlé à part, et par la base.
+ */
+export function allocateExpensePayment(paymentId: string, amount: Fcfa, expenseId: string): AllocationLine[] {
+	assertPositive(amount);
+	return [{ paymentId, target: 'expense', targetId: expenseId, direction: 'allocate', amount }];
 }
 
 /** Versement sur un compte de caution : une seule ligne ; le plafond (montant convenu) est contrôlé à part. */

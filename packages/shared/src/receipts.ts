@@ -13,6 +13,7 @@
  */
 import { z } from 'zod';
 import { formatDate } from './dates.js';
+import { EXPENSE_CATEGORY_LABELS, type ExpenseCategory } from './expenses.js';
 import { amountInFrenchWords } from './french-words.js';
 import { formatFcfa, type Fcfa } from './money.js';
 import type { MobileMoneyOperator, PaymentMeans, PaymentPurpose, PaymentView } from './payments.js';
@@ -214,6 +215,8 @@ export interface ReceiptSnapshot {
 	credit: Fcfa;
 	/** Caution : type et détenteur du compte. */
 	deposit: { type: 'security_deposit' | 'utilities_guarantee'; holder: 'organization' | 'owner' } | null;
+	/** Lot 10 : dépense remboursée (catégorie, description, date) ; absente des reçus antérieurs. */
+	expense?: { category: ExpenseCategory; description: string; spentOn: string } | null;
 	amount: Fcfa;
 	method: PaymentMeans;
 	operator: MobileMoneyOperator | null;
@@ -243,7 +246,15 @@ export function paymentMeansLabel(p: Pick<ReceiptSnapshot, 'method' | 'operator'
 }
 
 /** Objet du reçu : loyer et périodes couvertes, ou versement du dépôt de garantie avec son détenteur. */
-export function receiptObject(s: Pick<ReceiptSnapshot, 'purpose' | 'periods' | 'credit' | 'deposit'>): string[] {
+export function receiptObject(s: Pick<ReceiptSnapshot, 'purpose' | 'periods' | 'credit' | 'deposit' | 'expense'>): string[] {
+	if (s.purpose === 'expense') {
+		const e = s.expense;
+		return [
+			e
+				? `Remboursement de dépense : ${EXPENSE_CATEGORY_LABELS[e.category].toLowerCase()}, ${e.description} (${formatDate(e.spentOn)})`
+				: 'Remboursement de dépense'
+		];
+	}
 	if (s.purpose === 'deposit') {
 		const what = s.deposit?.type === 'utilities_guarantee' ? 'Versement de la garantie des factures' : 'Versement du dépôt de garantie';
 		const holder = s.deposit?.holder === 'owner' ? 'détenu par le propriétaire' : 'détenu par l’organisation';
@@ -346,7 +357,7 @@ export interface ReceiptVerificationView {
 export interface PaymentDetailView {
 	payment: PaymentView;
 	allocations: {
-		target: 'rent_due' | 'deposit_account' | 'credit';
+		target: 'rent_due' | 'deposit_account' | 'credit' | 'expense';
 		targetId: string | null;
 		direction: 'allocate' | 'reverse';
 		amount: Fcfa;

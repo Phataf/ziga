@@ -18,6 +18,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Inject, Injectable, type OnModuleInit } from '@nestjs/common';
 import {
 	allocateDepositPayment,
+	allocateExpensePayment,
 	allocateRentPayment,
 	applyLeaseCredit,
 	applyLinesToDues,
@@ -72,6 +73,7 @@ import { RentDueEvents, type DuesIssuedEvent } from '../leases/rent-due-events.j
 import { OrganizationsService } from '../organizations/organizations.service.js';
 import { GeographyService } from '../properties/geography.service.js';
 import { PropertiesService } from '../properties/properties.service.js';
+import { ExpenseClaims, type ExpenseClaim } from './expense-claims.js';
 import { PaymentProviders } from './payment-provider.js';
 import { renderReceiptPdf } from './receipt-pdf.js';
 
@@ -128,6 +130,7 @@ export function paymentView(p: PaymentRow): PaymentView {
 		tenantId: p.tenantId,
 		purpose: p.purpose,
 		depositAccountId: p.depositAccountId,
+		expenseId: p.expenseId,
 		amount: p.amount,
 		method: p.method,
 		operator: p.operator,
@@ -159,6 +162,22 @@ export function receiptView(r: ReceiptRow): ReceiptView {
 	};
 }
 
+/** Lot 10 : une imputation du registre, vue par le module collections. */
+export interface CollectionLedgerRow {
+	id: string;
+	paymentId: string;
+	leaseId: string;
+	target: AllocationRow['target'];
+	rentDueId: string | null;
+	direction: AllocationRow['direction'];
+	amount: number;
+	createdAt: Date;
+	paidOn: string;
+	confirmedAt: Date | null;
+	cancelledAt: Date | null;
+	receiptNumber: string | null;
+}
+
 @Injectable()
 export class PaymentsService implements OnModuleInit {
 	constructor(
@@ -170,6 +189,7 @@ export class PaymentsService implements OnModuleInit {
 		private readonly geography: GeographyService,
 		private readonly providers: PaymentProviders,
 		private readonly events: RentDueEvents,
+		private readonly expenseClaims: ExpenseClaims,
 		@InjectQueue(RECEIPTS_QUEUE) private readonly queue: Queue<ReceiptPdfJobData>,
 		@Inject(STORAGE) private readonly storage: StorageAdapter,
 		@Inject(APP_CONFIG) private readonly config: AppConfig
@@ -224,7 +244,12 @@ export class PaymentsService implements OnModuleInit {
 			payment: paymentView(payment),
 			allocations: lines
 				.filter((l) => c.role !== 'field_agent' || l.target !== 'deposit_account')
-				.map((l) => ({ target: l.target, targetId: l.rentDueId ?? l.depositAccountId, direction: l.direction, amount: l.amount })),
+				.map((l) => ({
+					target: l.target,
+					targetId: l.rentDueId ?? l.depositAccountId ?? l.expenseId,
+					direction: l.direction,
+					amount: l.amount
+				})),
 			receipt: receipt ? receiptView(receipt) : null
 		};
 	}
@@ -298,6 +323,7 @@ export class PaymentsService implements OnModuleInit {
 			throw new AppError('PAYMENT_LEASE_NOT_VALIDATED', 'On n’encaisse que sur un bail signé, en vigueur ou terminé.', 409);
 		}
 		if (entry.purpose === 'deposit') await this.checkDepositEntry(c, target, entry.depositAccountId!, entry.amount);
+		if (entry.purpose === 'expense') await this.checkExpenseEntry(c, entry.leaseId, entry.expenseId!, entry.amount);
 		if (entry.method === 'mobile_money_manual') await this.checkMobileMoneyDuplicate(c, entry);
 
 		const provider = this.providers.get('manual');
@@ -321,6 +347,7 @@ export class PaymentsService implements OnModuleInit {
 				tenantId: target.tenantId,
 				purpose: entry.purpose,
 				depositAccountId: entry.depositAccountId,
+				expenseId: entry.expenseId,
 				amount: entry.amount,
 				method: entry.method,
 				operator: entry.operator,
@@ -373,6 +400,7 @@ export class PaymentsService implements OnModuleInit {
 				leaseId: entry.leaseId,
 				purpose: entry.purpose,
 				depositAccountId: entry.depositAccountId,
+				expenseId: entry.expenseId,
 				amount: entry.amount,
 				method: entry.method,
 				operator: entry.operator,
@@ -414,6 +442,49 @@ export class PaymentsService implements OnModuleInit {
 				}
 			);
 		}
+	}
+
+	/**
+	 * Remboursement d'une dépense réclamée au locataire (lot 10, option A) : dépense du même bail, non annulée, jamais au-delà
+	 * de son reste dû (remboursements en attente compris). L'agent de terrain n'encaisse que des loyers.
+	 */
+	private async checkExpenseEntry(c: Context, leaseId: string, expenseId: string, amount: number): Promise<void> {
+		if (c.role === 'field_agent') throw new AppError('FORBIDDEN_ACTION', 'L’agent de terrain n’encaisse que les loyers.', 403);
+		const claim = await this.expenseClaims.get(c.tx, expenseId);
+		if (!claim) throw new AppError('EXPENSE_NOT_FOUND', 'Dépense introuvable.', 404);
+		if (claim.recovery !== 'claimed_from_tenant' || claim.leaseId !== leaseId) {
+			throw new AppError('PAYMENT_EXPENSE_NOT_CLAIMED', 'Cette dépense n’est pas réclamée au locataire de ce bail.', 409);
+		}
+		if (claim.status === 'cancelled') throw new AppError('PAYMENT_EXPENSE_CANCELLED', 'Cette dépense est annulée.', 409);
+		const { recovered, pending } = await this.expenseRecovery(c.tx, expenseId);
+		if (amount + recovered + pending > claim.amount) {
+			throw new AppError(
+				'EXPENSE_OVERPAID',
+				'Ce remboursement dépasse le reste dû sur la dépense (remboursements en attente compris).',
+				409,
+				{
+					remainingDue: Math.max(0, claim.amount - recovered),
+					pending
+				}
+			);
+		}
+	}
+
+	/** Remboursé (imputations nettes) et en attente de validation, sur une dépense réclamée. */
+	async expenseRecovery(tx: Tx, expenseId: string): Promise<{ recovered: number; pending: number }> {
+		const [r] = await tx
+			.select({
+				net: sql<number>`coalesce(sum(case ${paymentAllocations.direction} when 'allocate' then ${paymentAllocations.amount} else -${paymentAllocations.amount} end), 0)::bigint`
+			})
+			.from(paymentAllocations)
+			.where(eq(paymentAllocations.expenseId, expenseId));
+		const [p] = await tx
+			.select({ total: sql<number>`coalesce(sum(${payments.amount}), 0)::bigint` })
+			.from(payments)
+			.where(
+				and(eq(payments.expenseId, expenseId), eq(payments.kind, 'payment'), inArray(payments.status, [...AWAITING_PAYMENT_STATUSES]))
+			);
+		return { recovered: Number(r?.net ?? 0), pending: Number(p?.total ?? 0) };
 	}
 
 	/** Point b : même opérateur, même référence normalisée, hors paiements annulés : refus nommé. */
@@ -471,6 +542,7 @@ export class PaymentsService implements OnModuleInit {
 				target: l.target,
 				rentDueId: l.target === 'rent_due' ? l.targetId : null,
 				depositAccountId: l.target === 'deposit_account' ? l.targetId : null,
+				expenseId: l.target === 'expense' ? l.targetId : null,
 				direction: l.direction,
 				amount: l.amount,
 				createdBy
@@ -488,7 +560,20 @@ export class PaymentsService implements OnModuleInit {
 		let credit = 0;
 		let balanceDue: number;
 		let deposit: ReceiptSnapshot['deposit'] = null;
-		if (payment.purpose === 'rent') {
+		let expense: ReceiptSnapshot['expense'] = null;
+		if (payment.purpose === 'expense') {
+			const claim = (await this.expenseClaims.get(c.tx, payment.expenseId!)) as ExpenseClaim;
+			const { recovered } = await this.expenseRecovery(c.tx, payment.expenseId!);
+			await this.insertLines(
+				c.tx,
+				c.organizationId,
+				payment.leaseId,
+				allocateExpensePayment(payment.id, payment.amount, claim.id),
+				c.userId
+			);
+			expense = { category: claim.category, description: claim.description, spentOn: claim.spentOn };
+			balanceDue = Math.max(0, claim.amount - recovered - payment.amount);
+		} else if (payment.purpose === 'rent') {
 			const dues = await this.leases.duesForAllocation(payment.leaseId, c.tx);
 			// Crédit déjà présent (rare : sans échéance ouverte, il n'y en a pas) imputé d'abord, puis l'encaissement.
 			const creditLines = applyLeaseCredit(await this.creditsOf(c.tx, payment.leaseId), dues);
@@ -528,6 +613,7 @@ export class PaymentsService implements OnModuleInit {
 			periods,
 			credit,
 			deposit,
+			expense,
 			amount: payment.amount,
 			method: payment.method,
 			operator: payment.operator,
@@ -650,6 +736,7 @@ export class PaymentsService implements OnModuleInit {
 				tenantId: payment.tenantId,
 				purpose: payment.purpose,
 				depositAccountId: payment.depositAccountId,
+				expenseId: payment.expenseId,
 				amount: payment.amount,
 				method: payment.method,
 				operator: payment.operator,
@@ -994,13 +1081,69 @@ export class PaymentsService implements OnModuleInit {
 			return keys;
 		});
 	}
+
+	// ---------------------------------------------------------------- lot 10 : lecture pour le module collections
+
+	/**
+	 * Registre des imputations sur échéance et en crédit des baux donnés, dans l'ordre (`created_at`, identifiant), avec
+	 * la date de paiement, de confirmation et d'annulation de l'encaissement et le numéro de son reçu : éléments des
+	 * relevés (statements.ts). Transaction donnée : le worker des relevés n'a pas de requête.
+	 */
+	async collectionLedger(tx: Tx, leaseIds: readonly string[]): Promise<CollectionLedgerRow[]> {
+		if (!leaseIds.length) return [];
+		const rows = await tx
+			.select({
+				id: paymentAllocations.id,
+				paymentId: paymentAllocations.paymentId,
+				leaseId: paymentAllocations.leaseId,
+				target: paymentAllocations.target,
+				rentDueId: paymentAllocations.rentDueId,
+				direction: paymentAllocations.direction,
+				amount: paymentAllocations.amount,
+				createdAt: paymentAllocations.createdAt,
+				paidOn: payments.paidOn,
+				confirmedAt: payments.confirmedAt,
+				cancelledAt: payments.cancelledAt,
+				receiptNumber: receipts.number
+			})
+			.from(paymentAllocations)
+			.innerJoin(
+				payments,
+				and(eq(payments.organizationId, paymentAllocations.organizationId), eq(payments.id, paymentAllocations.paymentId))
+			)
+			.leftJoin(receipts, and(eq(receipts.organizationId, payments.organizationId), eq(receipts.paymentId, payments.id)))
+			.where(and(inArray(paymentAllocations.leaseId, [...leaseIds]), inArray(paymentAllocations.target, ['rent_due', 'credit'])))
+			.orderBy(asc(paymentAllocations.createdAt), asc(paymentAllocations.id));
+		return rows;
+	}
+
+	/** Encaissements à valider ou à rapprocher (loyers et remboursements de dépense), pour les impayés. */
+	async awaitingPayments(tx: Tx): Promise<{ leaseId: string; purpose: PaymentRow['purpose']; expenseId: string | null; amount: number }[]> {
+		return tx
+			.select({ leaseId: payments.leaseId, purpose: payments.purpose, expenseId: payments.expenseId, amount: payments.amount })
+			.from(payments)
+			.where(and(eq(payments.kind, 'payment'), inArray(payments.status, [...AWAITING_PAYMENT_STATUSES])));
+	}
+
+	/** Remboursé (imputations nettes) par dépense réclamée. */
+	async expenseRecoveries(tx: Tx): Promise<Map<string, number>> {
+		const rows = await tx
+			.select({
+				expenseId: paymentAllocations.expenseId,
+				net: sql<number>`sum(case ${paymentAllocations.direction} when 'allocate' then ${paymentAllocations.amount} else -${paymentAllocations.amount} end)::bigint`
+			})
+			.from(paymentAllocations)
+			.where(eq(paymentAllocations.target, 'expense'))
+			.groupBy(paymentAllocations.expenseId);
+		return new Map(rows.map((r) => [r.expenseId!, Number(r.net)]));
+	}
 }
 
 function toLine(r: AllocationRow): AllocationLine {
 	return {
 		paymentId: r.paymentId,
 		target: r.target,
-		targetId: r.rentDueId ?? r.depositAccountId,
+		targetId: r.rentDueId ?? r.depositAccountId ?? r.expenseId,
 		direction: r.direction,
 		amount: r.amount
 	};

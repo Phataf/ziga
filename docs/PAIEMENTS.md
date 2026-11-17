@@ -112,7 +112,8 @@ Elle est réservée au directeur (`payment.cancel`), avec un motif obligatoire, 
 - Imputation exacte sur cette dépense (cible `expense`), jamais en crédit ni sur une échéance (`ALLOCATION_PURPOSE`), jamais au-delà de son montant, tous encaissements confondus (`EXPENSE_OVERPAID`).
 - Contre-écriture comme pour un loyer ; une dépense en partie remboursée, ou dont un encaissement attend sa validation, ne s'annule pas (`EXPENSE_CLAIM_RECOVERED`, `EXPENSE_CLAIM_PENDING`).
 - L'argent revient à l'organisation qui a avancé la dépense : il n'entre jamais dans le relevé du propriétaire.
-- Reçu « Remboursement de dépense » (objet `expense` accepté par la base) ; routes et écran à l'étape 3 du lot 10.
+- Reçu « Remboursement de dépense » : l'objet du reçu reprend la catégorie, la description et la date de la dépense ; solde restant dû = reste de la dépense.
+- Saisie : `POST /payments` avec `purpose: 'expense'` et `expenseId` (même route, même service, même synchronisation) ; l'agent de terrain n'encaisse que des loyers (`FORBIDDEN_ACTION`). Le module payments lit la dépense par le lecteur que le module collections inscrit au démarrage (`ExpenseClaims`), jamais par sa table.
 
 ## 6. Doublon Mobile Money
 

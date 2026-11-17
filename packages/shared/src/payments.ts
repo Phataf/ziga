@@ -26,7 +26,7 @@ export const MOBILE_MONEY_OPERATORS = ['orange_money', 'moov_money', 'other'] as
 export type MobileMoneyOperator = (typeof MOBILE_MONEY_OPERATORS)[number];
 
 /** Un encaissement a un seul objet : le loyer d'un bail, ou le versement sur un compte de caution (réponse du porteur). */
-export const PAYMENT_PURPOSES = ['rent', 'deposit'] as const;
+export const PAYMENT_PURPOSES = ['rent', 'deposit', 'expense'] as const;
 export type PaymentPurpose = (typeof PAYMENT_PURPOSES)[number];
 
 /** `reversal` : la contre-écriture d'un paiement annulé, liée à lui ; jamais saisie, jamais imputée. */
@@ -270,6 +270,8 @@ const paymentEntryFields = {
 	leaseId: idSchema,
 	purpose: z.enum(PAYMENT_PURPOSES),
 	depositAccountId: idSchema.nullish().transform((v) => v ?? null),
+	/** Lot 10 : dépense réclamée au locataire que cet encaissement rembourse (objet `expense`). */
+	expenseId: idSchema.nullish().transform((v) => v ?? null),
 	amount: fcfaSchema.min(1, { error: 'Indiquez le montant.' }),
 	method: z.enum(PAYMENT_MEANS, { error: 'Choisissez le moyen de paiement.' }),
 	operator: z
@@ -296,6 +298,15 @@ export const paymentEntrySchema = z.object(paymentEntryFields).superRefine((p, c
 	}
 	if (p.purpose === 'rent' && p.depositAccountId) {
 		ctx.addIssue({ code: 'custom', path: ['depositAccountId'], message: 'Un encaissement de loyer ne vise pas un compte de caution.' });
+	}
+	if (p.purpose === 'expense' && !p.expenseId) {
+		ctx.addIssue({ code: 'custom', path: ['expenseId'], message: 'Choisissez la dépense remboursée.' });
+	}
+	if (p.purpose !== 'expense' && p.expenseId) {
+		ctx.addIssue({ code: 'custom', path: ['expenseId'], message: 'Seul un remboursement de dépense vise une dépense.' });
+	}
+	if (p.purpose === 'expense' && p.depositAccountId) {
+		ctx.addIssue({ code: 'custom', path: ['depositAccountId'], message: 'Un remboursement de dépense ne vise pas un compte de caution.' });
 	}
 	if (p.method === 'mobile_money_manual' || p.method === 'mobile_money_direct') {
 		if (!p.operator) ctx.addIssue({ code: 'custom', path: ['operator'], message: 'Choisissez l’opérateur.' });
@@ -324,7 +335,7 @@ export const paymentEntriesSchema = z.object({ payments: z.array(paymentEntrySch
 		const [a, c] = b.payments;
 		if (a!.leaseId !== c!.leaseId)
 			ctx.addIssue({ code: 'custom', path: ['payments'], message: 'Les deux encaissements visent le même bail.' });
-		if (a!.purpose === c!.purpose) {
+		if (a!.purpose === c!.purpose || a!.purpose === 'expense' || c!.purpose === 'expense') {
 			ctx.addIssue({ code: 'custom', path: ['payments'], message: 'Une saisie double réunit la caution et le loyer.' });
 		}
 	}
@@ -353,6 +364,7 @@ export interface PaymentView {
 	tenantId: string;
 	purpose: PaymentPurpose;
 	depositAccountId: string | null;
+	expenseId: string | null;
 	amount: Fcfa;
 	method: PaymentMeans;
 	operator: MobileMoneyOperator | null;

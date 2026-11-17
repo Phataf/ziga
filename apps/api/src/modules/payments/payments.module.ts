@@ -5,6 +5,7 @@ import { LeasesModule } from '../leases/leases.module.js';
 import { OrganizationsModule } from '../organizations/organizations.module.js';
 import { PropertiesModule } from '../properties/properties.module.js';
 import { SyncModule } from '../sync/sync.module.js';
+import { ExpenseClaims } from './expense-claims.js';
 import { PaymentProviders } from './payment-provider.js';
 import { PaymentsController, PublicReceiptsController, ReceiptSettingsController, ReceiptsController } from './payments.controller.js';
 import { PaymentsService } from './payments.service.js';
@@ -18,7 +19,7 @@ import { PaymentsSyncHandlers } from './payments.sync.js';
 @Module({
 	imports: [OrganizationsModule, SyncModule, LeasesModule, PropertiesModule, FeaturesModule, IdentityModule],
 	controllers: [PaymentsController, ReceiptsController, ReceiptSettingsController, PublicReceiptsController],
-	providers: [PaymentsService, PaymentsSyncHandlers, PaymentProviders],
-	exports: [PaymentsService, PaymentProviders]
+	providers: [PaymentsService, PaymentsSyncHandlers, PaymentProviders, ExpenseClaims],
+	exports: [PaymentsService, PaymentProviders, ExpenseClaims]
 })
 export class PaymentsModule {}

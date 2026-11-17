@@ -25,6 +25,8 @@ export const payments = pgTable('payments', {
 	tenantId: uuid('tenant_id').notNull(),
 	purpose: text('purpose').$type<PaymentPurpose>().notNull(),
 	depositAccountId: uuid('deposit_account_id'),
+	/** Lot 10 : dépense réclamée au locataire (objet `expense`). */
+	expenseId: uuid('expense_id'),
 	amount: fcfa('amount').notNull(),
 	method: text('method').$type<PaymentMeans>().notNull(),
 	operator: text('operator').$type<MobileMoneyOperator>(),
@@ -56,6 +58,7 @@ export const paymentAllocations = pgTable('payment_allocations', {
 	target: text('target').$type<AllocationTarget>().notNull(),
 	rentDueId: uuid('rent_due_id'),
 	depositAccountId: uuid('deposit_account_id'),
+	expenseId: uuid('expense_id'),
 	direction: text('direction').$type<AllocationDirection>().notNull(),
 	amount: fcfa('amount').notNull(),
 	createdBy: uuid('created_by'),

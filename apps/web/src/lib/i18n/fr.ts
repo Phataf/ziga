@@ -1308,7 +1308,7 @@ export const fr = {
 			bank_transfer: 'Avec la référence du virement'
 		} as Record<string, string>,
 		operators: { orange_money: 'Orange Money', moov_money: 'Moov Money', other: 'Autre opérateur' } as Record<string, string>,
-		purposes: { rent: 'Loyer', deposit: 'Caution' } as Record<string, string>,
+		purposes: { rent: 'Loyer', deposit: 'Caution', expense: 'Remboursement de dépense' } as Record<string, string>,
 		columns: {
 			date: 'Date',
 			tenant: 'Locataire',
