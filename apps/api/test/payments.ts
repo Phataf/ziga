@@ -7,7 +7,7 @@ import { newId } from '@ziga/shared/ids';
 import { newReceiptToken, provisionalReceiptNumber } from '@ziga/shared/payments';
 import type pg from 'pg';
 
-export type PaymentMethodSql = 'cash' | 'mobile_money_manual' | 'bank_transfer' | 'mobile_money_direct';
+export type PaymentMethodSql = 'cash' | 'mobile_money_manual' | 'bank_transfer' | 'mobile_money_direct' | 'deposit_offset';
 
 export interface PaymentExtra {
 	purpose?: 'rent' | 'deposit' | 'expense';
@@ -28,7 +28,9 @@ export interface PaymentExtra {
 export async function insertPayment(c: pg.Client, organizationId: string, leaseId: string, extra: PaymentExtra = {}): Promise<string> {
 	const id = newId();
 	const method = extra.method ?? 'cash';
-	const status = extra.status ?? (method === 'cash' ? 'confirmed' : method === 'mobile_money_direct' ? 'initiated' : 'to_reconcile');
+	const status =
+		extra.status ??
+		(method === 'cash' || method === 'deposit_offset' ? 'confirmed' : method === 'mobile_money_direct' ? 'initiated' : 'to_reconcile');
 	const isMobile = method === 'mobile_money_manual' || method === 'mobile_money_direct';
 	await c.query(
 		`insert into payments (id, organization_id, lease_id, purpose, deposit_account_id, amount, method, operator, transaction_reference,

@@ -323,6 +323,24 @@ describe('transfert de gestion (D16, règles 12 et 15)', () => {
 		});
 	});
 
+	it('une unité d’un mandat posé sur le bien entier : sa portée prend fin, celle du bien reste', () => {
+		const plan = managementTransferPlan(
+			input({
+				target: { propertyId: 'p1', unitId: 'u2' },
+				mandate: {
+					id: 'm1',
+					status: 'active',
+					scopes: [
+						{ id: 's1', propertyId: 'p1', unitId: null },
+						{ id: 's1u1', propertyId: 'p1', unitId: 'u1' },
+						{ id: 's1u2', propertyId: 'p1', unitId: 'u2' }
+					]
+				}
+			})
+		);
+		expect(plan).toMatchObject({ mandateAction: 'end_scopes', scopeIds: ['s1u2'], leaseIds: ['l2'] });
+	});
+
 	it('une seule unité d’un mandat plus large : seules ses portées prennent fin', () => {
 		const plan = managementTransferPlan(
 			input({

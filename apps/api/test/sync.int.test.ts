@@ -12,19 +12,27 @@ import { createOrg, sqlError, type Org } from './orgs.js';
 
 /** Tables synchronisées (lots 05 et 06) : toute nouvelle table passe par docs/SYNC.md et par cette liste. */
 const PUBLISHED = [
+	'agreements',
 	'communes',
 	'contract_templates',
 	'contract_versions',
 	'deposit_accounts',
 	'deposit_movements',
+	'deposit_settlement_lines',
+	'deposit_settlements',
 	'documents',
 	'expenses',
 	'feature_overrides',
 	'features',
+	'inspection_catalog_entries',
+	'inspection_items',
+	'inspections',
 	'lease_amendments',
 	'lease_contracts',
+	'lease_notices',
 	'lease_versions',
 	'leases',
+	'management_transfers',
 	'mandate_scopes',
 	'mandate_versions',
 	'mandates',
@@ -45,6 +53,7 @@ const PUBLISHED = [
 	'reminder_settings',
 	'reminders',
 	'rent_dues',
+	'repairs',
 	'tenants',
 	'units'
 ];

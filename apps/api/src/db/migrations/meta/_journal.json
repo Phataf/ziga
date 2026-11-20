@@ -134,6 +134,13 @@
 			"when": 1795200000000,
 			"tag": "0018_statement_organizations",
 			"breakpoints": true
+		},
+		{
+			"idx": 19,
+			"version": "7",
+			"when": 1795800000000,
+			"tag": "0019_tenant_exit",
+			"breakpoints": true
 		}
 	]
 }

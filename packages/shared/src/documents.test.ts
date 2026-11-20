@@ -12,12 +12,14 @@ import {
 import { ORGANIZATION_ROLES } from './permissions.js';
 
 describe('matrice de confidentialité des documents (D22, docs/UX.md §10)', () => {
-	it('types du lot 07 : direction et gestion seulement ; ni l’agent de terrain, ni le profil lecture', () => {
+	it('direction et gestion ; ni le profil lecture ; l’agent de terrain, seulement l’état des lieux de ses unités (lot 10 bis)', () => {
 		for (const type of DOCUMENT_TYPES) {
 			const doc = { type, restriction: null };
+			const inspection = type === 'inspection_photo' || type === 'inspection_scan';
 			expect(canReadDocument('director', doc), type).toBe(true);
 			expect(canReadDocument('manager', doc), type).toBe(true);
-			expect(canReadDocument('field_agent', doc, { assignedUnit: true }), type).toBe(false);
+			expect(canReadDocument('field_agent', doc, { assignedUnit: true }), type).toBe(inspection);
+			expect(canReadDocument('field_agent', doc, { assignedUnit: false }), type).toBe(false);
 			expect(canReadDocument('viewer', doc), type).toBe(false);
 			expect(canReadDocument(null, doc), type).toBe(false);
 		}

@@ -98,19 +98,43 @@ export async function insertDepositAccount(
 	return id;
 }
 
+export interface MovementExtra {
+	previousHolder?: string;
+	newHolder?: string;
+	newHolderName?: string;
+	reason?: string;
+	inspectionItemId?: string;
+	documentId?: string;
+	/** Lot 10 bis : décompte, ligne, échéance, dépense, réparation, accord, encaissement interne, transfert. */
+	settlementId?: string;
+	settlementLineId?: string;
+	rentDueId?: string;
+	expenseId?: string;
+	repairId?: string;
+	agreementId?: string;
+	paymentId?: string;
+	managementTransferId?: string;
+	/** Restitution (lot 10 bis) : par défaut, l'organisation, en espèces. */
+	refundedBy?: 'organization' | 'owner';
+	refundMethod?: string;
+	refundReference?: string;
+}
+
 export async function insertMovement(
 	c: pg.Client,
 	organizationId: string,
 	accountId: string,
 	type: string,
 	amount: number,
-	extra: { previousHolder?: string; newHolder?: string; reason?: string; inspectionItemId?: string; documentId?: string } = {}
+	extra: MovementExtra = {}
 ): Promise<string> {
 	const id = newId();
+	const refund = type === 'refunded';
 	await c.query(
 		`insert into deposit_movements (id, organization_id, account_id, type, amount, previous_holder, new_holder, reason, occurred_on,
-			inspection_item_id, document_id)
-		 values ($1, $2, $3, $4, $5, $6, $7, $8, current_date, $9, $10)`,
+			inspection_item_id, document_id, new_holder_name, settlement_id, settlement_line_id, rent_due_id, expense_id, repair_id,
+			agreement_id, payment_id, management_transfer_id, refunded_by, refund_method, refund_reference)
+		 values ($1, $2, $3, $4, $5, $6, $7, $8, current_date, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)`,
 		[
 			id,
 			organizationId,
@@ -121,7 +145,19 @@ export async function insertMovement(
 			extra.newHolder ?? null,
 			extra.reason ?? null,
 			extra.inspectionItemId ?? null,
-			extra.documentId ?? null
+			extra.documentId ?? null,
+			extra.newHolderName ?? null,
+			extra.settlementId ?? null,
+			extra.settlementLineId ?? null,
+			extra.rentDueId ?? null,
+			extra.expenseId ?? null,
+			extra.repairId ?? null,
+			extra.agreementId ?? null,
+			extra.paymentId ?? null,
+			extra.managementTransferId ?? null,
+			extra.refundedBy ?? (refund ? 'organization' : null),
+			extra.refundMethod ?? (refund ? 'cash' : null),
+			extra.refundReference ?? null
 		]
 	);
 	return id;

@@ -97,6 +97,8 @@ export const leases = pgTable('leases', {
 	exitOn: day('exit_on'),
 	endedAt: tstz('ended_at'),
 	endReason: text('end_reason'),
+	// Lot 10 bis : nature de la fin (départ, congé du bailleur, transfert de gestion, autre).
+	endKind: text('end_kind').$type<'tenant_exit' | 'lessor_notice' | 'management_transfer' | 'other'>(),
 	version: integer('version').notNull(),
 	// Lot 08 bis : dernier renouvellement (avenant signé, ou reconduction au terme sans congé).
 	lastRenewedOn: day('last_renewed_on'),
@@ -144,6 +146,8 @@ export const rentDues = pgTable('rent_dues', {
 	prorated: boolean('prorated').notNull(),
 	isAdvance: boolean('is_advance').notNull(),
 	leaseVersion: integer('lease_version').notNull(),
+	// Lot 10 bis : dernière période ramenée au dernier jour facturé, une fois, à la sortie.
+	exitAdjustedAt: tstz('exit_adjusted_at'),
 	createdAt: tstz('created_at').notNull().defaultNow(),
 	updatedAt: tstz('updated_at').notNull().defaultNow()
 });
@@ -157,6 +161,8 @@ export const depositAccounts = pgTable('deposit_accounts', {
 	agreedAmount: fcfa('agreed_amount').notNull(),
 	agreedMonths: smallint('agreed_months'),
 	holder: text('holder').$type<DepositHolder>().notNull(),
+	// Lot 10 bis : après un transfert de gestion, le nouveau gestionnaire, nommé en texte.
+	holderName: text('holder_name'),
 	status: text('status').$type<DepositAccountStatus>().notNull(),
 	createdBy: uuid('created_by'),
 	createdAt: tstz('created_at').notNull().defaultNow(),
@@ -178,6 +184,17 @@ export const depositMovements = pgTable('deposit_movements', {
 	agreementId: uuid('agreement_id'),
 	inspectionItemId: uuid('inspection_item_id'),
 	paymentId: uuid('payment_id'),
+	// Lot 10 bis (D32) : décompte, ligne, échéance ou dépense visée, réparation, transfert ; restitution enregistrée.
+	settlementId: uuid('settlement_id'),
+	settlementLineId: uuid('settlement_line_id'),
+	rentDueId: uuid('rent_due_id'),
+	expenseId: uuid('expense_id'),
+	repairId: uuid('repair_id'),
+	managementTransferId: uuid('management_transfer_id'),
+	refundedBy: text('refunded_by').$type<'organization' | 'owner'>(),
+	refundMethod: text('refund_method').$type<'cash' | 'mobile_money' | 'bank_transfer' | 'cheque' | 'other'>(),
+	refundReference: text('refund_reference'),
+	newHolderName: text('new_holder_name'),
 	createdBy: uuid('created_by'),
 	createdAt: tstz('created_at').notNull().defaultNow()
 });

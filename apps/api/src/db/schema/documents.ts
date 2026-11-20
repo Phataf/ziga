@@ -28,7 +28,14 @@ export const documents = pgTable('documents', {
 			'signed_amendment_scan',
 			'contract_legalization',
 			'contract_registration',
-			'expense_receipt'
+			'expense_receipt',
+			// Lot 10 bis : pièces de la sortie du locataire (rattachées au bail).
+			'notice_proof',
+			'inspection_photo',
+			'inspection_scan',
+			'repair_quote',
+			'agreement_document',
+			'settlement_outcome'
 		]
 	}).notNull(),
 	ownerId: uuid('owner_id'),
@@ -41,6 +48,9 @@ export const documents = pgTable('documents', {
 	// Lot 08 bis : contrat (projets, avenant signé, preuves) ou modèle de contrat.
 	leaseContractId: uuid('lease_contract_id'),
 	contractTemplateId: uuid('contract_template_id'),
+	// Lot 10 bis : état des lieux (scan) et sa ligne (photo).
+	inspectionId: uuid('inspection_id'),
+	inspectionItemId: uuid('inspection_item_id'),
 	version: integer('version').notNull(),
 	replacesId: uuid('replaces_id'),
 	fileName: text('file_name').notNull(),

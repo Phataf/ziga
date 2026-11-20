@@ -77,5 +77,8 @@ export const mandateScopes = pgTable('mandate_scopes', {
 	unitId: uuid('unit_id'),
 	viaProperty: boolean('via_property').notNull(),
 	managementActive: boolean('management_active').notNull(),
+	// Lot 10 bis : fin de la portée par un transfert de gestion (règle 12).
+	endedOn: date('ended_on', { mode: 'string' }),
+	managementTransferId: uuid('management_transfer_id'),
 	createdAt: tstz('created_at').notNull().defaultNow()
 });

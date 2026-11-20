@@ -82,6 +82,13 @@ Dans l'ordre, dans le lot qui crée la table :
 | `owner_statements` | 10 | relevés (brouillons et émis), totaux et contenu ; **ni** la clé du PDF **ni** les jetons des liens ; direction, gestion, lecture | jamais (génération et émission en ligne) |
 | `owner_statement_lines` | 10 | éléments consommés par un relevé émis (clé de l'élément), écrits par le serveur à l'émission | jamais |
 | `owner_payouts` | 10 | reversements enregistrés et contre-écritures, ajout seul | jamais (en ligne) |
+| `lease_notices` | 10 bis | congés et demandes ; agent de terrain : les congés enregistrés de ses baux, sans indemnité ni preuve | jamais à l'étape 2 (API à l'étape 3) |
+| `inspections`, `inspection_items` | 10 bis | états des lieux d'entrée et de sortie, lignes pièce par pièce ; agent de terrain : ceux de ses unités | jamais à l'étape 2 (l'étape 3 ouvre l'écriture hors ligne, agent de terrain compris) |
+| `inspection_catalog_entries` | 10 bis | pièces, éléments et réparations à la charge du locataire de l'organisation ; tous les membres | jamais à l'étape 2 |
+| `agreements`, `repairs` | 10 bis | accords (circuit d'accord) et réparations chiffrées ; direction, gestion, lecture ; jamais l'agent de terrain | jamais à l'étape 2 |
+| `deposit_settlements`, `deposit_settlement_lines` | 10 bis | décomptes de sortie et leurs lignes (ajout seul, par révision) ; direction, gestion, lecture ; jamais l'agent de terrain | jamais (en ligne) |
+| `management_transfers` | 10 bis | transferts de gestion, ajout seul ; le nouveau gestionnaire n'est qu'un nom | jamais (en ligne) |
+| colonnes du lot 10 bis | 10 bis | `leases.end_kind`, `rent_dues.exit_adjusted_at`, `deposit_accounts.holder_name`, liens et restitution des `deposit_movements`, `payment_allocations.source` et `receipts.source` (provenance `deposit` : imputation sur caution, jamais chez l'agent de terrain, comme les encaissements `deposit_offset`), `mandate_scopes.ended_on`, `documents.inspection_id` et `inspection_item_id` ; agent de terrain : photos et scans des états des lieux de ses baux (métadonnées) | comme avant |
 
 ## 4. Lire dans la base locale (écrans)
 

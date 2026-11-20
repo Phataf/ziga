@@ -842,7 +842,13 @@ export const fr = {
 			signed_amendment_scan: 'Avenant signé (scan)',
 			contract_legalization: 'Preuve de légalisation',
 			contract_registration: 'Preuve d’enregistrement',
-			expense_receipt: 'Justificatif de dépense'
+			expense_receipt: 'Justificatif de dépense',
+			notice_proof: 'Preuve du congé',
+			inspection_photo: 'Photo d’état des lieux',
+			inspection_scan: 'État des lieux signé (scan)',
+			repair_quote: 'Devis de réparation',
+			agreement_document: 'Accord écrit',
+			settlement_outcome: 'Issue d’une contestation'
 		},
 		file: 'Fichier (PDF ou image, 10 Mo au plus)',
 		restricted: 'Réservé à la direction',

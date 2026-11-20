@@ -61,6 +61,8 @@ export const paymentAllocations = pgTable('payment_allocations', {
 	expenseId: uuid('expense_id'),
 	direction: text('direction').$type<AllocationDirection>().notNull(),
 	amount: fcfa('amount').notNull(),
+	/** Lot 10 bis : provenance recopiée de l'encaissement par la base (`deposit` : imputation sur caution). */
+	source: text('source').$type<'tenant' | 'deposit'>().notNull().default('tenant'),
 	createdBy: uuid('created_by'),
 	createdAt: tstz('created_at').notNull().defaultNow()
 });
@@ -82,6 +84,8 @@ export const receipts = pgTable('receipts', {
 	issuedAt: tstz('issued_at'),
 	snapshot: jsonb('snapshot').$type<ReceiptSnapshot>(),
 	logoId: uuid('logo_id'),
+	/** Lot 10 bis : provenance recopiée de l'encaissement par la base. */
+	source: text('source').$type<'tenant' | 'deposit'>().notNull().default('tenant'),
 	pdfA6Key: text('pdf_a6_key'),
 	pdfTicketKey: text('pdf_ticket_key'),
 	pdfGeneratedAt: tstz('pdf_generated_at'),

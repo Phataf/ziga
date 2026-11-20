@@ -283,7 +283,8 @@ export const VAGUE_DESCRIPTIONS = [
 	'usage'
 ] as const;
 
-const VAGUE_WORDS = new Set(VAGUE_DESCRIPTIONS.flatMap((d) => d.split(' ')).concat(['et', 'general', 'globalement']));
+/** Mots des formules vagues (comparés à `inspection_vague_words()` de la base par un test). */
+export const VAGUE_WORDS = new Set(VAGUE_DESCRIPTIONS.flatMap((d) => d.split(' ')).concat(['et', 'general', 'globalement']));
 
 /** Longueur minimale d'une description, en caractères. */
 export const INSPECTION_DESCRIPTION_MIN = 12;
@@ -576,10 +577,12 @@ export interface ManagementTransferPlan {
  * ou importe le dossier remis (règle 15). Une caution détenue par le propriétaire ne change pas de détenteur.
  */
 export function managementTransferPlan(input: ManagementTransferInput): ManagementTransferPlan {
-	const scopes = coveringScopes(input);
+	const { propertyId, unitId } = input.target;
 	const all = input.mandate?.scopes ?? [];
+	// Bien entier : toutes ses portées. Une unité : seulement les siennes (celle d'un mandat posé sur le bien entier
+	// existe aussi, `via_property`) ; la portée du bien reste pour les autres unités.
+	const scopes = all.filter((s) => s.propertyId === propertyId && (unitId === null || s.unitId === unitId));
 	const onlyTarget = all.every((s) => scopes.includes(s));
-	const { unitId } = input.target;
 	const leases = input.leasesInForce.filter((l) => unitId === null || l.unitId === unitId);
 	const leaseIds = new Set(leases.map((l) => l.id));
 	return {

@@ -30,7 +30,15 @@ export const DOCUMENT_TYPES = [
 	'contract_legalization',
 	'contract_registration',
 	// Lot 10 : justificatif d'une dépense (facture, reçu du prestataire), rattaché au bien ou à l'unité.
-	'expense_receipt'
+	'expense_receipt',
+	// Lot 10 bis (rattachés au bail) : preuve du congé, photos d'une ligne d'état des lieux et scan d'un état des lieux
+	// signé, devis d'une réparation, accord écrit, issue d'une contestation.
+	'notice_proof',
+	'inspection_photo',
+	'inspection_scan',
+	'repair_quote',
+	'agreement_document',
+	'settlement_outcome'
 ] as const;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 
@@ -41,6 +49,16 @@ export const CONTRACT_DOCUMENT_TYPES = [
 	'signed_amendment_scan',
 	'contract_legalization',
 	'contract_registration'
+] as const satisfies readonly DocumentType[];
+
+/** Pièces de la sortie du locataire (lot 10 bis) : déposées depuis la sortie (préavis, état des lieux, décompte). */
+export const EXIT_DOCUMENT_TYPES = [
+	'notice_proof',
+	'inspection_photo',
+	'inspection_scan',
+	'repair_quote',
+	'agreement_document',
+	'settlement_outcome'
 ] as const satisfies readonly DocumentType[];
 
 /** `pending` : fiche créée, fichier pas encore reçu et vérifié ; `rejected` : fichier refusé (taille, type). */
@@ -120,7 +138,16 @@ export const DOCUMENT_ACCESS: Record<DocumentType, DocumentAccessRule> = {
 	contract_registration: { staff: STAFF, fieldAgent: 'never', owner: 'own', tenant: 'own' },
 	// Lot 10 : comme « Justificatifs retenus sur la caution » de la matrice ; le locataire ne verra que ceux des dépenses
 	// qui lui sont réclamées (lot 10 ter).
-	expense_receipt: { staff: STAFF, fieldAgent: 'never', owner: 'own', tenant: 'own' }
+	expense_receipt: { staff: STAFF, fieldAgent: 'never', owner: 'own', tenant: 'own' },
+	// Lot 10 bis. « État des lieux, inventaire » de la matrice : l'agent de terrain les lit sur ses unités affectées.
+	inspection_photo: { staff: STAFF, fieldAgent: 'assigned_units', owner: 'own', tenant: 'own' },
+	inspection_scan: { staff: STAFF, fieldAgent: 'assigned_units', owner: 'own', tenant: 'own' },
+	// « Justificatifs retenus sur la caution » : jamais l'agent de terrain (aucune donnée de caution).
+	repair_quote: { staff: STAFF, fieldAgent: 'never', owner: 'own', tenant: 'own' },
+	settlement_outcome: { staff: STAFF, fieldAgent: 'never', owner: 'own', tenant: 'own' },
+	// Preuve du congé et accord écrit : comme les annexes du contrat.
+	notice_proof: { staff: STAFF, fieldAgent: 'never', owner: 'own', tenant: 'own' },
+	agreement_document: { staff: STAFF, fieldAgent: 'never', owner: 'own', tenant: 'own' }
 };
 
 /** Documents du bail : rattachés au bail ou au locataire (module leases, lot 08). */

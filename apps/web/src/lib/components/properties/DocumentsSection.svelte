@@ -12,6 +12,7 @@
 	import {
 		CONTRACT_DOCUMENT_TYPES,
 		DOCUMENT_TYPES,
+		EXIT_DOCUMENT_TYPES,
 		LEASE_DOCUMENT_TYPES,
 		UPLOAD_MIME_TYPES,
 		type DocumentType,
@@ -51,7 +52,9 @@
 	// Les documents du contrat (lot 08 bis) se déposent depuis le contrat, jamais ici.
 	const PROPERTY_DOCUMENT_TYPES = DOCUMENT_TYPES.filter(
 		(d) =>
-			!(LEASE_DOCUMENT_TYPES as readonly DocumentType[]).includes(d) && !(CONTRACT_DOCUMENT_TYPES as readonly DocumentType[]).includes(d)
+			!(LEASE_DOCUMENT_TYPES as readonly DocumentType[]).includes(d) &&
+			!(CONTRACT_DOCUMENT_TYPES as readonly DocumentType[]).includes(d) &&
+			!(EXIT_DOCUMENT_TYPES as readonly DocumentType[]).includes(d)
 	);
 	const TYPES = $derived<readonly DocumentType[]>(leaseId ? LEASE_DOCUMENT_TYPES : PROPERTY_DOCUMENT_TYPES);
 	const role = $derived(organizations.active?.role);

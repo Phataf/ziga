@@ -103,7 +103,13 @@ describe('Sync Streams (lot 05, D30)', () => {
 		expect(agent).toMatch(/FROM properties WHERE id IN my_unit_properties/);
 		expect(agent).toMatch(/FROM media WHERE unit_id IN my_units/);
 		expect(agent).not.toMatch(/organization_id IN/);
-		expect(agent).not.toMatch(/\bdocuments\b/);
+		// Lot 10 bis (matrice docs/UX.md §10, « État des lieux ») : seulement les photos et scans des états des lieux de
+		// ses baux, jamais un document restreint ; aucun autre type.
+		const documents = agent.split('\n').filter((line) => /FROM documents\b/.test(line));
+		expect(documents).toHaveLength(2);
+		for (const line of documents) {
+			expect(line).toMatch(/WHERE lease_id IN my_unit_leases AND type = 'inspection_(photo|scan)' AND restriction IS NULL$/);
+		}
 		// Le stream de la gestion exclut l'agent de terrain ; aucun autre stream ne lit biens, unités ou photos.
 		const managed = stream('managed_properties');
 		expect(managed).toContain("organization_members.role != 'field_agent'");
@@ -119,7 +125,8 @@ describe('Sync Streams (lot 05, D30)', () => {
 		expect(docs).not.toMatch(/field_agent|viewer|role !=/);
 		expect(docs).toMatch(/FROM documents WHERE organization_id IN managed_organizations AND restriction IS NULL/);
 		const yaml = readFileSync(CONFIG, 'utf8');
-		expect(yaml.replace(docs, '')).not.toMatch(/FROM documents\b/);
+		// Ailleurs, seulement les états des lieux de l'agent de terrain (lot 10 bis, test précédent).
+		expect(yaml.replace(docs, '').replace(stream('assigned_units'), '')).not.toMatch(/FROM documents\b/);
 		// Jamais la clé de stockage d'un document ni l'original d'une photo (hors commentaires).
 		const queries = yaml
 			.split('\n')
@@ -157,5 +164,24 @@ describe('Sync Streams (lot 05, D30)', () => {
 		expect(yaml).not.toMatch(/\boccupancy\b/);
 		const tenants = yaml.split('\n').filter((line) => /FROM tenants\b/.test(line));
 		for (const line of tenants) expect(line).not.toMatch(/\buser_id\b/);
+	});
+
+	it('lot 10 bis : l’agent de terrain reçoit ses congés et ses états des lieux, jamais rien de la caution', () => {
+		const agent = stream('assigned_units');
+		expect(agent).toMatch(/FROM lease_notices WHERE lease_id IN my_unit_leases AND status = 'recorded'/);
+		expect(agent).toMatch(/FROM inspections WHERE lease_id IN my_unit_leases/);
+		expect(agent).toMatch(/FROM inspection_items WHERE inspection_id IN my_unit_inspections/);
+		const notice = agent.split('\n').find((line) => /FROM lease_notices\b/.test(line))!;
+		expect(notice).not.toMatch(/\b(early_termination_indemnity|proof_document_id|reason|declined_reason)\b/);
+		expect(agent).not.toMatch(/\b(deposit_accounts|deposit_movements|deposit_settlements|deposit_settlement_lines|agreements|repairs)\b/);
+		// Imputation sur caution (D32) : ni l'encaissement, ni son imputation, ni son reçu.
+		expect(agent).toMatch(/FROM payments WHERE .* AND method != 'deposit_offset'/);
+		expect(agent).toMatch(/FROM payment_allocations WHERE .* AND source != 'deposit'/);
+		expect(agent).toMatch(/FROM receipts WHERE .* AND source != 'deposit'/);
+		// Le décompte, les accords et les réparations ne descendent que dans le stream de la gestion.
+		const yaml = readFileSync(CONFIG, 'utf8');
+		const others = yaml.replace(stream('managed_properties'), '');
+		expect(others).not.toMatch(/FROM (deposit_settlements|deposit_settlement_lines|agreements|repairs|management_transfers)\b/);
+		expect(stream('managed_properties')).toContain("organization_members.role != 'field_agent'");
 	});
 });
