@@ -95,6 +95,16 @@ export const PERMISSIONS = {
 	'statement.share': [D, M],
 	'payout.record': [D, M],
 	'payout.cancel': [D],
+	// Lot 10 bis : sortie du locataire. Préavis, décompte de la caution, accords et transfert de gestion : direction et
+	// gestion ; états des lieux : aussi l'agent de terrain, sur ses unités affectées (la portée est vérifiée par l'API et
+	// les Sync Streams). Le profil lecture lit les états des lieux ; le décompte se lit avec `deposit.read`.
+	'lease.notice': [D, M],
+	'inspection.read': [D, M, F, V],
+	'inspection.create': [D, M, F],
+	'inspection.sign': [D, M, F],
+	'deposit.settle': [D, M],
+	'agreement.decide': [D, M],
+	'management.transfer': [D, M],
 	// Déclarées dès le lot 03 pour fixer le partage des rôles ; leurs endpoints viennent avec leur lot.
 	'listing.publish': [D, M],
 	'lead.manage': [D, M, F],

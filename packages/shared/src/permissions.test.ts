@@ -60,6 +60,13 @@ const expected: Record<OrganizationRole, Action[]> = {
 		'statement.issue',
 		'statement.share',
 		'payout.record',
+		'lease.notice',
+		'inspection.read',
+		'inspection.create',
+		'inspection.sign',
+		'deposit.settle',
+		'agreement.decide',
+		'management.transfer',
 		'listing.publish',
 		'lead.manage',
 		'visit.manage',
@@ -82,7 +89,10 @@ const expected: Record<OrganizationRole, Action[]> = {
 		'reminder.record_visit',
 		'lead.manage',
 		'visit.manage',
-		'photo.upload'
+		'photo.upload',
+		'inspection.read',
+		'inspection.create',
+		'inspection.sign'
 	],
 	// Lot 07 : biens et unités en lecture, aucun document privé.
 	// Lot 08 : locataires (sans état civil), baux et cautions en lecture. Lot 09 : encaissements et reçus en lecture.
@@ -98,6 +108,7 @@ const expected: Record<OrganizationRole, Action[]> = {
 		'reminder.read',
 		'expense.read',
 		'statement.read',
+		'inspection.read',
 		'export.csv'
 	]
 };
@@ -131,6 +142,15 @@ describe('matrice de permissions', () => {
 		expect(can('viewer', 'member.read')).toBe(false);
 		expect(can('manager', 'member.read')).toBe(true);
 		expect(can('manager', 'invitation.revoke')).toBe(false);
+	});
+
+	it('lot 10 bis : l’agent de terrain fait les états des lieux, jamais le décompte, les accords ni le transfert', () => {
+		for (const action of ['inspection.create', 'inspection.sign'] as const) expect(can('field_agent', action)).toBe(true);
+		for (const action of ['lease.notice', 'deposit.settle', 'agreement.decide', 'management.transfer'] as const) {
+			expect(can('field_agent', action)).toBe(false);
+			expect(can('viewer', action)).toBe(false);
+			expect(can('manager', action)).toBe(true);
+		}
 	});
 
 	it('sans rôle, rien n’est permis', () => {

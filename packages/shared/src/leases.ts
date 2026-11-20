@@ -225,13 +225,16 @@ export type DepositAccountStatus = (typeof DEPOSIT_ACCOUNT_STATUSES)[number];
 /**
  * Au lot 08, seuls `received` et `holder_changed` sont créés ; au lot 09, `received` naît d'un encaissement (avec son
  * reçu) et `received_cancelled` est sa contre-écriture quand l'encaissement est annulé ; les autres types servent au
- * lot 10 bis.
+ * lot 10 bis (`deposit-settlement.ts`). D32 : `retained` est réservé aux réparations constatées à l'état des lieux ;
+ * `applied_to_debt` (sommes dues et justifiées : loyers et charges impayés, dépenses réclamées) n'existe qu'au décompte
+ * de sortie ; `applied_to_rent` est l'imputation sur loyer par accord, pour les mois d'avant le départ.
  */
 export const DEPOSIT_MOVEMENT_TYPES = [
 	'received',
 	'received_cancelled',
 	'retained',
 	'applied_to_rent',
+	'applied_to_debt',
 	'refunded',
 	'additional_claimed',
 	'holder_changed'
@@ -240,7 +243,12 @@ export type DepositMovementType = (typeof DEPOSIT_MOVEMENT_TYPES)[number];
 export const DEPOSIT_MOVEMENT_TYPES_LOT_08 = ['received', 'holder_changed'] as const satisfies readonly DepositMovementType[];
 
 /** Sorties d'argent du compte : leur total ne dépasse jamais ce qui a été reçu (règle 14). */
-export const DEPOSIT_OUTFLOW_TYPES = ['retained', 'applied_to_rent', 'refunded'] as const satisfies readonly DepositMovementType[];
+export const DEPOSIT_OUTFLOW_TYPES = [
+	'retained',
+	'applied_to_rent',
+	'applied_to_debt',
+	'refunded'
+] as const satisfies readonly DepositMovementType[];
 
 export interface DepositMovementForBalance {
 	type: DepositMovementType;

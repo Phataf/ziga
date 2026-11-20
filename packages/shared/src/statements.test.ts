@@ -501,6 +501,48 @@ describe('cautions (point 4)', () => {
 	});
 });
 
+describe('caution détenue par le propriétaire (lot 10 bis, D32)', () => {
+	it('loyer couvert par la caution qu’il détient : en information (« perçus directement par vous »), hors du net ; commission due', () => {
+		const offset = a('p1', 80_000, { date: '2027-06-30', depositHolder: 'owner' });
+		const r = computeStatement(input('2027-06', { dues: [dueOf('d1', 'u1', '2027-06', [offset])] }));
+		expect(r.rentLines).toMatchObject([{ collectedBy: 'owner', rent: 75_000, charges: 5_000 }]);
+		expect(r.totals).toMatchObject({ collected: 0, rentCollectedByOwner: 75_000, chargesCollectedByOwner: 5_000, commission: 7_500 });
+		expect(r.totals.net).toBe(-7_500);
+		// Caution détenue par l'organisation : le même loyer entre dans le net.
+		const org = computeStatement(
+			input('2027-06', { dues: [dueOf('d1', 'u1', '2027-06', [{ ...offset, depositHolder: 'organization' }])] })
+		);
+		expect(org.totals).toMatchObject({ collected: 80_000, net: 72_500 });
+	});
+
+	it('réparation avancée par l’organisation puis retenue par le propriétaire sur sa caution : déduite une fois, au mois de la retenue', () => {
+		const repair: StatementExpense = {
+			id: nextId('ex'),
+			spentOn: '2027-06-20',
+			cancelledOn: null,
+			amount: 12_000,
+			category: 'plumbing',
+			description: 'Robinet de la douche',
+			unitId: 'u1',
+			propertyId: 'prop1',
+			paidBy: 'organization',
+			borneBy: 'tenant',
+			recovery: 'deposit',
+			ownerDepositRetention: { on: '2027-07-10', amount: 12_000 }
+		};
+		// Caution détenue par l'organisation (pas de retenue par le propriétaire) : rien sur le relevé.
+		expect(computeStatement(input('2027-07', { expenses: [{ ...repair, ownerDepositRetention: null }] })).expenseLines).toEqual([]);
+		expect(computeStatement(input('2027-06', { expenses: [repair] })).expenseLines).toEqual([]);
+		const july = computeStatement(input('2027-07', { expenses: [repair] }));
+		expect(july.expenseLines).toMatchObject([{ expenseId: repair.id, amount: -12_000, date: '2027-07-10', viaOwnerDeposit: true }]);
+		expect(july.totals).toMatchObject({ expenses: -12_000, net: -12_000 });
+		const august = computeStatement(input('2027-08', { expenses: [repair], consumed: new Set(keys(july)), issuedMonths: ['2027-07'] }));
+		expect(august.expenseLines).toEqual([]);
+		const doc = statementDocument(snapshot(july));
+		expect(JSON.stringify(doc)).toContain('retenue par vous sur la caution le 10/07/2027');
+	});
+});
+
 describe('rectificatif et émission', () => {
 	it('le rectificatif ne reprend que ce qui n’a pas été repris ; son net est la différence', () => {
 		const p1 = a('p1', 80_000, { date: '2027-03-04' });

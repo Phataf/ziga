@@ -208,6 +208,19 @@ describe('statut d’une échéance', () => {
 });
 
 describe('compte de caution', () => {
+	it('lot 10 bis (D32) : sommes dues et justifiées, une sortie plafonnée comme les autres', () => {
+		const account = { agreedAmount: 100_000, status: 'settling' as const };
+		const b = depositBalances(100_000, [
+			{ type: 'received', amount: 100_000 },
+			{ type: 'retained', amount: 15_000 },
+			{ type: 'applied_to_debt', amount: 60_000 },
+			{ type: 'additional_claimed', amount: 5_000 }
+		]);
+		expect(b).toMatchObject({ received: 100_000, outflows: 75_000, held: 25_000, claimed: 5_000 });
+		expect(depositMovementBlocker(account, b, { type: 'applied_to_debt', amount: 25_000 })).toBeNull();
+		expect(depositMovementBlocker(account, b, { type: 'applied_to_debt', amount: 25_001 })).toBe('DEPOSIT_OUTFLOW_EXCEEDS_RECEIVED');
+	});
+
 	it('versement annulé (lot 09) : contre-écriture qui retire le reçu, jamais sous les sorties déjà faites (règle 14)', () => {
 		const account = { agreedAmount: 150_000, status: 'held' as const };
 		const b = depositBalances(150_000, [

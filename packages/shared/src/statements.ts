@@ -188,6 +188,11 @@ export interface StatementAllocation extends LedgerEntry {
 	 * `null` si l'imputation relève d'un autre propriétaire : elle compte alors pour le cumul de l'échéance seulement.
 	 */
 	mandate: StatementMandate | null;
+	/**
+	 * Lot 10 bis (D32) : imputation sur caution (encaissement interne). Elle est perçue par le détenteur de la caution :
+	 * détenue par le propriétaire, le loyer figure en information (« perçus directement par vous »), hors du net.
+	 */
+	depositHolder?: 'organization' | 'owner' | null;
 }
 
 /** Une échéance et son registre **complet**, dans l'ordre (`created_at`, identifiant). */
@@ -230,6 +235,11 @@ export interface StatementExpense extends ExpenseRoles {
 	description: string;
 	unitId: string | null;
 	propertyId: string;
+	/**
+	 * Lot 10 bis (D32) : réparation avancée par l'organisation (supportée par le locataire, récupérée sur la caution) et
+	 * retenue par le propriétaire sur la caution qu'il détient, à cette date et pour ce montant : déduite de son relevé.
+	 */
+	ownerDepositRetention?: { on: string; amount: Fcfa } | null;
 }
 
 export interface StatementUnit {
@@ -373,6 +383,8 @@ export interface StatementExpenseLine {
 	/** Signé : négatif pour une dépense déduite, positif pour une dépense annulée rendue. */
 	amount: number;
 	late: boolean;
+	/** Lot 10 bis : réparation retenue par le propriétaire sur la caution qu'il détient. */
+	viaOwnerDeposit?: boolean;
 }
 
 export interface StatementUnitTotal {
@@ -522,7 +534,7 @@ export function computeStatement(input: StatementInput): StatementResult {
 			receiptNumber: e.receiptNumber,
 			rent: split.rent,
 			charges: split.charges,
-			collectedBy: e.mandate!.canCollectFunds ? 'organization' : 'owner',
+			collectedBy: e.depositHolder ?? (e.mandate!.canCollectFunds ? 'organization' : 'owner'),
 			mandateId: e.mandate!.mandateId,
 			mandateVersion: e.mandate!.version,
 			late: e.date < start,
@@ -686,6 +698,29 @@ export function computeStatement(input: StatementInput): StatementResult {
 					unitId: e.unitId,
 					amount: e.amount
 				});
+			}
+			continue;
+		}
+		if (effect === 'deposit_retention') {
+			// Retenue par le propriétaire sur la caution qu'il détient (D32) : il a l'argent, l'avance de l'organisation
+			// lui est déduite, une fois, au mois de la retenue.
+			const r = e.ownerDepositRetention;
+			const key = statementItemKey.expense(e.id);
+			if (r && r.amount > 0 && !consumed.has(key) && r.on <= end) {
+				assertInteger(r.amount, 'Retenue');
+				expenseLines.push({
+					expenseId: e.id,
+					category: e.category,
+					description: e.description,
+					unitId: e.unitId,
+					key,
+					kind: 'expense',
+					date: r.on,
+					amount: -r.amount,
+					late: r.on < start,
+					viaOwnerDeposit: true
+				});
+				take(key, 'line');
 			}
 			continue;
 		}
@@ -999,11 +1034,16 @@ function formatFcfaSignedPlain(n: number): string {
 	return n < 0 ? `−${formatFcfa(-n)}` : formatFcfa(n);
 }
 
-export function expenseLineLabel(l: Pick<StatementExpenseLine, 'kind' | 'category' | 'description' | 'date' | 'late'>): {
+export function expenseLineLabel(
+	l: Pick<StatementExpenseLine, 'kind' | 'category' | 'description' | 'date' | 'late' | 'viaOwnerDeposit'>
+): {
 	title: string;
 	detail: string;
 } {
 	const what = `${EXPENSE_CATEGORY_LABELS[l.category]} · ${l.description}`;
+	if (l.viaOwnerDeposit) {
+		return { title: what, detail: `Réparation avancée par l’agence, retenue par vous sur la caution le ${formatDate(l.date)}` };
+	}
 	return l.kind === 'expense'
 		? { title: what, detail: `Dépense du ${formatDate(l.date)}${l.late ? `, ${lateMention(l.date, false)}` : ''}` }
 		: { title: what, detail: `Dépense annulée le ${formatDate(l.date)}, rendue` };

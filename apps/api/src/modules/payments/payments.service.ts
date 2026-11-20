@@ -98,6 +98,7 @@ const ENTRY_MESSAGES: Record<PaymentEntryBlocker, { status: number; message: str
 		message: 'Votre organisation n’accepte pas ce moyen de paiement (paramètres de l’organisation).'
 	},
 	PAYMENT_METHOD_UNAVAILABLE: { status: 409, message: 'Le paiement Mobile Money depuis la plateforme arrive plus tard.' },
+	PAYMENT_METHOD_INTERNAL: { status: 400, message: 'L’imputation sur caution est décidée par le décompte de sortie, jamais saisie.' },
 	FORBIDDEN_ACTION: { status: 403, message: 'Votre rôle ne permet pas d’encaisser ce moyen de paiement.' },
 	PAYMENT_DATE_IN_FUTURE: { status: 400, message: 'La date du paiement ne peut pas être dans le futur.' }
 };

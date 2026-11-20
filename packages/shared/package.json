@@ -112,6 +112,14 @@
 			"types": "./dist/statements.d.ts",
 			"default": "./dist/statements.js"
 		},
+		"./deposit-settlement": {
+			"types": "./dist/deposit-settlement.d.ts",
+			"default": "./dist/deposit-settlement.js"
+		},
+		"./tenant-exit": {
+			"types": "./dist/tenant-exit.d.ts",
+			"default": "./dist/tenant-exit.js"
+		},
 		"./reminders": {
 			"types": "./dist/reminders.d.ts",
 			"default": "./dist/reminders.js"

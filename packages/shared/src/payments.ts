@@ -16,11 +16,23 @@ import { can, type Action, type OrganizationRole } from './permissions.js';
 // ---------------------------------------------------------------- moyens, opérateurs, objets
 
 /**
- * Moyens d'un encaissement : les trois moyens du registre (réglage de l'organisation, D18) et le paiement initié depuis
- * la plateforme, réservé au lot 14 (`payments.direct`).
+ * Moyens d'un encaissement : les trois moyens du registre (réglage de l'organisation, D18), le paiement initié depuis
+ * la plateforme, réservé au lot 14 (`payments.direct`), et l'imputation sur caution (lot 10 bis, D32).
  */
-export const PAYMENT_MEANS = [...PAYMENT_METHODS, 'mobile_money_direct'] as const;
+export const PAYMENT_MEANS = [...PAYMENT_METHODS, 'mobile_money_direct', 'deposit_offset'] as const;
 export type PaymentMeans = (typeof PAYMENT_MEANS)[number];
+
+/**
+ * Imputation sur caution (D32) : encaissement interne, décidé par le serveur au décompte de sortie ou à l'échéance d'un
+ * mois couvert par accord ; confirmé par lui, imputé exactement, avec un reçu numéroté. Ce n'est pas un moyen de
+ * paiement de l'organisation (D18) : jamais proposé à l'écran, jamais accepté d'une saisie (écran, route ou appareil).
+ */
+export const INTERNAL_PAYMENT_MEANS = ['deposit_offset'] as const satisfies readonly PaymentMeans[];
+
+/** Moyens qu'une personne peut saisir : tous, sauf l'imputation sur caution. */
+export const ENTERED_PAYMENT_MEANS = PAYMENT_MEANS.filter(
+	(m): m is Exclude<PaymentMeans, (typeof INTERNAL_PAYMENT_MEANS)[number]> => !(INTERNAL_PAYMENT_MEANS as readonly string[]).includes(m)
+);
 
 export const MOBILE_MONEY_OPERATORS = ['orange_money', 'moov_money', 'other'] as const;
 export type MobileMoneyOperator = (typeof MOBILE_MONEY_OPERATORS)[number];
@@ -119,6 +131,9 @@ export function initialPaymentStatus(method: PaymentMeans, role: OrganizationRol
 			return 'to_reconcile';
 		case 'mobile_money_direct':
 			return 'initiated';
+		// Décidée par le serveur seul, sur le décompte ou l'accord (D32) : la preuve est le décompte lui-même.
+		case 'deposit_offset':
+			return 'confirmed';
 	}
 }
 
@@ -129,6 +144,8 @@ export type PaymentEntryBlocker =
 	| 'PAYMENT_METHOD_NOT_ACCEPTED'
 	/** Paiement initié depuis la plateforme : lot 14. */
 	| 'PAYMENT_METHOD_UNAVAILABLE'
+	/** Imputation sur caution : écrite par le serveur seul (D32), jamais saisie. */
+	| 'PAYMENT_METHOD_INTERNAL'
 	/** Le rôle ne peut pas encaisser ce moyen (l'agent de terrain : espèces seulement ; le profil lecture : rien). */
 	| 'FORBIDDEN_ACTION'
 	/** Date du paiement dans le futur. */
@@ -152,6 +169,7 @@ export function paymentEntryBlockers(ctx: PaymentEntryContext): PaymentEntryBloc
 	const out: PaymentEntryBlocker[] = [];
 	if (!can(ctx.role, paymentRecordAction(ctx.method))) out.push('FORBIDDEN_ACTION');
 	if (ctx.method === 'mobile_money_direct') out.push('PAYMENT_METHOD_UNAVAILABLE');
+	else if (ctx.method === 'deposit_offset') out.push('PAYMENT_METHOD_INTERNAL');
 	else if (!ctx.acceptedMethods.includes(ctx.method)) out.push('PAYMENT_METHOD_NOT_ACCEPTED');
 	if (ctx.paidOn > ctx.today) out.push('PAYMENT_DATE_IN_FUTURE');
 	return out;
@@ -273,7 +291,8 @@ const paymentEntryFields = {
 	/** Lot 10 : dépense réclamée au locataire que cet encaissement rembourse (objet `expense`). */
 	expenseId: idSchema.nullish().transform((v) => v ?? null),
 	amount: fcfaSchema.min(1, { error: 'Indiquez le montant.' }),
-	method: z.enum(PAYMENT_MEANS, { error: 'Choisissez le moyen de paiement.' }),
+	// L'imputation sur caution n'est jamais saisie (D32) : refusée par le schéma, comme un moyen inconnu.
+	method: z.enum(ENTERED_PAYMENT_MEANS, { error: 'Choisissez le moyen de paiement.' }),
 	operator: z
 		.enum(MOBILE_MONEY_OPERATORS)
 		.nullish()

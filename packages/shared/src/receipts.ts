@@ -237,7 +237,9 @@ const METHOD_NAMES: Record<PaymentMeans, string> = {
 	cash: 'Espèces',
 	mobile_money_manual: 'Mobile Money',
 	bank_transfer: 'Virement bancaire',
-	mobile_money_direct: 'Mobile Money'
+	mobile_money_direct: 'Mobile Money',
+	// Lot 10 bis (D32) : encaissement interne, décidé par le serveur au décompte de sortie ou par accord.
+	deposit_offset: 'Imputation sur caution'
 };
 
 export function paymentMeansLabel(p: Pick<ReceiptSnapshot, 'method' | 'operator' | 'transactionReference'>): string {

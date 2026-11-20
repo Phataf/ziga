@@ -21,6 +21,8 @@ import {
 	paymentEntrySchema,
 	paymentEntriesSchema,
 	selectablePaymentMethods,
+	ENTERED_PAYMENT_MEANS,
+	INTERNAL_PAYMENT_MEANS,
 	cancelPaymentSchema,
 	type PaymentForDuplicate,
 	type PaymentStatus,
@@ -93,6 +95,37 @@ describe('statut décidé par le serveur à la saisie (règle 6)', () => {
 	});
 	it('paiement direct : initié (lot 14)', () => {
 		expect(initialPaymentStatus('mobile_money_direct', 'director')).toBe('initiated');
+	});
+	it('imputation sur caution (lot 10 bis, D32) : confirmée par le serveur, sur le décompte ou l’accord', () => {
+		expect(initialPaymentStatus('deposit_offset', 'director')).toBe('confirmed');
+	});
+});
+
+describe('imputation sur caution : moyen interne, jamais saisi (D32)', () => {
+	const base = { acceptedMethods: PAYMENT_METHODS, paidOn: '2027-01-05', today: '2027-01-05' };
+	it('pas un moyen de l’organisation (D18) : ni proposé, ni accepté d’une saisie, ni par le schéma', () => {
+		expect((PAYMENT_METHODS as readonly string[]).includes('deposit_offset')).toBe(false);
+		expect(INTERNAL_PAYMENT_MEANS).toEqual(['deposit_offset']);
+		expect((ENTERED_PAYMENT_MEANS as readonly string[]).includes('deposit_offset')).toBe(false);
+		for (const role of ORGANIZATION_ROLES) {
+			expect((selectablePaymentMethods(PAYMENT_METHODS, role) as string[]).includes('deposit_offset')).toBe(false);
+		}
+		expect(paymentEntryBlockers({ ...base, role: 'director', method: 'deposit_offset' })).toEqual(['PAYMENT_METHOD_INTERNAL']);
+		const receiptId = newId();
+		const entry = {
+			id: newId(),
+			leaseId: newId(),
+			purpose: 'rent',
+			amount: 80_000,
+			method: 'deposit_offset',
+			paidOn: '2027-01-05',
+			receiptId,
+			provisionalNumber: provisionalReceiptNumber(receiptId),
+			verificationToken: newReceiptToken(),
+			shareToken: newReceiptToken()
+		};
+		expect(paymentEntrySchema.safeParse(entry).success).toBe(false);
+		expect(paymentEntrySchema.safeParse({ ...entry, method: 'cash' }).success).toBe(true);
 	});
 });
 
