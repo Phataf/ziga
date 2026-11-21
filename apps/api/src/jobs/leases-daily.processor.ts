@@ -38,7 +38,7 @@ export class LeasesDailyProcessor extends WorkerHost implements OnApplicationBoo
 
 	async process(job: Job<LeasesDailyJobData>) {
 		const today = job.data.today && isIsoDate(job.data.today) ? job.data.today : toIsoDate();
-		const result = await runLeasesDaily(this.database, this.audit, today, this.events, this.hooks);
+		const result = await runLeasesDaily(this.database, this.audit, today, this.hooks, this.events);
 		this.logger.info({ today, ...result }, 'Baux et échéances du jour');
 		return { today, ...result };
 	}

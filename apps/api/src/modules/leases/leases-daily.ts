@@ -48,7 +48,7 @@ export async function exitLeasesFor(
 	audit: AuditService,
 	organizationId: string,
 	today: string,
-	hooks?: ExitHooks
+	hooks: ExitHooks
 ): Promise<{ ended: number; refundAlerts: number }> {
 	let ended = 0;
 	const due = await tx
@@ -73,7 +73,7 @@ export async function exitLeasesFor(
 			const now = new Date();
 			for (const a of exitDueAdjustments(rows, regenerated, rentEndsOn)) {
 				// Surplus déjà payé : l'argent du locataire, rendu au crédit du bail avant de réduire l'échéance.
-				if (a.excessPaid > 0 && hooks) {
+				if (a.excessPaid > 0) {
 					await hooks.payments.releaseToCredit({
 						tx,
 						organizationId,
@@ -158,8 +158,9 @@ export async function leasesDailyFor(
 	audit: AuditService,
 	organizationId: string,
 	today: string,
-	events?: RentDueEvents,
-	hooks?: ExitHooks
+	/** Obligatoire : sans lui, le surplus déjà payé ne reviendrait pas au crédit du locataire. */
+	hooks: ExitHooks,
+	events?: RentDueEvents
 ): Promise<LeasesDailyResult> {
 	const result: LeasesDailyResult = { activated: 0, waiting: 0, generated: 0, statuses: 0, renewed: 0, ended: 0, refundAlerts: 0 };
 	// Lot 10 bis : les sorties d'abord, pour qu'un bail à venir sur la même unité puisse entrer en vigueur ce jour-là.
@@ -254,8 +255,9 @@ export async function runLeasesDaily(
 	database: DatabaseService,
 	audit: AuditService,
 	today: string,
-	events?: RentDueEvents,
-	hooks?: ExitHooks
+	/** Obligatoire : sans lui, le surplus déjà payé ne reviendrait pas au crédit du locataire. */
+	hooks: ExitHooks,
+	events?: RentDueEvents
 ): Promise<LeasesDailyResult & { organizations: number }> {
 	const r = await database.db.execute<{ id: string }>(sql`select due_lease_organizations(${today}::date) as id`);
 	const total: LeasesDailyResult & { organizations: number } = {
@@ -269,7 +271,7 @@ export async function runLeasesDaily(
 		refundAlerts: 0
 	};
 	for (const { id } of r.rows) {
-		const one = await database.withOrganization(id, (tx) => leasesDailyFor(tx, audit, id, today, events, hooks));
+		const one = await database.withOrganization(id, (tx) => leasesDailyFor(tx, audit, id, today, hooks, events));
 		total.activated += one.activated;
 		total.waiting += one.waiting;
 		total.generated += one.generated;

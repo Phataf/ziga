@@ -34,6 +34,8 @@ Puis, pour chaque décompte non clos, l'**alerte de restitution** : « bientôt 
 
 Rejouée le même jour, la tâche ne change rien : un bail terminé n'est plus en préavis, une période déjà ramenée ne l'est plus, une alerte déjà posée à ce niveau ne l'est plus.
 
+La tâche tourne dans le worker (`worker.ts`). Le retour au crédit passe par `ExitHooks`, que les modules `payments` et `collections` remplissent au démarrage de **chaque** processus, l'API comme le worker. Un point vide n'est jamais ignoré : le processus refuse de démarrer, et une opération qui le lit échoue avec `EXIT_HOOKS_NOT_REGISTERED` (sa transaction est annulée, rien n'est écrit). Une seconde inscription est refusée.
+
 ## 3. États des lieux
 
 - `POST /inspections` (entrée ou sortie), `POST /inspections/:id/items`, `PATCH` et `DELETE /inspection-items/:id` (`inspection.create`) ; l'agent de terrain les fait sur ses unités, y compris hors ligne.
@@ -116,4 +118,5 @@ La source est la matrice de `packages/shared/src/permissions.ts` ; ce tableau la
 - `packages/shared` : `deposit-settlement.test.ts`, `tenant-exit.test.ts` (règles pures, propriété sur 2 000 décomptes).
 - Base : `exit-db.int.test.ts`, `migration-0019.int.test.ts`.
 - API, synchronisation et worker : `exit.int.test.ts` (exemple du porteur de bout en bout ; tâche du jour rejouée ; imputation sur caution numérotée ; caution du propriétaire et relevé ; cases cochées ; contestation ; transfert ; accès croisé A/B sur chaque route et par l'appareil).
+- Worker seul : `exit-worker.int.test.ts` (l'API arrêtée ; points d'inscription remplis ; point vide : démarrage refusé, fin de bail annulée sans rien écrire ; fin de bail avec retour au crédit, rien de perdu, rejouée sans effet).
 - Flux PowerSync : `apps/web/e2e/exit-sync.spec.ts`.

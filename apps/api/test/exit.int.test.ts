@@ -31,6 +31,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { parseConfig } from '../src/config/env.js';
 import { LEASES_DAILY_JOB, LEASES_QUEUE } from '../src/jobs/queues.js';
 import { bullConnection } from '../src/redis/redis.module.js';
+import { ExitHooks } from '../src/modules/leases/exit-hooks.js';
 import { WorkerModule } from '../src/worker.module.js';
 import { newPhone, startApp, type TestApp } from './http.js';
 import { addMember, createOrg, type Member, type Org } from './orgs.js';
@@ -773,5 +774,13 @@ describe('accès croisé A/B (point 8)', () => {
 		// L'agent de terrain non affecté : introuvable ; et jamais le décompte.
 		expect((await agent.call('GET', `/leases/${lease.id}/exit`)).status).toBe(404);
 		expect((await agent.call('POST', `/deposit-accounts/${accountId}/settlement`)).status).toBe(403);
+	});
+});
+
+describe('ExitHooks dans les deux processus', () => {
+	it('l’API (AppModule) et le worker (WorkerModule) ont chacun leurs points inscrits par payments et collections', () => {
+		expect(t.app.get(ExitHooks).missing()).toEqual([]);
+		expect(worker.get(ExitHooks).missing()).toEqual([]);
+		expect(t.app.get(ExitHooks)).not.toBe(worker.get(ExitHooks));
 	});
 });

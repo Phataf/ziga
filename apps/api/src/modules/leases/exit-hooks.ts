@@ -3,8 +3,13 @@
  * (CLAUDE.md §4), sans jamais les lire. Le module payments y inscrit l'imputation sur caution (D32), le retour d'un
  * surplus au crédit du bail, le crédit et les encaissements en attente ; le module collections, la dépense d'une
  * réparation et les dépenses réclamées au locataire. Global, comme RentDueEvents : la tâche de nuit s'en sert aussi.
+ *
+ * Les deux points sont remplis au démarrage de chaque processus, l'API (`main.ts`, `AppModule`) comme le worker
+ * (`worker.ts`, `WorkerModule`, où tourne la tâche du jour). Un point vide n'est jamais ignoré : le processus refuse de
+ * démarrer (`onApplicationBootstrap`), et une lecture d'un point vide lève `EXIT_HOOKS_NOT_REGISTERED`. Une seconde
+ * inscription est refusée aussi (deux modules qui croiraient tenir la même table).
  */
-import { Global, Injectable, Module } from '@nestjs/common';
+import { Global, Injectable, Module, type OnApplicationBootstrap } from '@nestjs/common';
 import type { Tx } from '../../db/database.js';
 import type { AuditActor } from '../audit/audit.service.js';
 
@@ -68,27 +73,61 @@ interface ExpenseHooks {
 	claimsOf(tx: Tx, leaseId: string): Promise<TenantClaim[]>;
 }
 
+export type ExitHookPoint = 'payments' | 'expenses';
+
+const OWNER: Record<ExitHookPoint, string> = { payments: 'payments', expenses: 'collections' };
+
+/** Point d'inscription vide ou rempli deux fois : une erreur de câblage du processus, jamais ignorée. */
+export class ExitHooksNotRegisteredError extends Error {
+	readonly code = 'EXIT_HOOKS_NOT_REGISTERED';
+
+	constructor(
+		readonly point: ExitHookPoint,
+		reason: 'missing' | 'twice' = 'missing'
+	) {
+		super(
+			reason === 'missing'
+				? `ExitHooks : le point « ${point} » n’est pas inscrit ; le module ${OWNER[point]} n’est pas chargé dans ce processus.`
+				: `ExitHooks : le point « ${point} » est inscrit deux fois ; seul le module ${OWNER[point]} l’inscrit.`
+		);
+		this.name = 'ExitHooksNotRegisteredError';
+	}
+}
+
 @Injectable()
-export class ExitHooks {
+export class ExitHooks implements OnApplicationBootstrap {
 	#payments: PaymentHooks | null = null;
 	#expenses: ExpenseHooks | null = null;
 
 	registerPayments(hooks: PaymentHooks): void {
+		if (this.#payments) throw new ExitHooksNotRegisteredError('payments', 'twice');
 		this.#payments = hooks;
 	}
 
 	registerExpenses(hooks: ExpenseHooks): void {
+		if (this.#expenses) throw new ExitHooksNotRegisteredError('expenses', 'twice');
 		this.#expenses = hooks;
 	}
 
 	get payments(): PaymentHooks {
-		if (!this.#payments) throw new Error('ExitHooks : le module payments ne s’est pas inscrit.');
+		if (!this.#payments) throw new ExitHooksNotRegisteredError('payments');
 		return this.#payments;
 	}
 
 	get expenses(): ExpenseHooks {
-		if (!this.#expenses) throw new Error('ExitHooks : le module collections ne s’est pas inscrit.');
+		if (!this.#expenses) throw new ExitHooksNotRegisteredError('expenses');
 		return this.#expenses;
+	}
+
+	/** Points encore vides (vérification au démarrage, et tests). */
+	missing(): ExitHookPoint[] {
+		return [...(this.#payments ? [] : ['payments' as const]), ...(this.#expenses ? [] : ['expenses' as const])];
+	}
+
+	/** Après tous les `onModuleInit` : un processus dont un point est vide ne démarre pas. */
+	onApplicationBootstrap(): void {
+		const [point] = this.missing();
+		if (point) throw new ExitHooksNotRegisteredError(point);
 	}
 }
 
