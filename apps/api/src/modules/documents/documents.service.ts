@@ -118,7 +118,7 @@ export class DocumentsService {
 	}
 
 	/** Document de l'organisation que ce membre peut lire (matrice, puis restriction) ; sinon introuvable. */
-	private async readable(id: string, lock = false): Promise<DocumentRow> {
+	private async readable(id: string, lock = false, access: { assignedUnit?: boolean } = {}): Promise<DocumentRow> {
 		const { tx, organizationId, role } = this.context();
 		const q = tx
 			.select()
@@ -126,7 +126,7 @@ export class DocumentsService {
 			.where(and(eq(documents.organizationId, organizationId), eq(documents.id, id)))
 			.limit(1);
 		const [row] = lock ? await q.for('update') : await q;
-		if (!row || !canReadDocument(role, row)) throw NOT_FOUND();
+		if (!row || !canReadDocument(role, row, access)) throw NOT_FOUND();
 		return row;
 	}
 
@@ -174,7 +174,10 @@ export class DocumentsService {
 	}
 
 	/** Dépôt : la fiche naît en attente ; l'URL d'envoi signe le type et la taille annoncés (10 minutes). */
-	async create(input: CreateDocumentData): Promise<{ document: DocumentView; upload: PresignedUpload }> {
+	async create(
+		input: CreateDocumentData,
+		inspection: { inspectionId: string; inspectionItemId: string | null } | null = null
+	): Promise<{ document: DocumentView; upload: PresignedUpload }> {
 		const { tx, organizationId, role, userId, actor } = this.context();
 		if (input.restriction) assertCan(role, 'document.restrict');
 		await this.checkSubjects(input);
@@ -207,6 +210,9 @@ export class DocumentsService {
 				// TENANT_NOT_FOUND) ; le module documents ne lit pas les tables du module leases.
 				tenantId: input.tenantId,
 				leaseId: input.leaseId,
+				// Lot 10 bis : photo ou scan d'un état des lieux, seulement par createForInspection (clés composites).
+				inspectionId: inspection?.inspectionId ?? null,
+				inspectionItemId: inspection?.inspectionItemId ?? null,
 				version,
 				replacesId: input.replacesId,
 				fileName: input.fileName,
@@ -232,6 +238,7 @@ export class DocumentsService {
 				unitId: input.unitId,
 				tenantId: input.tenantId,
 				leaseId: input.leaseId,
+				...(inspection ? { inspectionId: inspection.inspectionId, inspectionItemId: inspection.inspectionItemId } : {}),
 				version,
 				replacesId: input.replacesId,
 				fileName: input.fileName,
@@ -249,8 +256,39 @@ export class DocumentsService {
 	}
 
 	/** Nouvelle URL d'envoi tant que le fichier n'est pas arrivé (la première a expiré). */
-	async uploadUrl(id: string): Promise<PresignedUpload> {
-		const row = await this.readable(id);
+	/**
+	 * Lot 10 bis, étape 4 : photo d'une ligne ou scan signé d'un état des lieux. Le module leases a vérifié l'état des
+	 * lieux (de l'organisation, du bail, d'une unité affectée pour l'agent de terrain, encore en brouillon) : il le dit
+	 * par `assignedUnit`, que la matrice exige pour l'agent de terrain (docs/UX.md §10). Jamais par la route des documents.
+	 */
+	async createForInspection(input: {
+		id: string;
+		type: 'inspection_photo' | 'inspection_scan';
+		propertyId: string;
+		unitId: string;
+		leaseId: string;
+		inspectionId: string;
+		inspectionItemId: string | null;
+		fileName: string;
+		mimeType: CreateDocumentData['mimeType'];
+		byteSize: number;
+	}): Promise<{ document: DocumentView; upload: PresignedUpload }> {
+		const { inspectionId, inspectionItemId, ...rest } = input;
+		return this.create(
+			{ ...rest, ownerId: null, mandateId: null, tenantId: null, replacesId: null, restriction: null },
+			{ inspectionId, inspectionItemId }
+		);
+	}
+
+	/** Document d'un état des lieux déjà vérifié par le module leases ; sinon introuvable. */
+	async inspectionDocument(id: string, inspectionId: string): Promise<DocumentView> {
+		const row = await this.readable(id, false, { assignedUnit: true });
+		if (row.inspectionId !== inspectionId) throw NOT_FOUND();
+		return documentView(row);
+	}
+
+	async uploadUrl(id: string, access: { assignedUnit?: boolean } = {}): Promise<PresignedUpload> {
+		const row = await this.readable(id, false, access);
 		if (row.status !== 'pending') throw new AppError('DOCUMENT_NOT_PENDING', 'Ce document a déjà été reçu.', 409, { status: row.status });
 		return this.storage.presignPut(row.storageKey, {
 			contentType: row.mimeType,
@@ -260,9 +298,9 @@ export class DocumentsService {
 	}
 
 	/** Fichier reçu : taille et type réels, empreinte SHA-256 ; la version entre en vigueur ou est refusée. */
-	async uploaded(id: string): Promise<DocumentView> {
+	async uploaded(id: string, access: { assignedUnit?: boolean } = {}): Promise<DocumentView> {
 		const { tx, organizationId, actor } = this.context();
-		const row = await this.readable(id, true);
+		const row = await this.readable(id, true, access);
 		if (row.status !== 'pending') return documentView(row);
 		const found = await this.storage.stat(row.storageKey);
 		if (!found) throw new AppError('DOCUMENT_FILE_MISSING', 'Le fichier n’est pas encore arrivé : renvoyez-le.', 409);

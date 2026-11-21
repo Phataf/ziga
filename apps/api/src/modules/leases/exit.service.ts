@@ -26,6 +26,7 @@ import type {
 	DecideAgreementData,
 	DisputeData,
 	DisputeOutcomeData,
+	InspectionDocumentData,
 	InspectionItemData,
 	ManagementTransferData,
 	RecordNoticeData,
@@ -68,6 +69,7 @@ import { AuditService, type AuditActor } from '../audit/audit.service.js';
 import { OrganizationsService } from '../organizations/organizations.service.js';
 import { OwnersService } from '../owners/owners.service.js';
 import { PropertiesService } from '../properties/properties.service.js';
+import { DocumentsService } from '../documents/documents.service.js';
 import { ExitHooks } from './exit-hooks.js';
 
 type LeaseRow = typeof leases.$inferSelect;
@@ -119,7 +121,8 @@ export class ExitService {
 		private readonly properties: PropertiesService,
 		private readonly owners: OwnersService,
 		private readonly organizations: OrganizationsService,
-		private readonly hooks: ExitHooks
+		private readonly hooks: ExitHooks,
+		private readonly documents: DocumentsService
 	) {}
 
 	private context(origin?: AuditOrigin): Ctx {
@@ -351,6 +354,34 @@ export class ExitService {
 		if (!row) throw NOT_FOUND('Ligne d’état des lieux', 'INSPECTION_ITEM_NOT_FOUND');
 		await this.inspection(c, row.inspectionId);
 		return row;
+	}
+
+	/**
+	 * Étape 4 : photo d'une ligne, ou scan signé, d'un état des lieux encore en brouillon. L'agent de terrain les dépose
+	 * sur ses unités (`inspection.create`), sans le droit général de déposer des documents ; le module documents garde
+	 * la fiche, l'envoi signé et le contrôle du fichier.
+	 */
+	async inspectionDocument(inspectionId: string, input: InspectionDocumentData) {
+		const c = this.context();
+		const insp = await this.inspection(c, inspectionId);
+		if (insp.status !== 'draft') throw new AppError('INSPECTION_LOCKED', 'Un état des lieux signé ou contesté ne change plus.', 409);
+		if (input.inspectionItemId) {
+			const item = await this.item(c, input.inspectionItemId);
+			if (item.inspectionId !== inspectionId) throw NOT_FOUND('Ligne d’état des lieux', 'INSPECTION_ITEM_NOT_FOUND');
+		}
+		const lease = await this.lease(c, insp.leaseId);
+		const unit = await this.properties.getUnit(lease.unitId);
+		return this.documents.createForInspection({ ...input, propertyId: unit.propertyId, unitId: lease.unitId, leaseId: lease.id, inspectionId });
+	}
+
+	/** Envoi du fichier (URL signée) puis réception contrôlée, pour un document de cet état des lieux seulement. */
+	async inspectionDocumentStep(inspectionId: string, documentId: string, step: 'upload-url' | 'uploaded') {
+		const c = this.context();
+		await this.inspection(c, inspectionId);
+		await this.documents.inspectionDocument(documentId, inspectionId);
+		return step === 'upload-url'
+			? this.documents.uploadUrl(documentId, { assignedUnit: true })
+			: this.documents.uploaded(documentId, { assignedUnit: true });
 	}
 
 	async addItem(inspectionId: string, input: InspectionItemData, origin?: AuditOrigin): Promise<Row> {

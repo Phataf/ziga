@@ -97,6 +97,8 @@ function agencyNav(opts: { team: boolean; settings: boolean; contracts: boolean 
 		item({ path: 'app/impayes', label: n.arrears, icon: TriangleAlert, section: s.management }),
 		item({ path: 'app/proprietaires', label: n.owners, icon: Users, section: s.management }),
 		item({ path: 'app/locataires', label: n.tenants, icon: KeyRound, section: s.management }),
+		// Lot 10 bis : préavis, états des lieux, décomptes de caution, remise en état.
+		item({ path: 'app/sorties', label: n.exits, short: n.exitsShort, icon: LogOut, section: s.management }),
 		// Lot 10 : dépenses et relevés propriétaires (lecture pour le profil lecture seule).
 		item({ path: 'app/depenses', label: n.expenses, icon: Receipt, section: s.management }),
 		item({ path: 'app/releves', label: n.statementsLong, icon: FileText, section: s.management }),
@@ -141,6 +143,8 @@ export const profiles: Record<ProfileId, Profile> = {
 			item({ path: 'app/biens', label: n.myProperties, short: n.properties, icon: Building2, section: s.field, tab: true }),
 			item({ path: 'app/encaissements', label: n.myPayments, short: n.payments, icon: Wallet, section: s.field, tab: true }),
 			item({ path: 'app/impayes', label: n.late, icon: TriangleAlert, section: s.field }),
+			// Lot 10 bis : états des lieux de sortie de ses unités, hors ligne compris.
+			item({ path: 'app/sorties', label: n.exits, short: n.exitsShort, icon: LogOut, section: s.field }),
 			plus('app')
 		]
 	},
@@ -156,6 +160,7 @@ export const profiles: Record<ProfileId, Profile> = {
 			item({ path: 'app/contrats', label: n.contracts, icon: FilePenLine, section: s.myHomes }),
 			item({ path: 'app/encaissements', label: n.rentsReceived, short: n.rents, icon: Wallet, section: s.myHomes, tab: true }),
 			item({ path: 'app/impayes', label: n.late, icon: TriangleAlert, section: s.myHomes }),
+			item({ path: 'app/sorties', label: n.exits, short: n.exitsShort, icon: LogOut, section: s.myHomes }),
 			// Lot 10 : dépenses de ses logements ; pas de relevé (le bailleur est son propre propriétaire).
 			item({ path: 'app/depenses', label: n.expenses, icon: Receipt, section: s.myHomes }),
 			// Le bailleur est directeur de son organisation : ses paramètres (logo des reçus) et son journal.

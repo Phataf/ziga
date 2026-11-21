@@ -12,6 +12,7 @@ import {
 	decideAgreementSchema,
 	disputeOutcomeSchema,
 	disputeSchema,
+	inspectionDocumentSchema,
 	inspectionItemSchema,
 	managementTransferSchema,
 	recordNoticeSchema,
@@ -55,6 +56,28 @@ export class ExitController {
 	@HttpCode(201)
 	addItem(@Param('id') id: string, @Body() body: unknown) {
 		return this.exit.addItem(idSchema.parse(id), inspectionItemSchema.parse(body));
+	}
+
+	/** Étape 4 : photo d'une ligne ou scan signé ; l'agent de terrain sur ses unités (sans `document.upload`). */
+	@Post('inspections/:id/documents')
+	@Can('inspection.create')
+	@HttpCode(201)
+	inspectionDocument(@Param('id') id: string, @Body() body: unknown) {
+		return this.exit.inspectionDocument(idSchema.parse(id), inspectionDocumentSchema.parse(body));
+	}
+
+	@Post('inspections/:id/documents/:documentId/upload-url')
+	@Can('inspection.create')
+	@HttpCode(200)
+	inspectionDocumentUploadUrl(@Param('id') id: string, @Param('documentId') documentId: string) {
+		return this.exit.inspectionDocumentStep(idSchema.parse(id), idSchema.parse(documentId), 'upload-url');
+	}
+
+	@Post('inspections/:id/documents/:documentId/uploaded')
+	@Can('inspection.create')
+	@HttpCode(200)
+	inspectionDocumentUploaded(@Param('id') id: string, @Param('documentId') documentId: string) {
+		return this.exit.inspectionDocumentStep(idSchema.parse(id), idSchema.parse(documentId), 'uploaded');
 	}
 
 	@Patch('inspection-items/:id')

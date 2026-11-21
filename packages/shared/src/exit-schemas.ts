@@ -5,9 +5,11 @@
  */
 import { z } from 'zod';
 import { formatDate, isIsoDate } from './dates.js';
+import { UPLOAD_MIME_TYPES } from './documents.js';
 import { DISPUTE_OUTCOMES, INSPECTION_FINDINGS, REPAIR_PERFORMERS } from './deposit-settlement.js';
 import { idSchema } from './ids.js';
 import { fcfaSchema } from './money.js';
+import { MAX_UPLOAD_BYTES } from './properties.js';
 import {
 	AGREEMENT_PARTIES,
 	AGREEMENT_TYPES,
@@ -115,6 +117,34 @@ export function inspectionCheckboxLabel(s: { signerName: string; signedAt: strin
 export function inspectionScanLabel(s: { uploaderName: string; uploadedAt: string }): string {
 	return `Signature manuscrite, scan déposé par ${s.uploaderName} le ${formatDate(new Date(s.uploadedAt))}`;
 }
+
+/**
+ * Photo d'une ligne, ou scan signé d'un état des lieux (étape 4) : déposé par la route de l'état des lieux, ouverte à
+ * l'agent de terrain sur ses unités (`inspection.create`), jamais par celle des documents. Une photo pointe vers sa
+ * ligne ; le scan, vers l'état des lieux seul.
+ */
+export const INSPECTION_DOCUMENT_TYPES = ['inspection_photo', 'inspection_scan'] as const;
+export const inspectionDocumentSchema = z
+	.object({
+		id: idSchema,
+		type: z.enum(INSPECTION_DOCUMENT_TYPES),
+		inspectionItemId: optionalId,
+		fileName: z
+			.string()
+			.trim()
+			.min(1, { error: 'Nom du fichier manquant.' })
+			.max(200, { error: 'Nom du fichier trop long.' })
+			.refine((v) => !v.includes('/') && !v.includes('\\') && ![...v].some((ch) => ch.charCodeAt(0) < 32), {
+				error: 'Nom du fichier invalide.'
+			}),
+		mimeType: z.enum(UPLOAD_MIME_TYPES, { error: 'Format refusé : PDF, JPEG, PNG, WebP ou HEIC.' }),
+		byteSize: z.number().int().min(1, { error: 'Fichier vide.' }).max(MAX_UPLOAD_BYTES, { error: 'Document trop lourd : 10 Mo au plus.' })
+	})
+	.refine((d) => (d.type === 'inspection_photo') === (d.inspectionItemId !== null), {
+		error: 'Une photo se rattache à une ligne ; le scan, à l’état des lieux.',
+		path: ['inspectionItemId']
+	});
+export type InspectionDocumentData = z.output<typeof inspectionDocumentSchema>;
 
 // ---------------------------------------------------------------- réparations
 

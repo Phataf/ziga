@@ -784,3 +784,60 @@ describe('ExitHooks dans les deux processus', () => {
 		expect(t.app.get(ExitHooks)).not.toBe(worker.get(ExitHooks));
 	});
 });
+
+describe('étape 4 : photos et scan d’un état des lieux (agent de terrain, sans document.upload)', () => {
+	const JPEG = Buffer.from(
+		'/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=',
+		'base64'
+	);
+	async function send(m: Member, inspectionId: string, body: Record<string, unknown>, file: Buffer, mimeType: string) {
+		const created = await call<{ document: DocumentView; upload: { url: string } }>(
+			m,
+			'POST',
+			`/inspections/${inspectionId}/documents`,
+			{ id: newId(), fileName: 'photo.jpg', mimeType, byteSize: file.length, ...body },
+			201
+		);
+		const u = new URL(created.upload.url);
+		expect((await fetch(new URL(u.pathname + u.search, t.url), { method: 'PUT', body: file, headers: { 'content-type': mimeType } })).status).toBe(200);
+		return created.document.id;
+	}
+
+	it('l’agent de terrain dépose la photo d’une ligne de ses unités ; jamais ailleurs, jamais signé, jamais par B', async () => {
+		const u = await unitUnderMandate(manager, agent.userId);
+		const { lease } = await leaseWithDeposit(manager, u);
+		await noticeExitingToday(manager, lease.id);
+		const insp = await call<Row>(agent, 'POST', '/inspections', { id: newId(), leaseId: lease.id, type: 'exit', inspectedOn: today }, 201);
+		const item = await call<Row>(
+			agent,
+			'POST',
+			`/inspections/${insp.id}/items`,
+			{ id: newId(), room: 'Cuisine', element: 'sink', description: 'Évier fendu sur le côté gauche', finding: 'tenant_damage' },
+			201
+		);
+		// L'agent n'a pas la route générale des documents.
+		expect((await agent.call('POST', '/documents', { id: newId(), type: 'inspection_photo', leaseId: lease.id, fileName: 'a.jpg', mimeType: 'image/jpeg', byteSize: 10 })).status).toBe(403);
+		const photo = await send(agent, insp.id as string, { type: 'inspection_photo', inspectionItemId: item.id }, JPEG, 'image/jpeg');
+		const doc = await call<DocumentView>(agent, 'POST', `/inspections/${insp.id}/documents/${photo}/uploaded`);
+		expect(doc).toMatchObject({ type: 'inspection_photo', status: 'active', leaseId: lease.id, unitId: u.unit.id, propertyId: u.propertyId });
+		const row = (await owner.query(`select inspection_id, inspection_item_id, uploaded_by from documents where id = $1`, [photo])).rows[0];
+		expect(row).toEqual({ inspection_id: insp.id, inspection_item_id: item.id, uploaded_by: agent.userId });
+		// Une photo a sa ligne ; un scan n'en a pas.
+		expect(await refusal(agent, 'POST', `/inspections/${insp.id}/documents`, { id: newId(), type: 'inspection_photo', fileName: 'a.jpg', mimeType: 'image/jpeg', byteSize: 10 })).toMatchObject({ status: 400 });
+		// B ne l'atteint pas ; un document d'un autre état des lieux non plus.
+		expect((await b.director.call('POST', `/inspections/${insp.id}/documents`, { id: newId(), type: 'inspection_photo', inspectionItemId: item.id, fileName: 'a.jpg', mimeType: 'image/jpeg', byteSize: 10 })).status).toBe(404);
+		expect((await b.director.call('POST', `/inspections/${insp.id}/documents/${photo}/uploaded`)).status).toBe(404);
+		const other = await call<Row>(manager, 'POST', '/inspections', { id: newId(), leaseId: lease.id, type: 'entry', inspectedOn: today }, 201);
+		expect((await manager.call('POST', `/inspections/${other.id}/documents/${photo}/upload-url`)).status).toBe(404);
+		// Scan signé : il signe l'état des lieux, affiché comme scan déposé, jamais comme une signature électronique.
+		const scan = await send(manager, insp.id as string, { type: 'inspection_scan', fileName: 'edl.pdf' }, PDF, 'application/pdf');
+		await call(manager, 'POST', `/inspections/${insp.id}/documents/${scan}/uploaded`);
+		const signed = await call<Row>(manager, 'POST', `/inspections/${insp.id}/sign`, { scanDocumentId: scan });
+		expect(signed.status).toBe('signed_both');
+		// Signé : plus aucune photo.
+		expect(await refusal(agent, 'POST', `/inspections/${insp.id}/documents`, { id: newId(), type: 'inspection_photo', inspectionItemId: item.id, fileName: 'b.jpg', mimeType: 'image/jpeg', byteSize: 10 })).toMatchObject({ status: 409, code: 'INSPECTION_LOCKED' });
+		// Désaffecté : l'agent ne l'atteint plus.
+		await call(manager, 'POST', `/units/${u.unit.id}/assign`, { agentId: null });
+		expect((await agent.call('POST', `/inspections/${insp.id}/documents/${photo}/uploaded`)).status).toBe(404);
+	});
+});

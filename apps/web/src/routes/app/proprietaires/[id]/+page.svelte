@@ -11,6 +11,7 @@
 	import { newId } from '@ziga/shared/ids';
 	import { formatFcfa } from '@ziga/shared/money';
 	import { formatRateBp, revokeMandateSchema, type MandateVersionView, type MandateView, type OwnerView } from '@ziga/shared/owners';
+	import { resolve } from '$app/paths';
 	import { can } from '@ziga/shared/permissions';
 	import { COUNTRIES, formatPhone } from '@ziga/shared/phone';
 	import FormAlert from '#lib/components/auth/FormAlert.svelte';
@@ -273,14 +274,22 @@
 			{:else}
 				<div class="grid gap-3 lg:grid-cols-2">
 					{#each mandates as m (m.id)}
-						<MandateCard
-							mandate={m}
-							{today}
-							manage={canEditMandate}
-							onedit={() => openEditMandate(m)}
-							onrevoke={() => openRevoke(m)}
-							onhistory={() => openHistory(m)}
-						/>
+						<div class="space-y-2">
+							<MandateCard
+								mandate={m}
+								{today}
+								manage={canEditMandate}
+								onedit={() => openEditMandate(m)}
+								onrevoke={() => openRevoke(m)}
+								onhistory={() => openHistory(m)}
+							/>
+							<!-- Lot 10 bis : transfert de gestion guidé (D16, règle 12). -->
+							{#if can(role, 'management.transfer') && m.type === 'rental_management' && m.status === 'active'}
+								<Button variant="outline" href={resolve('/app/transferts/[mandateId]', { mandateId: m.id })} data-testid="transferer-gestion"
+									>{fr.exit.transfer.action}</Button
+								>
+							{/if}
+						</div>
 					{/each}
 				</div>
 			{/if}

@@ -160,6 +160,50 @@ export const LOCAL_QUERIES = {
 		LEFT JOIN units u ON u.organization_id = e.organization_id AND u.id = e.unit_id
 		WHERE e.organization_id = ? ORDER BY e.spent_on DESC, e.id DESC`,
 	/** Relevés propriétaires (direction, gestion, lecture), les plus récents d'abord. */
+	/**
+	 * Lot 10 bis : sorties de l'organisation — baux en préavis, ou terminés par une sortie, avec leur congé enregistré,
+	 * l'unité, le bien, le locataire et le décompte (l'agent de terrain ne reçoit ni le décompte ni la caution).
+	 */
+	exits: `SELECT l.id, l.status, l.unit_id, l.tenant_id, l.exit_on, l.end_kind, l.rent, l.charges, u.label AS unit_label, u.technical_status,
+		p.name AS property_name, t.full_name AS tenant_name, n.planned_exit_on, n.notified_on, n.origin AS notice_origin,
+		(SELECT s.status FROM deposit_settlements s WHERE s.organization_id = l.organization_id AND s.lease_id = l.id ORDER BY s.created_at DESC LIMIT 1) AS settlement_status,
+		(SELECT s.refund FROM deposit_settlements s WHERE s.organization_id = l.organization_id AND s.lease_id = l.id ORDER BY s.created_at DESC LIMIT 1) AS settlement_refund,
+		(SELECT s.refund_alert FROM deposit_settlements s WHERE s.organization_id = l.organization_id AND s.lease_id = l.id ORDER BY s.created_at DESC LIMIT 1) AS refund_alert,
+		(SELECT i.status FROM inspections i WHERE i.organization_id = l.organization_id AND i.lease_id = l.id AND i.type = 'exit' ORDER BY i.created_at DESC LIMIT 1) AS exit_inspection_status
+		FROM leases l
+		LEFT JOIN units u ON u.organization_id = l.organization_id AND u.id = l.unit_id
+		LEFT JOIN properties p ON p.organization_id = u.organization_id AND p.id = u.property_id
+		LEFT JOIN tenants t ON t.organization_id = l.organization_id AND t.id = l.tenant_id
+		LEFT JOIN lease_notices n ON n.organization_id = l.organization_id AND n.lease_id = l.id AND n.status = 'recorded'
+		WHERE l.organization_id = ? AND (l.status = 'notice' OR (l.status = 'ended' AND l.end_kind IN ('tenant_exit', 'lessor_notice')))
+		ORDER BY coalesce(n.planned_exit_on, l.exit_on) DESC, l.id`,
+	/** Unités à remettre en état ou en travaux (D14) : jamais disponibles tant qu'elles ne sont pas déclarées prêtes. */
+	refurbishUnits: `SELECT u.*, p.name AS property_name FROM units u
+		LEFT JOIN properties p ON p.organization_id = u.organization_id AND p.id = u.property_id
+		WHERE u.organization_id = ? AND u.technical_status IN ('to_refurbish', 'under_works') ORDER BY p.name COLLATE NOCASE, u.label COLLATE NOCASE, u.id`,
+	leaseNotices: `SELECT * FROM lease_notices WHERE organization_id = ? AND lease_id = ? ORDER BY created_at DESC, id DESC`,
+	leaseInspections: `SELECT * FROM inspections WHERE organization_id = ? AND lease_id = ? ORDER BY type, created_at, id`,
+	inspection: `SELECT * FROM inspections WHERE organization_id = ? AND id = ?`,
+	leaseInspectionItems: `SELECT it.* FROM inspection_items it JOIN inspections i ON i.organization_id = it.organization_id AND i.id = it.inspection_id
+		WHERE it.organization_id = ? AND i.lease_id = ? ORDER BY it.position, it.created_at, it.id`,
+	inspectionDocuments: `SELECT * FROM documents WHERE organization_id = ? AND inspection_id = ? ORDER BY created_at, id`,
+	leaseRepairs: `SELECT * FROM repairs WHERE organization_id = ? AND lease_id = ? ORDER BY created_at, id`,
+	leaseAgreements: `SELECT * FROM agreements WHERE organization_id = ? AND lease_id = ? ORDER BY proposed_on, created_at, id`,
+	leaseSettlements: `SELECT * FROM deposit_settlements WHERE organization_id = ? AND lease_id = ? ORDER BY created_at, id`,
+	leaseSettlementLines: `SELECT ln.* FROM deposit_settlement_lines ln JOIN deposit_settlements s ON s.organization_id = ln.organization_id AND s.id = ln.settlement_id
+		WHERE ln.organization_id = ? AND s.lease_id = ? ORDER BY ln.revision, ln.position, ln.id`,
+	/** Lot 10 bis : transferts de gestion d'un mandat (ajout seul). */
+	mandateTransfers: `SELECT * FROM management_transfers WHERE organization_id = ? AND mandate_id = ? ORDER BY created_at, id`,
+	/** Baux, comptes et mouvements de caution des unités d'un bien (assistant de transfert de gestion). */
+	propertyLeases: `SELECT l.*, u.label AS unit_label FROM leases l JOIN units u ON u.organization_id = l.organization_id AND u.id = l.unit_id
+		WHERE l.organization_id = ? AND u.property_id = ? ORDER BY u.label COLLATE NOCASE, l.id`,
+	propertyDeposits: `SELECT a.* FROM deposit_accounts a JOIN leases l ON l.organization_id = a.organization_id AND l.id = a.lease_id
+		JOIN units u ON u.organization_id = l.organization_id AND u.id = l.unit_id WHERE a.organization_id = ? AND u.property_id = ? ORDER BY a.id`,
+	propertyMovements: `SELECT m.* FROM deposit_movements m JOIN deposit_accounts a ON a.organization_id = m.organization_id AND a.id = m.account_id
+		JOIN leases l ON l.organization_id = a.organization_id AND l.id = a.lease_id JOIN units u ON u.organization_id = l.organization_id AND u.id = l.unit_id
+		WHERE m.organization_id = ? AND u.property_id = ? ORDER BY m.occurred_on, m.created_at, m.id`,
+	mandate: `SELECT * FROM mandates WHERE organization_id = ? AND id = ?`,
+	mandateScopes: `SELECT * FROM mandate_scopes WHERE organization_id = ? AND mandate_id = ? ORDER BY id`,
 	statements: `SELECT * FROM owner_statements WHERE organization_id = ? ORDER BY month DESC, version DESC, id DESC`,
 	statement: `SELECT * FROM owner_statements WHERE organization_id = ? AND id = ?`,
 	statementPayouts: `SELECT * FROM owner_payouts WHERE organization_id = ? AND statement_id = ? ORDER BY created_at, id`,

@@ -176,6 +176,8 @@ class Sync {
 		// Justificatifs de dépense en attente (lot 10 bis, étape 0) : de même.
 		const { expenseReceiptQueue } = await import('../collections/receipt-queue.svelte');
 		await expenseReceiptQueue.clear();
+		const { inspectionPhotoQueue } = await import('../exit/photo-queue.svelte');
+		await inspectionPhotoQueue.clear();
 	}
 }
 

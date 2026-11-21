@@ -8,7 +8,12 @@
 	import { Button } from '#lib/components/ui/button/index.ts';
 	import { fr } from '#lib/i18n/fr.ts';
 
-	let { files = $bindable([]) }: { files: File[] } = $props();
+	let {
+		files = $bindable([]),
+		title,
+		hint,
+		testid = 'justificatif'
+	}: { files: File[]; title?: string; hint?: string; testid?: string } = $props();
 	const t = fr.expenses.receipt;
 
 	function add(event: Event) {
@@ -28,9 +33,9 @@
 		'inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border-2 border-input px-4 font-medium focus-within:outline-2 focus-within:outline-ring';
 </script>
 
-<fieldset class="space-y-2" data-testid="justificatif">
-	<legend class="text-base font-medium">{t.title}</legend>
-	<p class="text-sm text-muted-foreground">{t.hint}</p>
+<fieldset class="space-y-2" data-testid={testid}>
+	<legend class="text-base font-medium">{title ?? t.title}</legend>
+	<p class="text-sm text-muted-foreground">{hint ?? t.hint}</p>
 	<div class="flex flex-wrap gap-2">
 		<label class={label}>
 			<Camera class="size-5" aria-hidden="true" />{t.takePhoto}

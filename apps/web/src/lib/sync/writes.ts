@@ -8,6 +8,7 @@ import type { PowerSyncDatabase } from '@powersync/web';
 import type { UpdateOrganizationOutput as OrganizationSettings } from '@ziga/shared/organizations';
 import { newId } from '@ziga/shared/ids';
 import type { ExpenseData } from '@ziga/shared/expenses';
+import type { CreateInspectionData, InspectionItemData, UpdateInspectionItemData } from '@ziga/shared/exit-schemas';
 import type { PaymentEntryData } from '@ziga/shared/payments';
 import type { CreateReminderData } from '@ziga/shared/reminders';
 import { commissionColumns, type CreateMandateData, type MandateTerms, type OwnerData } from '@ziga/shared/owners';
@@ -676,5 +677,74 @@ export async function recordExpense(db: PowerSyncDatabase, organizationId: strin
 			borne_by: e.borneBy,
 			recovery: e.recovery
 		})
+	);
+}
+
+// ---------------------------------------------------------------- lot 10 bis : état des lieux (hors ligne compris)
+
+/**
+ * État des lieux créé sur l'appareil (agent de terrain sur ses unités, gestion) : seules les colonnes que le serveur
+ * accepte de l'appareil sont écrites ; il naît brouillon (docs/SYNC.md, exit.sync.ts).
+ */
+export async function createInspection(db: PowerSyncDatabase, organizationId: string, i: CreateInspectionData): Promise<void> {
+	await db.writeTransaction((tx) =>
+		insert(tx, 'inspections', {
+			id: i.id,
+			organization_id: organizationId,
+			lease_id: i.leaseId,
+			type: i.type,
+			inspected_on: i.inspectedOn,
+			furnished: b(i.furnished)
+		})
+	);
+}
+
+function itemColumns(i: Partial<InspectionItemData>): Record<string, unknown> {
+	const out: Record<string, unknown> = {};
+	if (i.room !== undefined) out.room = i.room;
+	if (i.element !== undefined) out.element = i.element;
+	if (i.position !== undefined) out.position = i.position;
+	if (i.description !== undefined) out.description = i.description;
+	if (i.finding !== undefined) out.finding = i.finding;
+	if (i.entryItemId !== undefined) out.entry_item_id = i.entryItemId;
+	return out;
+}
+
+/** Lignes ajoutées d'un coup (une pièce entière du catalogue), dans une transaction locale. */
+export async function addInspectionItems(
+	db: PowerSyncDatabase,
+	organizationId: string,
+	inspectionId: string,
+	items: readonly InspectionItemData[]
+): Promise<void> {
+	await db.writeTransaction(async (tx) => {
+		for (const i of items) await insert(tx, 'inspection_items', { id: i.id, organization_id: organizationId, inspection_id: inspectionId, ...itemColumns(i) });
+	});
+}
+
+/** Description, constat… : seuls les champs modifiés partent (PATCH) ; refusés par le serveur une fois signé. */
+export async function updateInspectionItem(db: PowerSyncDatabase, organizationId: string, id: string, i: UpdateInspectionItemData): Promise<void> {
+	const row = itemColumns(i);
+	if (!Object.keys(row).length) return;
+	await db.writeTransaction((tx) => update(tx, 'inspection_items', id, organizationId, row));
+}
+
+export async function deleteInspectionItem(db: PowerSyncDatabase, organizationId: string, id: string): Promise<void> {
+	await db.writeTransaction((tx) => tx.execute(`DELETE FROM inspection_items WHERE id = ? AND organization_id = ?`, [id, organizationId]));
+}
+
+/**
+ * Case cochée par une partie, sur cet appareil, à l'heure de l'appareil (point 5 du porteur) : le serveur enregistre
+ * aussi qui l'a saisie. Jamais une signature électronique.
+ */
+export async function checkInspection(
+	db: PowerSyncDatabase,
+	organizationId: string,
+	id: string,
+	party: 'organization' | 'tenant',
+	at: Date = new Date()
+): Promise<void> {
+	await db.writeTransaction((tx) =>
+		update(tx, 'inspections', id, organizationId, party === 'organization' ? { organization_signed_at: at.toISOString() } : { tenant_signed_at: at.toISOString() })
 	);
 }
