@@ -296,6 +296,7 @@ function shortOf(label: string): string {
 	const short: Record<string, string> = {
 		'Tableau de bord': 'Accueil',
 		'Biens et unités': 'Biens',
+		'Préavis et sorties': 'Sorties',
 		'Ma tournée': 'Tournée',
 		'Mes biens': 'Biens',
 		'Mes encaissements': 'Encaissements',
