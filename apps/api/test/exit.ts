@@ -115,7 +115,8 @@ export async function insertItem(
 /** Signature des deux parties (cases cochées), puis l'état des lieux est figé. */
 export async function signInspection(c: pg.Client, inspectionId: string, userId: string): Promise<void> {
 	await c.query(
-		`update inspections set status = 'signed_both', organization_signed_at = now(), organization_signed_by = $2, tenant_signed_at = now()
+		`update inspections set status = 'signed_both', organization_signed_at = now(), organization_signed_by = $2, tenant_signed_at = now(),
+			tenant_signed_recorded_by = $2
 		 where id = $1`,
 		[inspectionId, userId]
 	);
