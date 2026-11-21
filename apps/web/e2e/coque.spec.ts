@@ -37,6 +37,7 @@ const cases: Case[] = [
 			'Impayés',
 			'Propriétaires',
 			'Locataires',
+			'Préavis et sorties',
 			'Dépenses',
 			'Relevés propriétaires',
 			'Contrats',
@@ -59,6 +60,7 @@ const cases: Case[] = [
 			'Impayés',
 			'Propriétaires',
 			'Locataires',
+			'Préavis et sorties',
 			'Dépenses',
 			'Relevés propriétaires',
 			'Contrats',
@@ -72,7 +74,7 @@ const cases: Case[] = [
 		account: 'fieldAgent',
 		path: '/app',
 		tabs: ['Tournée', 'Biens', 'Encaissements', 'Plus'],
-		menu: ['Ma tournée', 'Mes biens', 'Mes encaissements', 'Retards'],
+		menu: ['Ma tournée', 'Mes biens', 'Mes encaissements', 'Retards', 'Préavis et sorties'],
 		sections: ['Terrain']
 	},
 	{
@@ -87,6 +89,7 @@ const cases: Case[] = [
 			'Impayés',
 			'Propriétaires',
 			'Locataires',
+			'Préavis et sorties',
 			'Dépenses',
 			'Relevés propriétaires',
 			'À valider'
@@ -106,6 +109,7 @@ const cases: Case[] = [
 			'Contrats',
 			'Loyers reçus',
 			'Retards',
+			'Préavis et sorties',
 			'Dépenses',
 			'Paramètres de l’organisation',
 			'Journal'
@@ -181,6 +185,7 @@ test.describe('Téléphone (360 × 800)', () => {
 			'Impayés',
 			'Propriétaires',
 			'Locataires',
+			'Préavis et sorties',
 			'Dépenses',
 			'Relevés propriétaires',
 			'Contrats',
