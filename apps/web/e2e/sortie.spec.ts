@@ -45,10 +45,9 @@ async function pdf(): Promise<Buffer> {
 
 /** La vraie tâche du jour, dans le worker des tests (apps/api/scripts/e2e-leases-daily.mjs). */
 function runDaily(): Record<string, number> {
-	return JSON.parse(execFileSync(process.execPath, [DAILY, today], { encoding: 'utf8', cwd: resolve(import.meta.dirname, '../../api') })) as Record<
-		string,
-		number
-	>;
+	return JSON.parse(
+		execFileSync(process.execPath, [DAILY, today], { encoding: 'utf8', cwd: resolve(import.meta.dirname, '../../api') })
+	) as Record<string, number>;
 }
 
 async function pay(request: APIRequestContext, agency: Agency, leaseId: string, amount: number, extra: Record<string, unknown> = {}) {
@@ -92,14 +91,23 @@ async function exitingLease(request: APIRequestContext, agency: Agency, opts: { 
 		lessorType: 'owner'
 	});
 	const accountId = newId();
-	await post(request, agency.headers, '/deposit-accounts', { id: accountId, leaseId, type: 'security_deposit', agreedAmount: 100000, holder: 'organization' });
+	await post(request, agency.headers, '/deposit-accounts', {
+		id: accountId,
+		leaseId,
+		type: 'security_deposit',
+		agreedAmount: 100000,
+		holder: 'organization'
+	});
 	await pay(request, agency, leaseId, 100000, { purpose: 'deposit', depositAccountId: accountId });
 	const lease = await get<{ rentDues: { periodStart: string; amountDue: number; amountPaid: number; status: string }[] }>(
 		request,
 		agency.headers,
 		`/leases/${leaseId}`
 	);
-	const owed = lease.rentDues.filter((d) => d.status !== 'waived' && d.periodStart <= today).reduce((s, d) => s + d.amountDue - d.amountPaid, 0);
+	// Les mois passés seulement : le mois de la sortie est payé après la fin du bail, au prorata (pas de trop-perçu).
+	const owed = lease.rentDues
+		.filter((d) => d.status !== 'waived' && d.periodStart < monthDay(ty, tm, 0, 1))
+		.reduce((s, d) => s + d.amountDue - d.amountPaid, 0);
 	if (owed > 0) await pay(request, agency, leaseId, owed);
 	if (opts.notice) {
 		await post(request, agency.headers, `/leases/${leaseId}/notice`, {
@@ -111,6 +119,19 @@ async function exitingLease(request: APIRequestContext, agency: Agency, opts: { 
 		});
 	}
 	return { propertyId, unitId, tenantId, tenantName, leaseId, accountId };
+}
+
+/** À la date de sortie : la tâche du jour termine le bail (dernier mois au prorata, suivants abandonnés), puis le reste dû est payé. */
+async function endAndSettleRent(request: APIRequestContext, agency: Agency, leaseId: string) {
+	runDaily();
+	const lease = await get<{ status: string; rentDues: { amountDue: number; amountPaid: number; status: string }[] }>(
+		request,
+		agency.headers,
+		`/leases/${leaseId}`
+	);
+	expect(lease.status).toBe('ended');
+	const owed = lease.rentDues.filter((d) => d.status !== 'waived').reduce((s, d) => s + d.amountDue - d.amountPaid, 0);
+	if (owed > 0) await pay(request, agency, leaseId, owed);
 }
 
 async function open(browser: Browser, options: BrowserContextOptions, who: Person, target: string) {
@@ -126,7 +147,13 @@ async function open(browser: Browser, options: BrowserContextOptions, who: Perso
 }
 
 /** Un élément de l'état des lieux : constat (sortie), description ; enregistré sur l'appareil en quittant le champ. */
-async function fillElement(page: Page, element: string, finding: 'normal_wear' | 'tenant_damage' | 'landlord_defect', text: string, nth = 0) {
+async function fillElement(
+	page: Page,
+	element: string,
+	finding: 'normal_wear' | 'tenant_damage' | 'landlord_defect',
+	text: string,
+	nth = 0
+) {
 	const card = page.locator(`[data-testid="element"][data-element="${element}"]`).nth(nth);
 	await card.getByTestId(`constat-${finding}`).check();
 	await card.getByTestId('description').fill(text);
@@ -142,11 +169,10 @@ async function addRoom(page: Page, room: string) {
 }
 
 async function exitView(request: APIRequestContext, agency: Agency, leaseId: string) {
-	return get<{ inspections: { id: string; type: string; status: string; items: unknown[] }[]; settlements: { status: string; refund: number }[] }>(
-		request,
-		agency.headers,
-		`/leases/${leaseId}/exit`
-	);
+	return get<{
+		inspections: { id: string; type: string; status: string; items: unknown[] }[];
+		settlements: { status: string; refund: number }[];
+	}>(request, agency.headers, `/leases/${leaseId}/exit`);
 }
 
 test.describe('Sortie complète, du préavis à la restitution, sur les trois appareils', () => {
@@ -198,13 +224,14 @@ test.describe('Sortie complète, du préavis à la restitution, sur les trois ap
 			await synced(page, 20_000);
 			await expect(page.getByTestId('edl-fige')).toBeVisible({ timeout: 20_000 });
 			await expect
-				.poll(async () => (await exitView(request, agency, leaseId)).inspections.find((i) => i.type === 'exit')?.status, { timeout: 20_000 })
+				.poll(async () => (await exitView(request, agency, leaseId)).inspections.find((i) => i.type === 'exit')?.status, {
+					timeout: 20_000
+				})
 				.toBe('signed_both');
 
 			// 3. À la date de sortie, la tâche du jour termine le bail (échéances suivantes abandonnées, unité à remettre en
 			// état) ; puis le décompte : retenue impossible sans montant ni devis ; deux réparations justifiées ; 85 000 restitués.
-			expect(runDaily().ended).toBeGreaterThanOrEqual(1);
-			expect((await get<{ status: string }>(request, agency.headers, `/leases/${leaseId}`)).status).toBe('ended');
+			await endAndSettleRent(request, agency, leaseId);
 			await page.getByTestId('terminer-edl').click();
 			await page.getByTestId('ouvrir-decompte').click();
 			await page.getByTestId('preparer-decompte').click();
@@ -221,7 +248,10 @@ test.describe('Sortie complète, du préavis à la restitution, sur les trois ap
 				await expect(form.getByTestId('enregistrer-reparation')).toBeDisabled();
 				await form.getByTestId('reparation-montant').fill(amount);
 				await expect(form.getByTestId('enregistrer-reparation')).toBeDisabled();
-				await form.getByTestId('reparation-devis').getByTestId('justificatif-fichiers').setInputFiles({ name: 'devis.pdf', mimeType: 'application/pdf', buffer: await pdf() });
+				await form
+					.getByTestId('reparation-devis')
+					.getByTestId('justificatif-fichiers')
+					.setInputFiles({ name: 'devis.pdf', mimeType: 'application/pdf', buffer: await pdf() });
 				await expect(form.getByTestId('retenue-impossible')).toHaveCount(0);
 				await form.getByTestId('enregistrer-reparation').click();
 				await expect(form).toBeHidden({ timeout: 20_000 });
@@ -254,7 +284,9 @@ test.describe('Sortie complète, du préavis à la restitution, sur les trois ap
 			// 4. Bail terminé par la tâche du jour : l'unité est à remettre en état, jamais disponible avant d'être prête.
 			await page.goto('/app/sorties');
 			await synced(page, 20_000);
-			const card = page.getByTestId('unite-a-remettre').filter({ hasText: (await get<{ label: string }>(request, agency.headers, `/units/${unitId}`)).label });
+			const card = page
+				.getByTestId('unite-a-remettre')
+				.filter({ hasText: (await get<{ label: string }>(request, agency.headers, `/units/${unitId}`)).label });
 			await expect(card).toBeVisible({ timeout: 20_000 });
 			await expect(card).toContainText('Pas disponible');
 			await expect(page.getByTestId('sortie-close')).toHaveCount(1);
@@ -263,7 +295,11 @@ test.describe('Sortie complète, du préavis à la restitution, sur les trois ap
 			await card.getByTestId('declarer-prete').click();
 			await expect(card).toHaveCount(0, { timeout: 20_000 });
 			await synced(page, 20_000);
-			await expect.poll(async () => (await get<{ technicalStatus: string }>(request, agency.headers, `/units/${unitId}`)).technicalStatus, { timeout: 20_000 }).toBe('ready');
+			await expect
+				.poll(async () => (await get<{ technicalStatus: string }>(request, agency.headers, `/units/${unitId}`)).technicalStatus, {
+					timeout: 20_000
+				})
+				.toBe('ready');
 			await ctx.close();
 		});
 	}
@@ -313,7 +349,7 @@ test.describe('Décompte contesté', () => {
 			estimatedAmount: 30000,
 			quoteDocumentId: quote
 		});
-		expect(runDaily().ended).toBeGreaterThanOrEqual(1);
+		await endAndSettleRent(request, agency, leaseId);
 		const settlement = (await post(request, agency.headers, `/deposit-accounts/${accountId}/settlement`, {})) as { id: string };
 		await post(request, agency.headers, `/deposit-settlements/${settlement.id}/propose`, {});
 
@@ -335,10 +371,15 @@ test.describe('Décompte contesté', () => {
 		await expectNoHorizontalOverflow(page, 'Décompte contesté (ordinateur)');
 		await page.getByTestId('clore-issue').click();
 		await page.locator('#restitution-issue').selectOption('amicable_agreement');
-		await page.getByTestId('issue-document').getByTestId('justificatif-fichiers').setInputFiles({ name: 'accord.pdf', mimeType: 'application/pdf', buffer });
+		await page
+			.getByTestId('issue-document')
+			.getByTestId('justificatif-fichiers')
+			.setInputFiles({ name: 'accord.pdf', mimeType: 'application/pdf', buffer });
 		await page.getByTestId('enregistrer-restitution').click();
 		await expect(page.getByTestId('sortie-close')).toBeVisible({ timeout: 20_000 });
-		await expect.poll(async () => (await exitView(request, agency, leaseId)).settlements.at(-1)?.status, { timeout: 20_000 }).toBe('closed');
+		await expect
+			.poll(async () => (await exitView(request, agency, leaseId)).settlements.at(-1)?.status, { timeout: 20_000 })
+			.toBe('closed');
 		await ctx.close();
 	});
 
@@ -351,9 +392,23 @@ test.describe('Décompte contesté', () => {
 		const tenantId = newId();
 		await post(request, agency.headers, '/tenants', { id: tenantId, fullName: 'Rasmata Zongo', phone: '+22670445598' });
 		const leaseId = newId();
-		await post(request, agency.headers, '/leases', { id: leaseId, unitId, tenantId, startsOn: monthDay(ty, tm, -1, 1), rent: 75000, charges: 5000, lessorType: 'owner' });
+		await post(request, agency.headers, '/leases', {
+			id: leaseId,
+			unitId,
+			tenantId,
+			startsOn: monthDay(ty, tm, -1, 1),
+			rent: 75000,
+			charges: 5000,
+			lessorType: 'owner'
+		});
 		const accountId = newId();
-		await post(request, agency.headers, '/deposit-accounts', { id: accountId, leaseId, type: 'security_deposit', agreedAmount: 100000, holder: 'organization' });
+		await post(request, agency.headers, '/deposit-accounts', {
+			id: accountId,
+			leaseId,
+			type: 'security_deposit',
+			agreedAmount: 100000,
+			holder: 'organization'
+		});
 		await pay(request, agency, leaseId, 100000, { purpose: 'deposit', depositAccountId: accountId });
 		await post(request, agency.headers, `/leases/${leaseId}/notice`, {
 			id: newId(),
@@ -406,7 +461,12 @@ test.describe('État des lieux hors ligne par l’agent de terrain', () => {
 			await addRoom(page, room);
 			for (const element of elements) {
 				const damaged = room === 'Douche et WC' && element === 'shower';
-				await fillElement(page, element, damaged ? 'tenant_damage' : 'normal_wear', damaged ? 'Pommeau arraché, flexible coupé net' : `${room} : traces d’usage, rien de cassé`);
+				await fillElement(
+					page,
+					element,
+					damaged ? 'tenant_damage' : 'normal_wear',
+					damaged ? 'Pommeau arraché, flexible coupé net' : `${room} : traces d’usage, rien de cassé`
+				);
 				total += 1;
 			}
 			// Une photo prise sur place par pièce, gardée sur l'appareil.
