@@ -1244,7 +1244,7 @@ Quatre pull requests, chacune aussi envoyée sur `claude/lot10-sauvegarde` :
 ### Questions ouvertes pour le porteur
 Aucune.
 
-## Lot 10 bis — Sortie du locataire : préavis, états des lieux, décompte de caution, remise en état, transfert de gestion — en cours
+## Lot 10 bis — Sortie du locataire : préavis, états des lieux, décompte de caution, remise en état, transfert de gestion — terminé (étape 4 en relecture)
 
 Prompt : `prompts/lot-10bis-sortie-locataire.md`.
 
@@ -1344,3 +1344,19 @@ Prompt : `prompts/lot-10bis-sortie-locataire.md`.
   - synchronisation en lecture : `tenant_signed_recorded_by` (qui a saisi la case du locataire, pour le libellé) et `refund_alert` (alerte de restitution) ajoutées aux flux, au schéma local et à `docs/SYNC.md`.
 - **Tâche du jour dans Playwright** : `apps/api/scripts/e2e-leases-daily.mjs` lance la vraie tâche dans le worker des tests (base Redis n° 2) ; aucune dépendance ajoutée au web.
 - **Tests** : `e2e/sortie.spec.ts` (voir les critères ci-dessous) ; `profiles.test.ts` (entrée « Préavis et sorties ») ; `exit.int.test.ts` (photos et scan).
+- **`e2e/sortie.spec.ts`** (vraie API, vrai PowerSync, vrai worker) :
+  - sortie complète sur téléphone, tablette et ordinateur, par la gestion : « Préavis » depuis la fiche bail (délai de 3 mois affiché) ; état des lieux pièce par pièce (« Bon état » refusé et non enregistré) ; cases cochées, « Case cochée par … le … sur l'appareil de … », jamais « électronique » ; figé à la synchronisation ; tâche du jour à la date de sortie (bail terminé, mois de la sortie au prorata) ; décompte : retenue impossible tant que montant et devis manquent (bouton désactivé, message), deux réparations justifiées, **85 000 FCFA restitués** ; sur ordinateur, tableau et panneau des justificatifs, ailleurs des cartes ; proposition, acceptation, restitution (Mobile Money, référence), quatre mouvements ; unité « à remettre en état », « Pas disponible », déclarée prête, puis prête côté serveur ; sans débordement horizontal ;
+  - décompte contesté (ordinateur) : part non contestée de 70 000 FCFA, 70 001 refusés par le serveur, 70 000 restitués sans attendre, clôture avec l'issue (accord amiable) et son document ;
+  - imputation sur loyer (téléphone) : « il restera … pour couvrir d'éventuels dégâts », 40 000 FCFA gardés, accord proposé ;
+  - agent de terrain, téléphone, hors ligne : 4 pièces (32 éléments) avec une photo par pièce et les deux cases cochées, en moins de 15 minutes (mesuré) ; au retour du réseau, état des lieux signé des deux parties avec ses 32 lignes et 4 photos reçues ; jamais le décompte.
+
+### Critères d'acceptation
+- [x] Un gestionnaire (ici l'agent de terrain, le profil le plus restreint) réalise sur téléphone un état des lieux de sortie de 4 pièces avec photos, hors ligne, en moins de 15 minutes (`sortie.spec.ts`, durée mesurée).
+- [x] L'exemple du porteur produit un décompte de deux lignes justifiées et une restitution de 85 000 FCFA (fonction pure, base, API et écrans sur les trois appareils).
+- [x] Une unité ne réapparaît jamais comme disponible tant que le gestionnaire ne l'a pas déclarée prête (base, tâche du jour, liste « À remettre en état », `sortie.spec.ts`).
+- [x] Journal des lots mis à jour, avec les réponses du porteur aux questions ouvertes.
+
+### Dette technique et questions ouvertes (étape 4)
+- Le catalogue de l'organisation (`inspection_catalog_entries`) n'a pas encore d'écran d'édition : l'état des lieux propose les pièces et éléments par défaut de `packages/shared` (hors périmètre du prompt de l'étape).
+- La part non contestée affichée est la restitution proposée moins ce qui a déjà été restitué ; la plateforme n'arbitre pas le montant contesté.
+- Une photo arrivée après la signature n'est acceptée que si elle a été prise avant la dernière case cochée (heure de l'appareil, même confiance que l'heure d'une case cochée) ; jamais après un scan signé.
