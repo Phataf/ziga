@@ -86,6 +86,21 @@ interface Ctx {
 }
 
 const NOT_FOUND = (what: string, code: string) => new AppError(code, `${what} introuvable.`, 404);
+
+/**
+ * Photo prise sur place avant la signature, arrivée après elle (hors ligne, les cases cochées et les photos repartent
+ * ensemble) : acceptée si l'heure de prise de vue de l'appareil précède la dernière case cochée, dans les 30 jours qui
+ * suivent (même tolérance que l'heure d'une case cochée). Jamais un scan, jamais un état des lieux contesté.
+ */
+function takenBeforeSignature(
+	insp: { status: string; organizationSignedAt: Date | null; tenantSignedAt: Date | null },
+	input: { type: string; takenAt: string | null }
+): boolean {
+	if (insp.status !== 'signed_both' || input.type !== 'inspection_photo' || !input.takenAt) return false;
+	const signed = Math.max(insp.organizationSignedAt?.getTime() ?? 0, insp.tenantSignedAt?.getTime() ?? 0);
+	const taken = Date.parse(input.takenAt);
+	return signed > 0 && taken <= signed && Date.now() - signed < 30 * 86_400_000;
+}
 const LEASE_NOT_FOUND = () => NOT_FOUND('Bail', 'LEASE_NOT_FOUND');
 const INSPECTION_NOT_FOUND = () => NOT_FOUND('État des lieux', 'INSPECTION_NOT_FOUND');
 const SETTLEMENT_NOT_FOUND = () => NOT_FOUND('Décompte', 'SETTLEMENT_NOT_FOUND');
@@ -364,14 +379,23 @@ export class ExitService {
 	async inspectionDocument(inspectionId: string, input: InspectionDocumentData) {
 		const c = this.context();
 		const insp = await this.inspection(c, inspectionId);
-		if (insp.status !== 'draft') throw new AppError('INSPECTION_LOCKED', 'Un état des lieux signé ou contesté ne change plus.', 409);
+		if (insp.status !== 'draft' && !takenBeforeSignature(insp, input)) {
+			throw new AppError('INSPECTION_LOCKED', 'Un état des lieux signé ou contesté ne change plus.', 409);
+		}
 		if (input.inspectionItemId) {
 			const item = await this.item(c, input.inspectionItemId);
 			if (item.inspectionId !== inspectionId) throw NOT_FOUND('Ligne d’état des lieux', 'INSPECTION_ITEM_NOT_FOUND');
 		}
 		const lease = await this.lease(c, insp.leaseId);
 		const unit = await this.properties.getUnit(lease.unitId);
-		return this.documents.createForInspection({ ...input, propertyId: unit.propertyId, unitId: lease.unitId, leaseId: lease.id, inspectionId });
+		const { takenAt: _takenAt, ...file } = input;
+		return this.documents.createForInspection({
+			...file,
+			propertyId: unit.propertyId,
+			unitId: lease.unitId,
+			leaseId: lease.id,
+			inspectionId
+		});
 	}
 
 	/** Envoi du fichier (URL signée) puis réception contrôlée, pour un document de cet état des lieux seulement. */

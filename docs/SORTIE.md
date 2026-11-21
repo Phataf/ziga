@@ -113,10 +113,27 @@ Une ligne de décompte non justifiée est refusée avec son code (`RETENTION_*`,
 
 La source est la matrice de `packages/shared/src/permissions.ts` ; ce tableau la résume.
 
-## 9. Tests
+## 9. Écrans (étape 4)
+
+Lus sur l'appareil (aucun appel réseau pour afficher) ; l'état des lieux s'écrit hors ligne, le reste en ligne.
+
+| Écran | Chemin | Ce qu'il fait |
+| --- | --- | --- |
+| Fiche bail | `/app/baux/[id]` | bouton « Préavis » (congé : délai, fin du loyer et indemnité calculés comme le serveur, preuve facultative) ; « Ouvrir la sortie » |
+| Préavis et sorties | `/app/sorties` | sorties en cours (étape, alerte de restitution) et closes ; **unités à remettre en état** : « Pas disponible » tant qu'elles ne sont pas déclarées prêtes (« Mettre en travaux », « Déclarer prête ») |
+| Une sortie | `/app/sorties/[id]` | congé, états des lieux d'entrée et de sortie, comparaison, résumé du décompte ; l'agent de terrain n'y voit pas le décompte |
+| État des lieux | `/app/sorties/[id]/etat-des-lieux/[inspectionId]` | pièce par pièce (éléments proposés par pièce, ou ceux de l'entrée), constat et description par élément, enregistrés sur l'appareil dès qu'ils sont complets (« bon état » seul refusé), photos prises sur place, cases cochées ou scan signé, contestation et issue |
+| Comparaison | `/app/sorties/[id]/comparaison` | entrée et sortie côte à côte (`compareInspections`) |
+| Décompte | `/app/sorties/[id]/decompte` | lignes avec leur justificatif ou ce qui manque (refus nommé) ; sur ordinateur, tableau et panneau des justificatifs à droite ; réparation chiffrée seulement avec montant et devis ; accords (imputation sur loyer : ce qui restera pour les dégâts, part gardée ; réparation par le locataire) et décision ; proposition, acceptation, contestation, restitution de la part non contestée, clôture |
+| Transfert de gestion | `/app/transferts/[mandateId]` | assistant en quatre étapes depuis la fiche propriétaire : périmètre, dossier remis, caution, confirmation (`managementTransferPlan`) |
+
+**Photos et scan d'un état des lieux.** Pris sur place, réduits en JPEG (métadonnées retirées) et gardés sur l'appareil (file IndexedDB, vidée à la déconnexion), ils partent au retour du réseau par `POST /inspections/:id/documents` (puis `…/upload-url` et `…/uploaded`), ouverts à l'agent de terrain sur ses unités (`inspection.create`) sans le droit général de déposer des documents. Une photo pointe vers sa ligne ; le scan signe l'état des lieux. Hors ligne, cases cochées et photos repartent ensemble : une photo dont l'heure de prise de vue précède la dernière case cochée est reçue après la signature (dans les 30 jours) ; toute autre est refusée (`INSPECTION_LOCKED`).
+
+## 10. Tests
 
 - `packages/shared` : `deposit-settlement.test.ts`, `tenant-exit.test.ts` (règles pures, propriété sur 2 000 décomptes).
 - Base : `exit-db.int.test.ts`, `migration-0019.int.test.ts`.
 - API, synchronisation et worker : `exit.int.test.ts` (exemple du porteur de bout en bout ; tâche du jour rejouée ; imputation sur caution numérotée ; caution du propriétaire et relevé ; cases cochées ; contestation ; transfert ; accès croisé A/B sur chaque route et par l'appareil).
 - Worker seul : `exit-worker.int.test.ts` (l'API arrêtée ; points d'inscription remplis ; point vide : démarrage refusé, fin de bail annulée sans rien écrire ; fin de bail avec retour au crédit, rien de perdu, rejouée sans effet).
 - Flux PowerSync : `apps/web/e2e/exit-sync.spec.ts`.
+- Écrans : `apps/web/e2e/sortie.spec.ts` (sortie complète sur les trois appareils, cas contesté, imputation sur loyer, état des lieux hors ligne de l'agent de terrain), et la tâche du jour lancée dans le worker des tests (`apps/api/scripts/e2e-leases-daily.mjs`).

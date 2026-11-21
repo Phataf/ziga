@@ -27,16 +27,20 @@ export async function uploadExitDocument(
 ): Promise<string> {
 	const blob = await assemblePdf(files, title);
 	const id = newId();
-	const created = await organizations.call<{ document: DocumentView; upload: { url: string; headers: Record<string, string> } }>('POST', '/documents', {
-		id,
-		type,
-		leaseId: subject.leaseId,
-		propertyId: subject.propertyId ?? null,
-		unitId: subject.unitId ?? null,
-		fileName: `${title}.pdf`,
-		mimeType: 'application/pdf',
-		byteSize: blob.size
-	});
+	const created = await organizations.call<{ document: DocumentView; upload: { url: string; headers: Record<string, string> } }>(
+		'POST',
+		'/documents',
+		{
+			id,
+			type,
+			leaseId: subject.leaseId,
+			propertyId: subject.propertyId ?? null,
+			unitId: subject.unitId ?? null,
+			fileName: `${title}.pdf`,
+			mimeType: 'application/pdf',
+			byteSize: blob.size
+		}
+	);
 	const response = await fetch(created.upload.url, { method: 'PUT', body: blob, headers: { 'content-type': 'application/pdf' } });
 	if (!response.ok) throw new NetworkError();
 	const doc = await organizations.call<DocumentView>('POST', `/documents/${id}/uploaded`);

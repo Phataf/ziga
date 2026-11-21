@@ -147,7 +147,9 @@ class InspectionPhotoQueue {
 						inspectionItemId: f.inspectionItemId,
 						fileName: f.fileName,
 						mimeType: f.mimeType,
-						byteSize: f.blob.size
+						byteSize: f.blob.size,
+						// Heure de la prise de vue : une photo prise avant la signature est reçue même après elle.
+						takenAt: f.type === 'inspection_photo' ? new Date(f.createdAt).toISOString() : null
 					})
 					.catch((error: unknown) => {
 						// Réponse perdue : la fiche existe déjà (même identifiant), on reprend à l'envoi du fichier.

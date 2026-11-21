@@ -7,7 +7,7 @@
 	 * il porte l'alerte « Contrat non signé » (D20).
 	 */
 	import { onMount } from 'svelte';
-	import { Ban, CheckCircle2, CircleAlert, HandCoins, Pencil, Repeat2 } from '@lucide/svelte';
+	import { Ban, CheckCircle2, CircleAlert, HandCoins, LogOut, Pencil, Repeat2 } from '@lucide/svelte';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import type { DocumentView } from '@ziga/shared/documents';
@@ -31,6 +31,7 @@
 	import FormAlert from '#lib/components/auth/FormAlert.svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
 	import LeaseContractSection from '#lib/components/contracts/LeaseContractSection.svelte';
+	import NoticeForm from '#lib/components/exit/NoticeForm.svelte';
 	import DocumentsSection from '#lib/components/properties/DocumentsSection.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.ts';
 	import { Button } from '#lib/components/ui/button/index.ts';
@@ -76,6 +77,7 @@
 	let saved = $state<string | null>(null);
 	let panel = $state<'cancel' | 'rent' | `holder:${string}` | null>(null);
 	let form = $state<Record<string, string>>({});
+	let noticeOpen = $state(false);
 
 	onMount(() => {
 		const org = organizations.activeId;
@@ -352,6 +354,25 @@
 						</div>{/if}
 				</dl>
 			</details>
+			<!-- Lot 10 bis : congé (préavis) et sortie du locataire. -->
+			{#if (lease.status === 'active' && can(role, 'lease.notice')) || lease.status === 'notice' || lease.status === 'ended'}
+				<div class="flex flex-wrap gap-2">
+					{#if lease.status === 'active' && can(role, 'lease.notice')}
+						<Button onclick={() => (noticeOpen = true)} disabled={!sync.online} data-testid="preavis"
+							><LogOut aria-hidden="true" />{fr.exit.notice.action}</Button
+						>
+					{/if}
+					{#if lease.status === 'notice' || lease.status === 'ended'}
+						<Button variant="outline" href={resolve('/app/sorties/[id]', { id: lease.id })} data-testid="ouvrir-sortie"
+							><LogOut aria-hidden="true" />{fr.exit.open}</Button
+						>
+					{/if}
+				</div>
+				{#if lease.status === 'active' && can(role, 'lease.notice') && !sync.online}<p class="text-sm text-muted-foreground">
+						{fr.exit.onlineOnly}
+					</p>{/if}
+				<NoticeForm bind:open={noticeOpen} {lease} />
+			{/if}
 			{#if canUpdate}
 				<div class="flex flex-wrap gap-2">
 					{#if lease.status === 'draft'}

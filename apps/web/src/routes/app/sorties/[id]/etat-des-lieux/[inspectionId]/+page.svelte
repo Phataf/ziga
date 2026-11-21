@@ -16,7 +16,13 @@
 	import { disputeSchema, disputeOutcomeSchema } from '@ziga/shared/exit-schemas';
 	import { newId } from '@ziga/shared/ids';
 	import { can } from '@ziga/shared/permissions';
-	import { DEFAULT_INSPECTION_ELEMENTS, DEFAULT_INSPECTION_ROOMS, inspectionItemBlocker, normalizeDescription, tenantRepairHints } from '@ziga/shared/tenant-exit';
+	import {
+		DEFAULT_INSPECTION_ELEMENTS,
+		DEFAULT_INSPECTION_ROOMS,
+		inspectionItemBlocker,
+		normalizeDescription,
+		tenantRepairHints
+	} from '@ziga/shared/tenant-exit';
 	import FormAlert from '#lib/components/auth/FormAlert.svelte';
 	import ReceiptPicker from '#lib/components/collections/ReceiptPicker.svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
@@ -27,7 +33,15 @@
 	import { messageOf } from '#lib/auth/forms.ts';
 	import { assemblePdf, uploadExitDocument } from '#lib/exit/documents.ts';
 	import { inspectionPhotoQueue } from '#lib/exit/photo-queue.svelte.ts';
-	import { elementLabel, roomTemplate, signatureView, toInspection, toItem, type LocalInspection, type LocalItem } from '#lib/exit/views.ts';
+	import {
+		elementLabel,
+		roomTemplate,
+		signatureView,
+		toInspection,
+		toItem,
+		type LocalInspection,
+		type LocalItem
+	} from '#lib/exit/views.ts';
 	import { fr } from '#lib/i18n/fr.ts';
 	import { toTenant } from '#lib/leases/views.ts';
 	import { organizations } from '#lib/org/organizations.svelte.ts';
@@ -58,7 +72,12 @@
 		const o = organizations.activeId;
 		const onError = (error: Error) => (message = messageOf(error));
 		const stops = [
-			sync.watch<Row>(LOCAL_QUERIES.inspection, [o, inspectionId], (r) => ((inspection = r[0] ? toInspection(r[0]) : null), (loaded = true)), onError),
+			sync.watch<Row>(
+				LOCAL_QUERIES.inspection,
+				[o, inspectionId],
+				(r) => ((inspection = r[0] ? toInspection(r[0]) : null), (loaded = true)),
+				onError
+			),
 			sync.watch<Row>(LOCAL_QUERIES.leaseInspectionItems, [o, leaseId], (r) => (allItems = r.map(toItem)), onError),
 			sync.watch<Row>(
 				LOCAL_QUERIES.leaseInspections,
@@ -139,7 +158,15 @@
 				delete edits[c.id];
 			} else {
 				await addInspectionItems(await db(), org!, inspectionId, [
-					{ id: c.id, room: c.room, element: c.element, position: c.position, description: text, finding: c.finding, entryItemId: c.entryItemId }
+					{
+						id: c.id,
+						room: c.room,
+						element: c.element,
+						position: c.position,
+						description: text,
+						finding: c.finding,
+						entryItemId: c.entryItemId
+					}
 				]);
 				drafts = drafts.filter((d) => d.id !== c.id);
 			}
@@ -181,7 +208,9 @@
 		if (!name) return;
 		// L'état des lieux d'entrée de la même pièce donne les éléments à revoir ; sinon, ceux proposés pour la pièce.
 		const fromEntry = entryItems.filter((e) => normalizeDescription(e.room) === normalizeDescription(name));
-		const elements = fromEntry.length ? fromEntry.map((e) => ({ element: e.element, entryItemId: e.id })) : roomTemplate(name).map((e) => ({ element: e, entryItemId: null }));
+		const elements = fromEntry.length
+			? fromEntry.map((e) => ({ element: e.element, entryItemId: e.id }))
+			: roomTemplate(name).map((e) => ({ element: e, entryItemId: null }));
 		const start = nextPosition;
 		drafts = [
 			...drafts,
@@ -203,7 +232,15 @@
 		if (!room) return;
 		drafts = [
 			...drafts,
-			{ id: newId(), room, element: newElement, position: nextPosition, description: '', finding: null, entryItemId: entryByKey.get(key(room, newElement))?.id ?? null }
+			{
+				id: newId(),
+				room,
+				element: newElement,
+				position: nextPosition,
+				description: '',
+				finding: null,
+				entryItemId: entryByKey.get(key(room, newElement))?.id ?? null
+			}
 		];
 	}
 
@@ -370,8 +407,7 @@
 					value={description(c)}
 					oninput={(e) => setText(c, (e.currentTarget as HTMLTextAreaElement).value)}
 					onblur={() => persist({ ...c, description: description(c) })}
-					data-testid="description"
-				></textarea>
+					data-testid="description"></textarea>
 				<p class="text-sm text-muted-foreground">{t.descriptionHint}</p>
 			</div>
 			{#if blocker && description(c).trim()}
@@ -389,7 +425,15 @@
 				{#if c.saved}
 					<label class={fileLabel}>
 						<Camera class="size-5" aria-hidden="true" />{t.takePhoto}
-						<input type="file" accept="image/*" capture="environment" multiple class="sr-only" onchange={(e) => takePhoto(c, e)} data-testid="photo" />
+						<input
+							type="file"
+							accept="image/*"
+							capture="environment"
+							multiple
+							class="sr-only"
+							onchange={(e) => takePhoto(c, e)}
+							data-testid="photo"
+						/>
 					</label>
 				{/if}
 				<Button variant="ghost" onclick={() => remove(c)}><Trash2 class="size-5" aria-hidden="true" />{t.removeElement}</Button>
@@ -400,18 +444,26 @@
 		{/if}
 		{#if queued.length || sent}
 			<div class="space-y-1" data-testid="photos-element">
-				<p class="text-sm text-muted-foreground">{t.photos} · {t.photoCount(queued.length + sent)}{sent ? ` · ${t.photoSent(sent)}` : ''}</p>
+				<p class="text-sm text-muted-foreground">
+					{t.photos} · {t.photoCount(queued.length + sent)}{sent ? ` · ${t.photoSent(sent)}` : ''}
+				</p>
 				<ul class="flex flex-wrap gap-2">
 					{#each queued as q (q.id)}
 						<li class="space-y-1">
 							{#if inspectionPhotoQueue.previews[q.id]}
-								<img src={inspectionPhotoQueue.previews[q.id]} alt="{t.photos} — {elementLabel(c.element)}" class="size-20 rounded-lg object-cover" />
+								<img
+									src={inspectionPhotoQueue.previews[q.id]}
+									alt="{t.photos} — {elementLabel(c.element)}"
+									class="size-20 rounded-lg object-cover"
+								/>
 							{/if}
 							{#if q.error}
 								<p class="max-w-40 text-sm text-destructive">{t.photoRefused(q.error)}</p>
 								<Button variant="ghost" onclick={() => inspectionPhotoQueue.remove(q.id)}>{t.photoDiscard}</Button>
 							{:else}
-								<p class="text-sm text-muted-foreground" data-testid="photo-en-attente">{inspectionPhotoQueue.sending === q.id ? t.photoSending : t.photoQueued}</p>
+								<p class="text-sm text-muted-foreground" data-testid="photo-en-attente">
+									{inspectionPhotoQueue.sending === q.id ? t.photoSending : t.photoQueued}
+								</p>
 							{/if}
 						</li>
 					{/each}
@@ -439,7 +491,9 @@
 				{#each rooms as r, i (r)}
 					<button
 						type="button"
-						class="min-h-11 shrink-0 rounded-full border-2 px-4 font-medium {r === room ? 'border-primary bg-primary text-primary-foreground' : 'border-input bg-card hover:bg-accent'}"
+						class="min-h-11 shrink-0 rounded-full border-2 px-4 font-medium {r === room
+							? 'border-primary bg-primary text-primary-foreground'
+							: 'border-input bg-card hover:bg-accent'}"
 						aria-pressed={r === room}
 						onclick={() => (roomIndex = i)}
 						data-testid="piece-{i}">{r}</button
@@ -469,8 +523,11 @@
 					<Button variant="outline" disabled={rooms.indexOf(room) === 0} onclick={() => (roomIndex = rooms.indexOf(room) - 1)}
 						><ChevronLeft class="size-5" aria-hidden="true" />{t.previousRoom}</Button
 					>
-					<Button variant="outline" disabled={rooms.indexOf(room) === rooms.length - 1} onclick={() => (roomIndex = rooms.indexOf(room) + 1)} data-testid="piece-suivante"
-						>{t.nextRoom}<ChevronRight class="size-5" aria-hidden="true" /></Button
+					<Button
+						variant="outline"
+						disabled={rooms.indexOf(room) === rooms.length - 1}
+						onclick={() => (roomIndex = rooms.indexOf(room) + 1)}
+						data-testid="piece-suivante">{t.nextRoom}<ChevronRight class="size-5" aria-hidden="true" /></Button
 					>
 				</div>
 			</section>
@@ -515,7 +572,9 @@
 			</ul>
 			{#if signatures?.scan}<p class="text-base" data-testid="libelle-scan">{signatures.scan}</p>{/if}
 			{#if inspection.status === 'draft' && signatures?.complete}<p class="text-base">{t.waitingServer}</p>{/if}
-			{#if inspection.status === 'signed_both'}<p class="flex items-center gap-2 text-base font-medium" data-testid="edl-fige"><CircleCheck class="size-5 text-primary" aria-hidden="true" />{t.signed}</p>{/if}
+			{#if inspection.status === 'signed_both'}<p class="flex items-center gap-2 text-base font-medium" data-testid="edl-fige">
+					<CircleCheck class="size-5 text-primary" aria-hidden="true" />{t.signed}
+				</p>{/if}
 			{#if canSign && !inspection.scanDocumentId}
 				{#if queuedScan}
 					<p class="text-base text-muted-foreground">{queuedScan.error ? t.photoRefused(queuedScan.error) : t.scanQueued}</p>
@@ -531,8 +590,12 @@
 				<h2 id="titre-contestation" class="text-lg font-semibold">{t.dispute}</h2>
 				{#if inspection.status === 'disputed'}
 					<p class="text-base">{t.disputed}</p>
-					{#if inspection.tenantObservations}<p class="text-base break-words">{fr.exit.agreements.parties.tenant} : {inspection.tenantObservations}</p>{/if}
-					{#if inspection.organizationObservations}<p class="text-base break-words">{fr.exit.agreements.parties.organization} : {inspection.organizationObservations}</p>{/if}
+					{#if inspection.tenantObservations}<p class="text-base break-words">
+							{fr.exit.agreements.parties.tenant} : {inspection.tenantObservations}
+						</p>{/if}
+					{#if inspection.organizationObservations}<p class="text-base break-words">
+							{fr.exit.agreements.parties.organization} : {inspection.organizationObservations}
+						</p>{/if}
 					{#if inspection.disputeOutcome}
 						<Badge variant="info">{t.outcomes[inspection.disputeOutcome]}</Badge>
 					{:else if can(role, 'deposit.settle')}
@@ -554,7 +617,11 @@
 						<option value="organization">{organizations.active?.name}</option>
 					</select>
 					<label for="observations-edl" class="text-base font-medium">{t.observations}</label>
-					<textarea id="observations-edl" class="min-h-20 w-full rounded-lg border bg-background p-3 text-base" maxlength={2000} bind:value={observations}></textarea>
+					<textarea
+						id="observations-edl"
+						class="min-h-20 w-full rounded-lg border bg-background p-3 text-base"
+						maxlength={2000}
+						bind:value={observations}></textarea>
 					<Button type="submit" variant="outline" disabled={busy || !sync.online}>{t.disputeSubmit}</Button>
 					{#if !sync.online}<p class="text-sm text-muted-foreground">{fr.exit.onlineOnly}</p>{/if}
 				</form>

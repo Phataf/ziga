@@ -71,7 +71,9 @@
 							<td class="px-4 py-3">{r.entry?.description ?? t.absent}</td>
 							<td class="px-4 py-3">
 								{#if r.exit}
-									{#if finding(r.exit.finding)}<Badge variant={r.exit.finding === 'tenant_damage' ? 'warning' : 'secondary'}>{finding(r.exit.finding)}</Badge>{/if}
+									{#if finding(r.exit.finding)}<Badge variant={r.exit.finding === 'tenant_damage' ? 'warning' : 'secondary'}
+											>{finding(r.exit.finding)}</Badge
+										>{/if}
 									<span class="block">{r.exit.description}</span>
 								{:else}{t.absent}{/if}
 							</td>
@@ -93,7 +95,9 @@
 						<div class="rounded-lg bg-muted p-3">
 							<p class="text-sm text-muted-foreground">{t.exit}</p>
 							{#if r.exit}
-								{#if finding(r.exit.finding)}<Badge variant={r.exit.finding === 'tenant_damage' ? 'warning' : 'secondary'}>{finding(r.exit.finding)}</Badge>{/if}
+								{#if finding(r.exit.finding)}<Badge variant={r.exit.finding === 'tenant_damage' ? 'warning' : 'secondary'}
+										>{finding(r.exit.finding)}</Badge
+									>{/if}
 								<p class="text-base break-words">{r.exit.description}</p>
 							{:else}<p class="text-base">{t.absent}</p>{/if}
 						</div>

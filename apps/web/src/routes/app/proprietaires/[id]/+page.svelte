@@ -285,8 +285,10 @@
 							/>
 							<!-- Lot 10 bis : transfert de gestion guidé (D16, règle 12). -->
 							{#if can(role, 'management.transfer') && m.type === 'rental_management' && m.status === 'active'}
-								<Button variant="outline" href={resolve('/app/transferts/[mandateId]', { mandateId: m.id })} data-testid="transferer-gestion"
-									>{fr.exit.transfer.action}</Button
+								<Button
+									variant="outline"
+									href={resolve('/app/transferts/[mandateId]', { mandateId: m.id })}
+									data-testid="transferer-gestion">{fr.exit.transfer.action}</Button
 								>
 							{/if}
 						</div>

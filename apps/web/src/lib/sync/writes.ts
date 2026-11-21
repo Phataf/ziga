@@ -718,12 +718,18 @@ export async function addInspectionItems(
 	items: readonly InspectionItemData[]
 ): Promise<void> {
 	await db.writeTransaction(async (tx) => {
-		for (const i of items) await insert(tx, 'inspection_items', { id: i.id, organization_id: organizationId, inspection_id: inspectionId, ...itemColumns(i) });
+		for (const i of items)
+			await insert(tx, 'inspection_items', { id: i.id, organization_id: organizationId, inspection_id: inspectionId, ...itemColumns(i) });
 	});
 }
 
 /** Description, constat… : seuls les champs modifiés partent (PATCH) ; refusés par le serveur une fois signé. */
-export async function updateInspectionItem(db: PowerSyncDatabase, organizationId: string, id: string, i: UpdateInspectionItemData): Promise<void> {
+export async function updateInspectionItem(
+	db: PowerSyncDatabase,
+	organizationId: string,
+	id: string,
+	i: UpdateInspectionItemData
+): Promise<void> {
 	const row = itemColumns(i);
 	if (!Object.keys(row).length) return;
 	await db.writeTransaction((tx) => update(tx, 'inspection_items', id, organizationId, row));
@@ -745,6 +751,12 @@ export async function checkInspection(
 	at: Date = new Date()
 ): Promise<void> {
 	await db.writeTransaction((tx) =>
-		update(tx, 'inspections', id, organizationId, party === 'organization' ? { organization_signed_at: at.toISOString() } : { tenant_signed_at: at.toISOString() })
+		update(
+			tx,
+			'inspections',
+			id,
+			organizationId,
+			party === 'organization' ? { organization_signed_at: at.toISOString() } : { tenant_signed_at: at.toISOString() }
+		)
 	);
 }

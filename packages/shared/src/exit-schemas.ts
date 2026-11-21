@@ -138,7 +138,16 @@ export const inspectionDocumentSchema = z
 				error: 'Nom du fichier invalide.'
 			}),
 		mimeType: z.enum(UPLOAD_MIME_TYPES, { error: 'Format refusé : PDF, JPEG, PNG, WebP ou HEIC.' }),
-		byteSize: z.number().int().min(1, { error: 'Fichier vide.' }).max(MAX_UPLOAD_BYTES, { error: 'Document trop lourd : 10 Mo au plus.' })
+		byteSize: z.number().int().min(1, { error: 'Fichier vide.' }).max(MAX_UPLOAD_BYTES, { error: 'Document trop lourd : 10 Mo au plus.' }),
+		/**
+		 * Heure de la prise de vue sur l'appareil (photo). Une photo prise avant la signature peut arriver après elle :
+		 * hors ligne, les cases cochées et les photos repartent ensemble au retour du réseau.
+		 */
+		takenAt: z
+			.string()
+			.refine((v) => !Number.isNaN(Date.parse(v)), { error: 'Date invalide.' })
+			.nullish()
+			.transform((v) => v ?? null)
 	})
 	.refine((d) => (d.type === 'inspection_photo') === (d.inspectionItemId !== null), {
 		error: 'Une photo se rattache à une ligne ; le scan, à l’état des lieux.',

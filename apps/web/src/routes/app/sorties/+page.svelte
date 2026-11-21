@@ -183,7 +183,11 @@
 		<ul class="divide-y rounded-xl border bg-card">
 			{#each closed as r (r.id)}
 				<li>
-					<a href={resolve('/app/sorties/[id]', { id: String(r.id) })} class="flex min-h-16 items-center gap-3 p-3 hover:bg-accent" data-testid="sortie-close">
+					<a
+						href={resolve('/app/sorties/[id]', { id: String(r.id) })}
+						class="flex min-h-16 items-center gap-3 p-3 hover:bg-accent"
+						data-testid="sortie-close"
+					>
 						<CircleCheck class="size-6 shrink-0 text-primary" aria-hidden="true" />
 						<span class="min-w-0 flex-1">
 							<span class="block font-semibold break-words">{r.tenant_name} · {r.unit_label}</span>

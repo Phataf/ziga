@@ -45,12 +45,19 @@ describe('navigation par profil (docs/UX.md §2)', () => {
 			'Impayés',
 			'Propriétaires',
 			'Locataires',
+			'Préavis et sorties',
 			'Dépenses',
 			'Relevés propriétaires',
 			'Contrats',
 			'À valider',
 			'Équipe'
 		]);
+	});
+
+	it('lot 10 bis : « Préavis et sorties » pour tous les profils d’organisation, l’agent de terrain compris (états des lieux de ses unités)', () => {
+		const has = (id: keyof typeof profiles) => profiles[id].nav.some((i) => i.href === '/app/sorties');
+		expect((['director', 'manager', 'viewer', 'landlord', 'field_agent'] as const).map(has)).toEqual([true, true, true, true, true]);
+		expect([has('owner'), has('tenant')]).toEqual([false, false]);
 	});
 
 	it('lot 08 bis : « Contrats » pour la direction, la gestion et le bailleur ; ni pour le profil lecture ni pour l’agent', () => {

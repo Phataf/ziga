@@ -45,7 +45,9 @@
 		if (blocker) return void (message = t.blockers[blocker] ?? null);
 		busy = true;
 		try {
-			const proofDocumentId = files.length ? await uploadExitDocument('notice_proof', { leaseId: lease.id }, files, 'Preuve du congé') : null;
+			const proofDocumentId = files.length
+				? await uploadExitDocument('notice_proof', { leaseId: lease.id }, files, 'Preuve du congé')
+				: null;
 			const parsed = recordNoticeSchema.safeParse({
 				id: newId(),
 				origin,

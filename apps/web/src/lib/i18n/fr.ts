@@ -2193,7 +2193,8 @@ export const fr = {
 			} as Record<string, string>,
 			remaining: (n: number) => (n === 1 ? '1 élément à compléter avant de signer.' : `${n} éléments à compléter avant de signer.`),
 			signatures: 'Signatures',
-			signHint: 'Chaque partie coche sa case sur cet appareil, ou vous déposez le scan signé à la main. Une case cochée n’est jamais une signature électronique.',
+			signHint:
+				'Chaque partie coche sa case sur cet appareil, ou vous déposez le scan signé à la main. Une case cochée n’est jamais une signature électronique.',
 			checkOrganization: (org: string) => `Case de ${org}`,
 			checkTenant: (tenant: string) => `Case de ${tenant}`,
 			check: 'Cocher la case',
@@ -2254,7 +2255,10 @@ export const fr = {
 			repairAmount: 'Montant (FCFA)',
 			repairQuote: 'Devis ou facture',
 			repairPerformer: 'Qui répare ?',
-			performers: { organization: 'L’organisation (dépense supportée par le locataire)', tenant: 'Le locataire, sur accord écrit' } as Record<string, string>,
+			performers: {
+				organization: 'L’organisation (dépense supportée par le locataire)',
+				tenant: 'Le locataire, sur accord écrit'
+			} as Record<string, string>,
 			repairSubmit: 'Ajouter la réparation',
 			repairRefused: 'Sans montant ni justificatif, aucune retenue n’est possible.',
 			noDamage: 'Aucun élément classé « imputable au locataire » : aucune retenue possible.',
@@ -2272,7 +2276,10 @@ export const fr = {
 			refundAmount: 'Montant restitué',
 			refundOn: 'Date de la restitution',
 			refundedBy: 'Restituée par',
-			refundedByOptions: { organization: (org: string) => org, owner: 'Le propriétaire (restitution enregistrée, jamais exécutée par la plateforme)' },
+			refundedByOptions: {
+				organization: (org: string) => org,
+				owner: 'Le propriétaire (restitution enregistrée, jamais exécutée par la plateforme)'
+			},
 			method: 'Moyen',
 			methods: {
 				cash: 'Espèces',
@@ -2320,7 +2327,8 @@ export const fr = {
 			newSelfRepair: 'Le locataire répare lui-même',
 			months: 'Mois couverts',
 			keep: 'Part gardée pour d’éventuels dégâts (FCFA)',
-			plan: (applied: string, remaining: string) => `La caution paiera ${applied} de loyers ; il restera ${remaining} pour couvrir d’éventuels dégâts.`,
+			plan: (applied: string, remaining: string) =>
+				`La caution paiera ${applied} de loyers ; il restera ${remaining} pour couvrir d’éventuels dégâts.`,
 			nothingLeft: 'Toute la caution part en loyers : plus rien ne couvrira les dégradations.',
 			uncovered: (month: string, amount: string) => `${month} : ${amount} resteront dus.`,
 			beforeMonths: 'L’accord doit être accepté avant le début des mois couverts.',
@@ -2351,7 +2359,12 @@ export const fr = {
 			itemsDefault: ['Bail signé', 'Fiche du locataire', 'États des lieux', 'Reçus de caution'],
 			addItem: 'Ajouter une pièce',
 			note: 'Note (facultative)',
-			leases: (n: number) => (n === 0 ? 'Aucun bail en cours sur ce périmètre.' : n === 1 ? '1 bail sera terminé chez vous.' : `${n} baux seront terminés chez vous.`),
+			leases: (n: number) =>
+				n === 0
+					? 'Aucun bail en cours sur ce périmètre.'
+					: n === 1
+						? '1 bail sera terminé chez vous.'
+						: `${n} baux seront terminés chez vous.`,
 			depositChange: (amount: string, manager: string) => `Caution de ${amount} : nouveau détenteur ${manager} (nommé en texte).`,
 			noDeposit: 'Aucune caution à transmettre.',
 			endMandate: 'Le mandat de gestion prend fin.',

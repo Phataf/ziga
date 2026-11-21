@@ -175,7 +175,12 @@ export interface SignatureView {
  */
 export function signatureView(
 	i: LocalInspection,
-	ctx: { names: ReadonlyMap<string, string>; tenantName: string; me: { id: string; name: string }; scanUploader?: { name: string; at: string } }
+	ctx: {
+		names: ReadonlyMap<string, string>;
+		tenantName: string;
+		me: { id: string; name: string };
+		scanUploader?: { name: string; at: string };
+	}
 ): SignatureView {
 	const name = (id: string | null) => (id ? (ctx.names.get(id) ?? (id === ctx.me.id ? ctx.me.name : '—')) : ctx.me.name);
 	const organization = i.organizationSignedAt
@@ -188,7 +193,10 @@ export function signatureView(
 	const tenant = i.tenantSignedAt
 		? inspectionCheckboxLabel({ signerName: ctx.tenantName, signedAt: i.tenantSignedAt, deviceOwnerName: name(i.tenantSignedRecordedBy) })
 		: null;
-	const scan = i.scanDocumentId && ctx.scanUploader ? inspectionScanLabel({ uploaderName: ctx.scanUploader.name, uploadedAt: ctx.scanUploader.at }) : null;
+	const scan =
+		i.scanDocumentId && ctx.scanUploader
+			? inspectionScanLabel({ uploaderName: ctx.scanUploader.name, uploadedAt: ctx.scanUploader.at })
+			: null;
 	return { organization, tenant, scan, complete: !!i.scanDocumentId || (!!organization && !!tenant) };
 }
 
@@ -373,10 +381,7 @@ export function lineProof(
 /** Étape d'une sortie, pour la liste : préavis, état des lieux, décompte, restitution, close. */
 export type ExitStage = 'notice' | 'inspection' | 'settlement' | 'disputed' | 'closed';
 
-export function exitStage(ctx: {
-	exitInspection: LocalInspection | null;
-	settlement: LocalSettlement | null;
-}): ExitStage {
+export function exitStage(ctx: { exitInspection: LocalInspection | null; settlement: LocalSettlement | null }): ExitStage {
 	if (ctx.settlement?.status === 'closed') return 'closed';
 	if (ctx.settlement?.status === 'disputed' || ctx.exitInspection?.status === 'disputed') return 'disputed';
 	if (ctx.settlement) return 'settlement';

@@ -12,7 +12,14 @@
 	import { page } from '$app/state';
 	import { formatDate, toIsoDate } from '@ziga/shared/dates';
 	import { agreementPlan, DISPUTE_OUTCOMES } from '@ziga/shared/deposit-settlement';
-	import { createAgreementSchema, createRepairSchema, decideAgreementSchema, disputeSchema, REFUND_METHODS, refundSchema } from '@ziga/shared/exit-schemas';
+	import {
+		createAgreementSchema,
+		createRepairSchema,
+		decideAgreementSchema,
+		disputeSchema,
+		REFUND_METHODS,
+		refundSchema
+	} from '@ziga/shared/exit-schemas';
 	import { newId } from '@ziga/shared/ids';
 	import type { DepositAccountView, DepositMovementView, LeaseView, RentDueView } from '@ziga/shared/leases';
 	import { formatFcfa, parseFcfa } from '@ziga/shared/money';
@@ -109,7 +116,9 @@
 	const agreementById = $derived(new Map(agreements.map((a) => [a.id, a])));
 	const itemById = $derived(new Map(items.map((i) => [i.id, i])));
 	const exitInspection = $derived(inspections.find((i) => i.type === 'exit') ?? null);
-	const damaged = $derived(exitInspection ? items.filter((i) => i.inspectionId === exitInspection.id && i.finding === 'tenant_damage') : []);
+	const damaged = $derived(
+		exitInspection ? items.filter((i) => i.inspectionId === exitInspection.id && i.finding === 'tenant_damage') : []
+	);
 	const accountMovements = $derived(account ? movements.filter((m) => m.accountId === account.id) : []);
 	const alreadyRefunded = $derived(accountMovements.filter((m) => m.type === 'refunded').reduce((s, m) => s + m.amount, 0));
 	const refundRemaining = $derived(settlement ? Math.max(0, settlement.refund - alreadyRefunded) : 0);
@@ -182,7 +191,12 @@
 		if (!repairJustified) return void (message = t.repairRefused);
 		const ok = await act(async () => {
 			const quoteDocumentId = repairFiles.length
-				? await uploadExitDocument('repair_quote', { leaseId, propertyId: unit?.propertyId, unitId: unit?.id }, repairFiles, 'Devis de réparation')
+				? await uploadExitDocument(
+						'repair_quote',
+						{ leaseId, propertyId: unit?.propertyId, unitId: unit?.id },
+						repairFiles,
+						'Devis de réparation'
+					)
 				: null;
 			const parsed = createRepairSchema.parse({
 				id: newId(),
@@ -207,14 +221,15 @@
 	let agreementProposedBy = $state<'tenant' | 'organization' | 'owner'>('tenant');
 	let agreementProposedOn = $state(today);
 	let agreementText = $state('');
-	let agreementFiles = $state<File[]>([]);
 	const openDues = $derived(dues.filter((d) => d.status !== 'waived' && d.status !== 'paid' && d.balance > 0));
 	const held = $derived(settlement ? settlement.received - alreadyRefunded : (account?.balances.held ?? 0));
 	const plan = $derived(
 		agreementPlan({
 			held,
 			keep: Math.min(parseFcfa(agreementKeep) ?? 0, held),
-			months: openDues.filter((d) => agreementMonths.includes(d.periodStart)).map((d) => ({ periodStart: d.periodStart, outstanding: d.balance }))
+			months: openDues
+				.filter((d) => agreementMonths.includes(d.periodStart))
+				.map((d) => ({ periodStart: d.periodStart, outstanding: d.balance }))
 		})
 	);
 
@@ -225,7 +240,6 @@
 		agreementProposedBy = 'tenant';
 		agreementProposedOn = today;
 		agreementText = '';
-		agreementFiles = [];
 		agreementOpen = true;
 	}
 
@@ -272,7 +286,9 @@
 		if (!decideOf) return;
 		const a = decideOf;
 		const ok = await act(async () => {
-			const documentId = decisionFiles.length ? await uploadExitDocument('agreement_document', { leaseId }, decisionFiles, 'Accord écrit') : null;
+			const documentId = decisionFiles.length
+				? await uploadExitDocument('agreement_document', { leaseId }, decisionFiles, 'Accord écrit')
+				: null;
 			const parsed = decideAgreementSchema.parse({ decision, decidedByParty, decidedOn, reason: refusalReason, documentId });
 			await organizations.call('POST', `/agreements/${a.id}/decision`, parsed);
 			await refreshDraft();
@@ -289,7 +305,8 @@
 		event.preventDefault();
 		const parsed = disputeSchema.safeParse({ party: disputeParty, observations });
 		if (!parsed.success) return void (message = parsed.error.issues[0]!.message);
-		if (await act(() => organizations.call('POST', `/deposit-settlements/${settlement!.id}/dispute`, parsed.data), t.disputed)) disputeOpen = false;
+		if (await act(() => organizations.call('POST', `/deposit-settlements/${settlement!.id}/dispute`, parsed.data), t.disputed))
+			disputeOpen = false;
 	}
 
 	let refundOpen = $state(false);
@@ -324,15 +341,21 @@
 			if (await act(() => organizations.call('POST', `/deposit-settlements/${s.id}/refunds`, parsed.data))) refundOpen = false;
 			return;
 		}
-		const ok = await act(async () => {
-			const disputed = s.status === 'disputed';
-			const documentId = disputed && outcomeFiles.length ? await uploadExitDocument('settlement_outcome', { leaseId }, outcomeFiles, 'Issue de la contestation') : null;
-			await organizations.call('POST', `/deposit-settlements/${s.id}/close`, {
-				refund: refundRemaining > 0 ? details : null,
-				disputeOutcome: disputed ? outcome : null,
-				documentId
-			});
-		}, t.closed(formatDate(today)));
+		const ok = await act(
+			async () => {
+				const disputed = s.status === 'disputed';
+				const documentId =
+					disputed && outcomeFiles.length
+						? await uploadExitDocument('settlement_outcome', { leaseId }, outcomeFiles, 'Issue de la contestation')
+						: null;
+				await organizations.call('POST', `/deposit-settlements/${s.id}/close`, {
+					refund: refundRemaining > 0 ? details : null,
+					disputeOutcome: disputed ? outcome : null,
+					documentId
+				});
+			},
+			t.closed(formatDate(today))
+		);
 		if (ok) refundOpen = false;
 	}
 
@@ -348,8 +371,11 @@
 		>
 	{:else if p.documentId}
 		{#if can(role, 'document.read')}
-			<Button variant="outline" onclick={() => act(() => openDocument(p.documentId!), '')} disabled={!sync.online} data-testid="voir-justificatif"
-				><Paperclip class="size-4" aria-hidden="true" />{t.viewProof}</Button
+			<Button
+				variant="outline"
+				onclick={() => act(() => openDocument(p.documentId!), '')}
+				disabled={!sync.online}
+				data-testid="voir-justificatif"><Paperclip class="size-4" aria-hidden="true" />{t.viewProof}</Button
 			>
 		{:else}
 			<span class="flex items-center gap-1 text-base"><Paperclip class="size-4" aria-hidden="true" />{t.proof}</span>
@@ -390,12 +416,19 @@
 					<section class="space-y-3 rounded-xl border bg-card p-4" aria-labelledby="titre-lignes" data-testid="lignes-decompte">
 						<div class="flex flex-wrap items-center justify-between gap-2">
 							<h2 id="titre-lignes" class="text-lg font-semibold">{t.title}</h2>
-							<Badge variant={settlement.status === 'closed' ? 'success' : settlement.status === 'disputed' ? 'danger' : 'info'} data-testid="statut-decompte"
-								>{fr.exit.stages[settlement.status === 'closed' ? 'closed' : settlement.status === 'disputed' ? 'disputed' : 'settlement']}</Badge
+							<Badge
+								variant={settlement.status === 'closed' ? 'success' : settlement.status === 'disputed' ? 'danger' : 'info'}
+								data-testid="statut-decompte"
+								>{fr.exit.stages[
+									settlement.status === 'closed' ? 'closed' : settlement.status === 'disputed' ? 'disputed' : 'settlement'
+								]}</Badge
 							>
 						</div>
 						{#if settlement.refundDeadline && settlement.status !== 'closed'}
-							<p class="text-base">{t.deadline(formatDate(settlement.refundDeadline))}{#if settlement.refundAlert} · <Badge variant="danger">{fr.exit.refundAlert[settlement.refundAlert]}</Badge>{/if}</p>
+							<p class="text-base">
+								{t.deadline(formatDate(settlement.refundDeadline))}{#if settlement.refundAlert}
+									· <Badge variant="danger">{fr.exit.refundAlert[settlement.refundAlert]}</Badge>{/if}
+							</p>
 						{/if}
 						{#if !shown.length}
 							<p class="text-base text-muted-foreground">{t.noLines}</p>
@@ -434,9 +467,18 @@
 							</ul>
 						{/if}
 						<dl class="space-y-1 border-t pt-3 text-base">
-							<div class="flex justify-between gap-3"><dt>{t.received}</dt><dd class="font-semibold tabular-nums" data-testid="caution-recue">{formatFcfa(settlement.received)}</dd></div>
-							{#if settlement.credit > 0}<div class="flex justify-between gap-3"><dt>{t.credit}</dt><dd class="tabular-nums">+ {formatFcfa(settlement.credit)}</dd></div>{/if}
-							<div class="flex justify-between gap-3"><dt>{t.deductions}</dt><dd class="tabular-nums">− {formatFcfa(settlement.deductions)}</dd></div>
+							<div class="flex justify-between gap-3">
+								<dt>{t.received}</dt>
+								<dd class="font-semibold tabular-nums" data-testid="caution-recue">{formatFcfa(settlement.received)}</dd>
+							</div>
+							{#if settlement.credit > 0}<div class="flex justify-between gap-3">
+									<dt>{t.credit}</dt>
+									<dd class="tabular-nums">+ {formatFcfa(settlement.credit)}</dd>
+								</div>{/if}
+							<div class="flex justify-between gap-3">
+								<dt>{t.deductions}</dt>
+								<dd class="tabular-nums">− {formatFcfa(settlement.deductions)}</dd>
+							</div>
 						</dl>
 						{#if settlement.claim > 0}
 							<p class="text-base text-muted-foreground">{t.claim}</p>
@@ -444,7 +486,9 @@
 						{/if}
 						<p class="text-base text-muted-foreground">{settlement.outcome === 'zero' ? t.zero : t.refund}</p>
 						<p class="text-3xl font-bold text-primary" data-testid="a-restituer">{formatFcfa(settlement.refund)}</p>
-						{#if alreadyRefunded > 0}<p class="text-base" data-testid="deja-restitue">{t.alreadyRefunded(formatFcfa(alreadyRefunded))}</p>{/if}
+						{#if alreadyRefunded > 0}<p class="text-base" data-testid="deja-restitue">
+								{t.alreadyRefunded(formatFcfa(alreadyRefunded))}
+							</p>{/if}
 					</section>
 
 					{#if editable}
@@ -453,7 +497,9 @@
 							{#if !damaged.length}
 								<p class="text-base text-muted-foreground">{t.noDamage}</p>
 							{:else}
-								<Button variant="outline" onclick={() => openRepair()} data-testid="chiffrer-reparation"><Plus class="size-5" aria-hidden="true" />{t.addRepair}</Button>
+								<Button variant="outline" onclick={() => openRepair()} data-testid="chiffrer-reparation"
+									><Plus class="size-5" aria-hidden="true" />{t.addRepair}</Button
+								>
 							{/if}
 						</section>
 					{/if}
@@ -466,16 +512,24 @@
 								<li class="space-y-2 rounded-lg border p-3" data-testid="accord">
 									<p class="flex flex-wrap items-center justify-between gap-2">
 										<span class="font-medium">{ta.types[a.type]}</span>
-										<Badge variant={a.status === 'accepted' ? 'success' : a.status === 'refused' ? 'danger' : 'warning'}>{ta.statuses[a.status]}</Badge>
+										<Badge variant={a.status === 'accepted' ? 'success' : a.status === 'refused' ? 'danger' : 'warning'}
+											>{ta.statuses[a.status]}</Badge
+										>
 									</p>
-									<p class="text-sm text-muted-foreground">{ta.proposedBy(ta.parties[a.proposedBy] ?? a.proposedBy, formatDate(a.proposedOn))}</p>
+									<p class="text-sm text-muted-foreground">
+										{ta.proposedBy(ta.parties[a.proposedBy] ?? a.proposedBy, formatDate(a.proposedOn))}
+									</p>
 									{#if a.months.length}<p class="text-base">{ta.months} : {a.months.map((m) => formatDate(m)).join(', ')}</p>{/if}
 									{#if a.keptAmount > 0}<p class="text-base">{ta.keep} : {formatFcfa(a.keptAmount)}</p>{/if}
 									{#if a.description}<p class="text-base break-words">{a.description}</p>{/if}
-									{#if a.decidedOn && a.decidedByParty}<p class="text-sm text-muted-foreground">{ta.decided(ta.statuses[a.status]!, ta.parties[a.decidedByParty] ?? '', formatDate(a.decidedOn))}</p>{/if}
+									{#if a.decidedOn && a.decidedByParty}<p class="text-sm text-muted-foreground">
+											{ta.decided(ta.statuses[a.status]!, ta.parties[a.decidedByParty] ?? '', formatDate(a.decidedOn))}
+										</p>{/if}
 									{#if a.status === 'proposed' && can(role, 'agreement.decide')}
 										<div class="flex flex-wrap gap-2">
-											<Button onclick={() => openDecision(a, 'accepted')} disabled={!sync.online} data-testid="accepter-accord">{ta.accept}</Button>
+											<Button onclick={() => openDecision(a, 'accepted')} disabled={!sync.online} data-testid="accepter-accord"
+												>{ta.accept}</Button
+											>
 											<Button variant="outline" onclick={() => openDecision(a, 'refused')} disabled={!sync.online}>{ta.refuse}</Button>
 										</div>
 									{/if}
@@ -486,8 +540,15 @@
 						</ul>
 						{#if canSettle && settlement.status !== 'closed'}
 							<div class="flex flex-wrap gap-2">
-								<Button variant="outline" onclick={() => openAgreement('deposit_applied_to_rent')} disabled={!sync.online} data-testid="nouvel-accord-loyer">{ta.newRent}</Button>
-								<Button variant="outline" onclick={() => openAgreement('tenant_self_repair')} disabled={!sync.online}>{ta.newSelfRepair}</Button>
+								<Button
+									variant="outline"
+									onclick={() => openAgreement('deposit_applied_to_rent')}
+									disabled={!sync.online}
+									data-testid="nouvel-accord-loyer">{ta.newRent}</Button
+								>
+								<Button variant="outline" onclick={() => openAgreement('tenant_self_repair')} disabled={!sync.online}
+									>{ta.newSelfRepair}</Button
+								>
 							</div>
 						{/if}
 					</section>
@@ -496,21 +557,40 @@
 						<section class="flex flex-wrap gap-2 rounded-xl border bg-card p-4" aria-label={t.title} data-testid="actions-decompte">
 							{#if settlement.status === 'draft'}
 								<Button variant="outline" onclick={prepare} disabled={busy || !sync.online}>{t.refresh}</Button>
-								<Button onclick={() => act(() => organizations.call('POST', `/deposit-settlements/${settlement!.id}/propose`))} disabled={busy || !sync.online} data-testid="proposer-decompte">{t.propose}</Button>
+								<Button
+									onclick={() => act(() => organizations.call('POST', `/deposit-settlements/${settlement!.id}/propose`))}
+									disabled={busy || !sync.online}
+									data-testid="proposer-decompte">{t.propose}</Button
+								>
 							{:else if settlement.status === 'proposed'}
-								<Button onclick={() => act(() => organizations.call('POST', `/deposit-settlements/${settlement!.id}/accept`))} disabled={busy || !sync.online} data-testid="accepter-decompte">{t.accept}</Button>
+								<Button
+									onclick={() => act(() => organizations.call('POST', `/deposit-settlements/${settlement!.id}/accept`))}
+									disabled={busy || !sync.online}
+									data-testid="accepter-decompte">{t.accept}</Button
+								>
 							{/if}
 							{#if settlement.status === 'proposed' || settlement.status === 'accepted'}
-								<Button variant="outline" onclick={() => ((disputeOpen = true), (observations = ''))} disabled={!sync.online} data-testid="contester-decompte">{t.dispute}</Button>
+								<Button
+									variant="outline"
+									onclick={() => ((disputeOpen = true), (observations = ''))}
+									disabled={!sync.online}
+									data-testid="contester-decompte">{t.dispute}</Button
+								>
 							{/if}
 							{#if settlement.status === 'disputed'}
 								<p class="w-full text-base">{t.disputed}</p>
-								{#if settlement.tenantObservations}<p class="w-full text-base break-words">{ta.parties.tenant} : {settlement.tenantObservations}</p>{/if}
+								{#if settlement.tenantObservations}<p class="w-full text-base break-words">
+										{ta.parties.tenant} : {settlement.tenantObservations}
+									</p>{/if}
 								{#if refundRemaining > 0}
 									<p class="w-full text-base font-medium" data-testid="part-non-contestee">{t.undisputed(formatFcfa(refundRemaining))}</p>
-									<Button onclick={() => openRefund('partial')} disabled={!sync.online} data-testid="restituer-part">{t.partialRefund}</Button>
+									<Button onclick={() => openRefund('partial')} disabled={!sync.online} data-testid="restituer-part"
+										>{t.partialRefund}</Button
+									>
 								{/if}
-								<Button variant="outline" onclick={() => openRefund('close')} disabled={!sync.online} data-testid="clore-issue">{t.closeWithOutcome}</Button>
+								<Button variant="outline" onclick={() => openRefund('close')} disabled={!sync.online} data-testid="clore-issue"
+									>{t.closeWithOutcome}</Button
+								>
 							{/if}
 							{#if settlement.status === 'accepted'}
 								<Button onclick={() => openRefund('close')} disabled={!sync.online} data-testid="clore-decompte">{t.close}</Button>
@@ -527,8 +607,14 @@
 
 				<aside class="space-y-4">
 					{#if device.isDesktop && shown.length}
-						<section class="space-y-3 rounded-xl border bg-card p-4" aria-labelledby="titre-justificatifs" data-testid="panneau-justificatifs">
-							<h2 id="titre-justificatifs" class="flex items-center gap-2 text-lg font-semibold"><FileText class="size-5" aria-hidden="true" />{t.proofPanel}</h2>
+						<section
+							class="space-y-3 rounded-xl border bg-card p-4"
+							aria-labelledby="titre-justificatifs"
+							data-testid="panneau-justificatifs"
+						>
+							<h2 id="titre-justificatifs" class="flex items-center gap-2 text-lg font-semibold">
+								<FileText class="size-5" aria-hidden="true" />{t.proofPanel}
+							</h2>
 							<p class="text-sm text-muted-foreground">{t.proofPanelHint}</p>
 							<ul class="space-y-3">
 								{#each shown as l (l.id)}
@@ -546,7 +632,9 @@
 						<ol class="space-y-2">
 							{#each accountMovements as m (m.id)}
 								<li class="rounded-lg bg-muted p-2 text-base" data-testid="mouvement">
-									<span class="font-medium">{fr.leases.movementTypes[m.type] ?? m.type}</span> · <span class="tabular-nums">{formatFcfa(m.amount)}</span> · {formatDate(m.occurredOn)}
+									<span class="font-medium">{fr.leases.movementTypes[m.type] ?? m.type}</span> ·
+									<span class="tabular-nums">{formatFcfa(m.amount)}</span>
+									· {formatDate(m.occurredOn)}
 									{#if m.reason}<span class="block text-sm break-words text-muted-foreground">{m.reason}</span>{/if}
 								</li>
 							{/each}
@@ -585,7 +673,9 @@
 				<label for="reparation-accord" class="text-base font-medium">{ta.types.tenant_self_repair}</label>
 				<select id="reparation-accord" class={select} bind:value={repairAgreement}>
 					<option value="">—</option>
-					{#each selfRepairAgreements as a (a.id)}<option value={a.id}>{ta.proposedBy(ta.parties[a.proposedBy] ?? '', formatDate(a.proposedOn))}</option>{/each}
+					{#each selfRepairAgreements as a (a.id)}<option value={a.id}
+							>{ta.proposedBy(ta.parties[a.proposedBy] ?? '', formatDate(a.proposedOn))}</option
+						>{/each}
 				</select>
 			</div>
 		{/if}
@@ -594,8 +684,12 @@
 			<Input id="reparation-montant" inputmode="numeric" bind:value={repairAmount} class="tabular-nums" data-testid="reparation-montant" />
 		</div>
 		<ReceiptPicker bind:files={repairFiles} title={t.repairQuote} hint={t.proofPanelHint} testid="reparation-devis" />
-		{#if !repairJustified}<p class="flex items-start gap-2 text-base text-destructive" role="status" data-testid="retenue-impossible"><CircleAlert class="mt-0.5 size-5 shrink-0" aria-hidden="true" />{t.repairRefused}</p>{/if}
-		<Button type="submit" class="w-full" disabled={busy || !repairJustified || !sync.online} data-testid="enregistrer-reparation">{t.repairSubmit}</Button>
+		{#if !repairJustified}<p class="flex items-start gap-2 text-base text-destructive" role="status" data-testid="retenue-impossible">
+				<CircleAlert class="mt-0.5 size-5 shrink-0" aria-hidden="true" />{t.repairRefused}
+			</p>{/if}
+		<Button type="submit" class="w-full" disabled={busy || !repairJustified || !sync.online} data-testid="enregistrer-reparation"
+			>{t.repairSubmit}</Button
+		>
 	</form>
 </Sheet>
 
@@ -608,7 +702,9 @@
 				<legend class="text-base font-medium">{ta.months}</legend>
 				{#each openDues as d (d.id)}
 					<label class="flex min-h-11 items-center gap-3">
-						<input type="checkbox" class="size-5" value={d.periodStart} bind:group={agreementMonths} />{formatDate(d.periodStart)} – {formatDate(d.periodEnd)} · {formatFcfa(d.balance)}
+						<input type="checkbox" class="size-5" value={d.periodStart} bind:group={agreementMonths} />{formatDate(d.periodStart)} – {formatDate(
+							d.periodEnd
+						)} · {formatFcfa(d.balance)}
 					</label>
 				{/each}
 			</fieldset>
@@ -619,7 +715,9 @@
 			<div class="space-y-1 rounded-lg bg-warning-soft p-3 text-base text-warning-foreground" role="status" data-testid="reste-degats">
 				<p>{ta.plan(formatFcfa(plan.applied), formatFcfa(plan.remainingForDamage))}</p>
 				{#if plan.nothingLeft}<p class="font-medium">{ta.nothingLeft}</p>{/if}
-				{#each plan.months.filter((m) => m.uncovered > 0) as m (m.periodStart)}<p>{ta.uncovered(formatDate(m.periodStart), formatFcfa(m.uncovered))}</p>{/each}
+				{#each plan.months.filter((m) => m.uncovered > 0) as m (m.periodStart)}<p>
+						{ta.uncovered(formatDate(m.periodStart), formatFcfa(m.uncovered))}
+					</p>{/each}
 			</div>
 			<p class="text-sm text-muted-foreground">{ta.beforeMonths}</p>
 		{/if}
@@ -639,7 +737,11 @@
 		</div>
 		<div class={field}>
 			<label for="accord-texte" class="text-base font-medium">{ta.description}</label>
-			<textarea id="accord-texte" class="min-h-20 w-full rounded-lg border bg-background p-3 text-base" maxlength={1000} bind:value={agreementText}></textarea>
+			<textarea
+				id="accord-texte"
+				class="min-h-20 w-full rounded-lg border bg-background p-3 text-base"
+				maxlength={1000}
+				bind:value={agreementText}></textarea>
 		</div>
 		<Button type="submit" class="w-full" disabled={busy || !sync.online} data-testid="enregistrer-accord">{ta.submit}</Button>
 	</form>
@@ -688,20 +790,35 @@
 		</div>
 		<div class={field}>
 			<label for="contestation-observations" class="text-base font-medium">{fr.exit.inspection.observations}</label>
-			<textarea id="contestation-observations" class="min-h-24 w-full rounded-lg border bg-background p-3 text-base" maxlength={2000} bind:value={observations} data-testid="contestation-observations"></textarea>
+			<textarea
+				id="contestation-observations"
+				class="min-h-24 w-full rounded-lg border bg-background p-3 text-base"
+				maxlength={2000}
+				bind:value={observations}
+				data-testid="contestation-observations"></textarea>
 		</div>
-		<Button type="submit" class="w-full" disabled={busy || !sync.online} data-testid="enregistrer-contestation">{fr.exit.inspection.disputeSubmit}</Button>
+		<Button type="submit" class="w-full" disabled={busy || !sync.online} data-testid="enregistrer-contestation"
+			>{fr.exit.inspection.disputeSubmit}</Button
+		>
 	</form>
 </Sheet>
 
 <Sheet bind:open={refundOpen} labelledby="restitution-titre" side="right">
 	<form class="space-y-4" onsubmit={saveRefund} novalidate data-testid="formulaire-restitution">
-		<h2 id="restitution-titre" class="pr-10 text-xl font-semibold">{refundMode === 'partial' ? t.partialRefund : settlement?.status === 'disputed' ? t.closeWithOutcome : t.close}</h2>
+		<h2 id="restitution-titre" class="pr-10 text-xl font-semibold">
+			{refundMode === 'partial' ? t.partialRefund : settlement?.status === 'disputed' ? t.closeWithOutcome : t.close}
+		</h2>
 		<FormAlert {message} />
 		{#if refundMode === 'partial'}
 			<div class={field}>
 				<label for="restitution-montant" class="text-base font-medium">{t.refundAmount}</label>
-				<Input id="restitution-montant" inputmode="numeric" bind:value={refundAmount} class="tabular-nums" data-testid="restitution-montant" />
+				<Input
+					id="restitution-montant"
+					inputmode="numeric"
+					bind:value={refundAmount}
+					class="tabular-nums"
+					data-testid="restitution-montant"
+				/>
 				<p class="text-sm text-muted-foreground">{t.undisputed(formatFcfa(refundRemaining))}</p>
 			</div>
 		{:else if settlement?.status === 'disputed'}
@@ -711,7 +828,12 @@
 					{#each DISPUTE_OUTCOMES as o (o)}<option value={o}>{fr.exit.inspection.outcomes[o]}</option>{/each}
 				</select>
 			</div>
-			<ReceiptPicker bind:files={outcomeFiles} title={fr.exit.inspection.outcomeDocument} hint={fr.exit.inspection.disputed} testid="issue-document" />
+			<ReceiptPicker
+				bind:files={outcomeFiles}
+				title={fr.exit.inspection.outcomeDocument}
+				hint={fr.exit.inspection.disputed}
+				testid="issue-document"
+			/>
 		{/if}
 		{#if refundMode === 'partial' || refundRemaining > 0}
 			<p class="text-base font-medium">{t.refundForm}{refundMode === 'close' ? ` : ${formatFcfa(refundRemaining)}` : ''}</p>
@@ -722,10 +844,18 @@
 			<fieldset class="space-y-2">
 				<legend class="text-base font-medium">{t.refundedBy}</legend>
 				<label class="flex min-h-11 items-center gap-3 rounded-lg border-2 bg-card px-3 py-2 has-checked:border-primary">
-					<input type="radio" name="restitue-par" value="organization" bind:group={refundedBy} disabled={ownerHolds} class="size-5 shrink-0" />{t.refundedByOptions.organization(orgName)}
+					<input
+						type="radio"
+						name="restitue-par"
+						value="organization"
+						bind:group={refundedBy}
+						disabled={ownerHolds}
+						class="size-5 shrink-0"
+					/>{t.refundedByOptions.organization(orgName)}
 				</label>
 				<label class="flex min-h-11 items-center gap-3 rounded-lg border-2 bg-card px-3 py-2 has-checked:border-primary">
-					<input type="radio" name="restitue-par" value="owner" bind:group={refundedBy} disabled={!ownerHolds} class="size-5 shrink-0" />{t.refundedByOptions.owner}
+					<input type="radio" name="restitue-par" value="owner" bind:group={refundedBy} disabled={!ownerHolds} class="size-5 shrink-0" />{t
+						.refundedByOptions.owner}
 				</label>
 			</fieldset>
 			<div class={field}>
@@ -739,6 +869,8 @@
 				<Input id="restitution-reference" bind:value={refundReference} maxlength={60} />
 			</div>
 		{/if}
-		<Button type="submit" class="w-full" disabled={busy || !sync.online} data-testid="enregistrer-restitution">{refundMode === 'partial' ? t.refundSubmit : settlement?.status === 'disputed' ? t.closeWithOutcome : t.close}</Button>
+		<Button type="submit" class="w-full" disabled={busy || !sync.online} data-testid="enregistrer-restitution"
+			>{refundMode === 'partial' ? t.refundSubmit : settlement?.status === 'disputed' ? t.closeWithOutcome : t.close}</Button
+		>
 	</form>
 </Sheet>
