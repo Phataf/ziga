@@ -34,6 +34,7 @@ import {
 	newReceiptToken,
 	normalizeTransactionReference,
 	paymentEntryBlockers,
+	provisionalReceiptNumber,
 	PaymentTransitionError,
 	type PaymentEntryBlocker,
 	type PaymentEntryData,
@@ -69,6 +70,7 @@ import { RECEIPT_PDF_JOB, RECEIPTS_QUEUE, type ReceiptPdfJobData } from '../../j
 import { STORAGE, type StorageAdapter } from '../../storage/storage.js';
 import { AuditService, type AuditActor } from '../audit/audit.service.js';
 import { LeasesService, type DueForPayment, type PaymentTarget } from '../leases/leases.service.js';
+import { ExitHooks, type CreditReleaseInput, type DepositOffsetInput } from '../leases/exit-hooks.js';
 import { RentDueEvents, type DuesIssuedEvent } from '../leases/rent-due-events.js';
 import { OrganizationsService } from '../organizations/organizations.service.js';
 import { GeographyService } from '../properties/geography.service.js';
@@ -191,6 +193,7 @@ export class PaymentsService implements OnModuleInit {
 		private readonly providers: PaymentProviders,
 		private readonly events: RentDueEvents,
 		private readonly expenseClaims: ExpenseClaims,
+		private readonly exitHooks: ExitHooks,
 		@InjectQueue(RECEIPTS_QUEUE) private readonly queue: Queue<ReceiptPdfJobData>,
 		@Inject(STORAGE) private readonly storage: StorageAdapter,
 		@Inject(APP_CONFIG) private readonly config: AppConfig
@@ -199,6 +202,159 @@ export class PaymentsService implements OnModuleInit {
 	onModuleInit(): void {
 		// Crédit du bail imputé sur chaque nouvelle échéance (validation, changement de loyer, tâche de nuit).
 		this.events.onIssued((event) => this.applyCreditOnIssued(event));
+		// Lot 10 bis (D32) : la sortie du locataire demande ici l'imputation sur caution, le retour d'un surplus au crédit
+		// du bail, le crédit et les encaissements en attente (le module leases ne lit jamais ces tables).
+		this.exitHooks.registerPayments({
+			depositOffset: (input) => this.recordDepositOffset(input),
+			releaseToCredit: (input) => this.releaseToCredit(input),
+			credit: async (tx, leaseId) => (await this.creditsOf(tx, leaseId)).reduce((sum, c) => sum + c.amount, 0),
+			pendingRent: async (tx, leaseId) => {
+				const rows = await tx
+					.select({ amount: payments.amount })
+					.from(payments)
+					.where(
+						and(
+							eq(payments.leaseId, leaseId),
+							eq(payments.kind, 'payment'),
+							eq(payments.purpose, 'rent'),
+							inArray(payments.status, ['to_validate', 'to_reconcile'])
+						)
+					);
+				return rows.reduce((sum, r) => sum + r.amount, 0);
+			}
+		});
+	}
+
+	/**
+	 * Imputation sur caution (D32) : encaissement interne, confirmé par le serveur, imputé exactement sur l'échéance ou la
+	 * dépense visée, avec un reçu numéroté ; jamais saisi (le moyen n'est pas accepté d'une saisie). Idempotent par sa
+	 * clé : une ligne du décompte n'est imputée qu'une fois. Le mouvement de caution qui le porte est écrit par le module
+	 * leases dans la même transaction (contrainte différée de la base).
+	 */
+	private async recordDepositOffset(input: DepositOffsetInput): Promise<{ paymentId: string; receiptNumber: string | null }> {
+		const [existing] = await input.tx
+			.select()
+			.from(payments)
+			.where(and(eq(payments.organizationId, input.organizationId), eq(payments.idempotencyKey, input.idempotencyKey)))
+			.limit(1);
+		if (existing) return { paymentId: existing.id, receiptNumber: (await this.receiptOf(input.tx, existing.id))?.number ?? null };
+		const role = RequestContext.organization().role;
+		const c: Context = { tx: input.tx, organizationId: input.organizationId, role, userId: input.userId, actor: input.actor };
+		const target = await this.leases.paymentTarget(input.leaseId);
+		const id = newId();
+		const now = new Date();
+		const [payment] = await c.tx
+			.insert(payments)
+			.values({
+				id,
+				organizationId: c.organizationId,
+				kind: 'payment',
+				leaseId: input.leaseId,
+				tenantId: target.tenantId,
+				purpose: input.purpose,
+				expenseId: input.expenseId,
+				amount: input.amount,
+				method: 'deposit_offset',
+				paidOn: input.paidOn,
+				status: 'confirmed',
+				provider: 'manual',
+				idempotencyKey: input.idempotencyKey,
+				note: 'Imputation sur caution (décompte de sortie)',
+				recordedBy: c.userId,
+				confirmedAt: now,
+				confirmedBy: c.userId
+			})
+			.returning();
+		const receiptId = newId();
+		await c.tx.insert(receipts).values({
+			id: receiptId,
+			organizationId: c.organizationId,
+			paymentId: id,
+			leaseId: input.leaseId,
+			purpose: input.purpose,
+			provisionalNumber: provisionalReceiptNumber(receiptId),
+			status: 'provisional'
+		});
+		await this.audit.record(c.tx, {
+			actor: c.actor,
+			organizationId: c.organizationId,
+			action: 'payment.record',
+			objectType: 'payment',
+			objectId: id,
+			after: {
+				leaseId: input.leaseId,
+				purpose: input.purpose,
+				rentDueId: input.rentDueId,
+				expenseId: input.expenseId,
+				amount: input.amount,
+				method: 'deposit_offset',
+				status: 'confirmed'
+			}
+		});
+		const today = toIsoDate();
+		let periods: ReceiptPeriod[] = [];
+		let expense: ReceiptSnapshot['expense'] = null;
+		let balanceDue: number;
+		if (input.purpose === 'rent') {
+			const dues = await this.leases.duesForAllocation(input.leaseId, c.tx);
+			const due = dues.find((d) => d.id === input.rentDueId);
+			if (!due) throw new AppError('RENT_DUE_NOT_FOUND', 'Échéance introuvable.', 404);
+			await this.insertLines(
+				c.tx,
+				c.organizationId,
+				input.leaseId,
+				[{ paymentId: id, target: 'rent_due', targetId: due.id, direction: 'allocate', amount: input.amount }],
+				c.userId
+			);
+			await this.leases.refreshDueStatusesAfterPayment([due.id], today, c.actor, c.tx);
+			periods = [{ start: due.periodStart, end: due.periodEnd, amount: input.amount, isAdvance: due.isAdvance }];
+			balanceDue = await this.leases.outstandingOf(input.leaseId, today, c.tx);
+		} else {
+			const claim = (await this.expenseClaims.get(c.tx, input.expenseId!)) as ExpenseClaim;
+			const { recovered } = await this.expenseRecovery(c.tx, input.expenseId!);
+			await this.insertLines(c.tx, c.organizationId, input.leaseId, allocateExpensePayment(id, input.amount, claim.id), c.userId);
+			expense = { category: claim.category, description: claim.description, spentOn: claim.spentOn };
+			balanceDue = Math.max(0, claim.amount - recovered - input.amount);
+		}
+		const receiptNumber = await this.issueReceipt(c, payment!, target, { periods, credit: 0, deposit: null, expense, balanceDue }, today);
+		return { paymentId: id, receiptNumber };
+	}
+
+	/**
+	 * Surplus déjà payé sur une échéance raccourcie ou abandonnée à la sortie (D32) : rendu au crédit du bail, sur les
+	 * encaissements les plus récents d'abord (une ligne inverse sur l'échéance, une ligne de crédit, même encaissement :
+	 * chaque encaissement impute toujours exactement son montant). C'est l'argent du locataire (point a du porteur).
+	 */
+	private async releaseToCredit(input: CreditReleaseInput): Promise<void> {
+		const rows = await input.tx
+			.select()
+			.from(paymentAllocations)
+			.where(and(eq(paymentAllocations.leaseId, input.leaseId), eq(paymentAllocations.rentDueId, input.rentDueId)))
+			.orderBy(desc(paymentAllocations.createdAt), desc(paymentAllocations.id));
+		const net = new Map<string, number>();
+		for (const r of [...rows].reverse())
+			net.set(r.paymentId, (net.get(r.paymentId) ?? 0) + (r.direction === 'allocate' ? r.amount : -r.amount));
+		let left = input.amount;
+		const lines: AllocationLine[] = [];
+		for (const paymentId of [...new Set(rows.map((r) => r.paymentId))]) {
+			if (left <= 0) break;
+			const take = Math.min(left, net.get(paymentId) ?? 0);
+			if (take <= 0) continue;
+			lines.push({ paymentId, target: 'rent_due', targetId: input.rentDueId, direction: 'reverse', amount: take });
+			lines.push({ paymentId, target: 'credit', targetId: null, direction: 'allocate', amount: take });
+			left -= take;
+		}
+		if (!lines.length) return;
+		await this.insertLines(input.tx, input.organizationId, input.leaseId, lines, input.actor.type === 'user' ? input.actor.userId : null);
+		await this.audit.record(input.tx, {
+			actor: input.actor,
+			organizationId: input.organizationId,
+			action: 'payment.credit_released',
+			objectType: 'rent_due',
+			objectId: input.rentDueId,
+			after: { leaseId: input.leaseId, amount: input.amount - left },
+			origin: input.actor.type === 'system' ? 'job' : 'api'
+		});
 	}
 
 	private context(): Context {
@@ -600,9 +756,29 @@ export class PaymentsService implements OnModuleInit {
 				allocateDepositPayment(payment.id, payment.amount, account.id),
 				c.userId
 			);
-			deposit = { type: account.type, holder: account.holder };
+			// Un compte passé au nouveau gestionnaire (lot 10 bis) est soldé : il ne reçoit plus de versement.
+			deposit = { type: account.type, holder: account.holder === 'owner' ? 'owner' : 'organization' };
 			balanceDue = Math.max(0, account.remainingDue - payment.amount);
 		}
+		return this.issueReceipt(c, payment, target, { periods, credit, deposit, expense, balanceDue }, today, origin);
+	}
+
+	/** Reçu numéroté par la base, copie figée (D29) et PDF en tâche de fond (confirmation, imputation sur caution). */
+	private async issueReceipt(
+		c: Context,
+		payment: PaymentRow,
+		target: PaymentTarget,
+		o: {
+			periods: ReceiptPeriod[];
+			credit: number;
+			deposit: ReceiptSnapshot['deposit'];
+			expense: ReceiptSnapshot['expense'];
+			balanceDue: number;
+		},
+		today: string,
+		origin?: AuditOrigin
+	): Promise<string | null> {
+		const { periods, credit, deposit, expense, balanceDue } = o;
 		const receipt = await this.receiptOf(c.tx, payment.id);
 		if (!receipt) return null;
 		await this.organizations.ensureReceiptPrefix(c.actor, c.tx, origin);

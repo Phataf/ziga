@@ -216,7 +216,11 @@ export interface LocalSnapshotInput {
 	payment: Pick<LocalPayment, 'id' | 'purpose' | 'amount' | 'method' | 'operator' | 'transactionReference' | 'paidOn'>;
 	/** Échéances du bail avant cet encaissement (imputation prévisionnelle). */
 	dues: readonly DueForScreen[];
-	deposit: { type: 'security_deposit' | 'utilities_guarantee'; holder: 'organization' | 'owner'; remainingDue: number } | null;
+	deposit: {
+		type: 'security_deposit' | 'utilities_guarantee';
+		holder: 'organization' | 'owner' | 'third_party';
+		remainingDue: number;
+	} | null;
 	collectedBy: string;
 	today: string;
 }
@@ -243,7 +247,7 @@ export function localSnapshot(input: LocalSnapshotInput): ReceiptSnapshot {
 			...base,
 			periods: [],
 			credit: 0,
-			deposit: { type: input.deposit.type, holder: input.deposit.holder },
+			deposit: { type: input.deposit.type, holder: input.deposit.holder === 'owner' ? 'owner' : 'organization' },
 			balanceDue: Math.max(0, input.deposit.remainingDue - input.payment.amount)
 		};
 	}

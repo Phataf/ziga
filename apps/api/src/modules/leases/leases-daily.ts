@@ -4,18 +4,26 @@
  *   (préavis pas encore terminé, lot 10 bis), il attend et l'audit le dit (la règle 8 n'est jamais contournée) ;
  * - un bail sans fin reçoit ses échéances sur 12 mois glissants (sans doublon : clé bail + période) ;
  * - une échéance devient due à sa date et passe en retard le lendemain si elle n'est pas soldée.
+ * - lot 10 bis : à la date de sortie, le bail en préavis se termine ; la dernière période est ramenée au dernier jour
+ *   facturé selon le mode du bail, les échéances suivantes sont abandonnées, le surplus déjà payé revient au crédit du
+ *   bail (D32) ; la base fait passer l'unité « à remettre en état » (D14). Un décompte pas encore clos reçoit son alerte
+ *   avant la fin du délai de restitution (une ligne d'audit par niveau atteint).
  * Idempotente : relancée le même jour, elle ne change rien.
  * Les organisations viennent de due_lease_organizations (SECURITY DEFINER, seulement des identifiants).
  */
 import { automaticRenewalEnd } from '@ziga/shared/contracts';
 import { addDays } from '@ziga/shared/dates';
-import { and, asc, eq, inArray, isNotNull, isNull, lt, lte, sql } from 'drizzle-orm';
+import { refundAlert } from '@ziga/shared/deposit-settlement';
+import { generateRentSchedule } from '@ziga/shared/rent-schedule';
+import { exitDueAdjustments } from '@ziga/shared/tenant-exit';
+import { and, asc, eq, inArray, isNotNull, isNull, lt, lte, ne, sql } from 'drizzle-orm';
 import type { DatabaseService } from '../../db/database.module.js';
 import type { Tx } from '../../db/database.js';
-import { leases } from '../../db/schema/leases.js';
+import { depositSettlements, leaseNotices, leases, rentDues } from '../../db/schema/leases.js';
 import type { AuditActor, AuditService } from '../audit/audit.service.js';
+import type { ExitHooks } from './exit-hooks.js';
 import type { RentDueEvents } from './rent-due-events.js';
-import { generateDues, refreshDueStatuses, renewLease } from './rent-dues.js';
+import { generateDues, refreshDueStatuses, renewLease, scheduleInput } from './rent-dues.js';
 
 const SYSTEM: AuditActor = { type: 'system' };
 
@@ -26,6 +34,114 @@ export interface LeasesDailyResult {
 	statuses: number;
 	/** Lot 08 bis : baux arrivés à leur terme sans congé, reconduits selon leur paramètre (D24). */
 	renewed: number;
+	/** Lot 10 bis : baux terminés à leur date de sortie ; alertes du délai de restitution. */
+	ended: number;
+	refundAlerts: number;
+}
+
+/**
+ * Lot 10 bis : fin des baux en préavis arrivés à leur date de sortie, et alertes du délai de restitution. Rejouée le même
+ * jour, elle ne change rien (le bail est terminé, l'ajustement de la dernière période n'a lieu qu'une fois).
+ */
+export async function exitLeasesFor(
+	tx: Tx,
+	audit: AuditService,
+	organizationId: string,
+	today: string,
+	hooks?: ExitHooks
+): Promise<{ ended: number; refundAlerts: number }> {
+	let ended = 0;
+	const due = await tx
+		.select()
+		.from(leases)
+		.where(and(eq(leases.organizationId, organizationId), eq(leases.status, 'notice'), lte(leases.exitOn, today)))
+		.orderBy(asc(leases.exitOn), asc(leases.id))
+		.for('update');
+	for (const lease of due) {
+		const [notice] = await tx
+			.select()
+			.from(leaseNotices)
+			.where(and(eq(leaseNotices.leaseId, lease.id), eq(leaseNotices.status, 'recorded')))
+			.limit(1);
+		const rentEndsOn = notice?.rentEndsOn ?? lease.exitOn!;
+		const adjustments: { id: string; action: string; amountDue: number; excessPaid: number }[] = [];
+		if (rentEndsOn >= lease.duesStartOn) {
+			const input = await scheduleInput(tx, lease, rentEndsOn);
+			const endOn = lease.endsOn && lease.endsOn < rentEndsOn ? lease.endsOn : rentEndsOn;
+			const regenerated = generateRentSchedule({ ...input, endOn, until: rentEndsOn });
+			const rows = await tx.select().from(rentDues).where(eq(rentDues.leaseId, lease.id)).for('update');
+			const now = new Date();
+			for (const a of exitDueAdjustments(rows, regenerated, rentEndsOn)) {
+				// Surplus déjà payé : l'argent du locataire, rendu au crédit du bail avant de réduire l'échéance.
+				if (a.excessPaid > 0 && hooks) {
+					await hooks.payments.releaseToCredit({
+						tx,
+						organizationId,
+						leaseId: lease.id,
+						rentDueId: a.id,
+						amount: a.excessPaid,
+						actor: SYSTEM,
+						today
+					});
+				}
+				await tx
+					.update(rentDues)
+					.set(
+						a.action === 'waive'
+							? { status: 'waived', exitAdjustedAt: now, updatedAt: now }
+							: {
+									rent: a.rent,
+									charges: a.charges,
+									amountDue: a.amountDue,
+									periodEnd: a.periodEnd,
+									prorated: true,
+									exitAdjustedAt: now,
+									updatedAt: now
+								}
+					)
+					.where(eq(rentDues.id, a.id));
+				adjustments.push({ id: a.id, action: a.action, amountDue: a.amountDue, excessPaid: a.excessPaid });
+			}
+		}
+		const endKind = notice?.origin === 'lessor' ? 'lessor_notice' : 'tenant_exit';
+		await tx
+			.update(leases)
+			.set({ status: 'ended', endedAt: new Date(), endKind, endReason: 'Sortie du locataire', updatedAt: new Date() })
+			.where(eq(leases.id, lease.id));
+		await audit.record(tx, {
+			actor: SYSTEM,
+			organizationId,
+			action: 'lease.end',
+			objectType: 'lease',
+			objectId: lease.id,
+			before: { status: 'notice' },
+			after: { status: 'ended', endKind, exitOn: lease.exitOn, rentEndsOn, adjustments },
+			origin: 'job'
+		});
+		ended += 1;
+	}
+	let refundAlerts = 0;
+	const open = await tx
+		.select()
+		.from(depositSettlements)
+		.where(and(eq(depositSettlements.organizationId, organizationId), ne(depositSettlements.status, 'closed')))
+		.for('update');
+	for (const s of open) {
+		const level = refundAlert(today, s.refundDeadline, false);
+		if (level === 'none' || level === s.refundAlert) continue;
+		await tx.update(depositSettlements).set({ refundAlert: level, updatedAt: new Date() }).where(eq(depositSettlements.id, s.id));
+		await audit.record(tx, {
+			actor: SYSTEM,
+			organizationId,
+			action: level === 'soon' ? 'deposit.refund_deadline_soon' : 'deposit.refund_deadline_overdue',
+			objectType: 'deposit_settlement',
+			objectId: s.id,
+			after: { refundDeadline: s.refundDeadline, level },
+			origin: 'job'
+		});
+		refundAlerts += 1;
+	}
+	return { ended, refundAlerts };
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -42,9 +158,14 @@ export async function leasesDailyFor(
 	audit: AuditService,
 	organizationId: string,
 	today: string,
-	events?: RentDueEvents
+	events?: RentDueEvents,
+	hooks?: ExitHooks
 ): Promise<LeasesDailyResult> {
-	const result: LeasesDailyResult = { activated: 0, waiting: 0, generated: 0, statuses: 0, renewed: 0 };
+	const result: LeasesDailyResult = { activated: 0, waiting: 0, generated: 0, statuses: 0, renewed: 0, ended: 0, refundAlerts: 0 };
+	// Lot 10 bis : les sorties d'abord, pour qu'un bail à venir sur la même unité puisse entrer en vigueur ce jour-là.
+	const exit = await exitLeasesFor(tx, audit, organizationId, today, hooks);
+	result.ended = exit.ended;
+	result.refundAlerts = exit.refundAlerts;
 	const starting = await tx
 		.select()
 		.from(leases)
@@ -120,7 +241,8 @@ export async function leasesDailyFor(
 	const openEnded = await tx
 		.select()
 		.from(leases)
-		.where(and(eq(leases.organizationId, organizationId), inArray(leases.status, ['signed', 'active', 'notice']), isNull(leases.endsOn)))
+		// Un bail en préavis ne reçoit plus d'échéances glissantes : elles s'arrêtent au dernier jour facturé (lot 10 bis).
+		.where(and(eq(leases.organizationId, organizationId), inArray(leases.status, ['signed', 'active']), isNull(leases.endsOn)))
 		.orderBy(asc(leases.id));
 	for (const lease of openEnded) result.generated += (await generateDues(tx, audit, lease, today, SYSTEM, 'job', events)).inserted;
 	result.statuses = await refreshDueStatuses(tx, audit, organizationId, today, SYSTEM, 'job');
@@ -132,7 +254,8 @@ export async function runLeasesDaily(
 	database: DatabaseService,
 	audit: AuditService,
 	today: string,
-	events?: RentDueEvents
+	events?: RentDueEvents,
+	hooks?: ExitHooks
 ): Promise<LeasesDailyResult & { organizations: number }> {
 	const r = await database.db.execute<{ id: string }>(sql`select due_lease_organizations(${today}::date) as id`);
 	const total: LeasesDailyResult & { organizations: number } = {
@@ -141,15 +264,19 @@ export async function runLeasesDaily(
 		waiting: 0,
 		generated: 0,
 		statuses: 0,
-		renewed: 0
+		renewed: 0,
+		ended: 0,
+		refundAlerts: 0
 	};
 	for (const { id } of r.rows) {
-		const one = await database.withOrganization(id, (tx) => leasesDailyFor(tx, audit, id, today, events));
+		const one = await database.withOrganization(id, (tx) => leasesDailyFor(tx, audit, id, today, events, hooks));
 		total.activated += one.activated;
 		total.waiting += one.waiting;
 		total.generated += one.generated;
 		total.statuses += one.statuses;
 		total.renewed += one.renewed;
+		total.ended += one.ended;
+		total.refundAlerts += one.refundAlerts;
 	}
 	return total;
 }

@@ -141,6 +141,13 @@
 			"when": 1795800000000,
 			"tag": "0019_tenant_exit",
 			"breakpoints": true
+		},
+		{
+			"idx": 20,
+			"version": "7",
+			"when": 1795900000000,
+			"tag": "0020_exit_api",
+			"breakpoints": true
 		}
 	]
 }

@@ -14,6 +14,8 @@ import type { Tx } from '../../db/database.js';
 import { expenses } from '../../db/schema/collections.js';
 import { AuditService } from '../audit/audit.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
+import { ExitHooks } from '../leases/exit-hooks.js';
+import { PaymentsService } from '../payments/payments.service.js';
 import { ExpenseClaims } from '../payments/expense-claims.js';
 import { collectionsContext, iso } from './collections-context.js';
 
@@ -50,10 +52,52 @@ export class ExpensesService implements OnModuleInit {
 	constructor(
 		private readonly audit: AuditService,
 		private readonly claims: ExpenseClaims,
-		private readonly documents: DocumentsService
+		private readonly documents: DocumentsService,
+		private readonly exitHooks: ExitHooks,
+		private readonly payments: PaymentsService
 	) {}
 
 	onModuleInit(): void {
+		// Lot 10 bis : la sortie du locataire crée la dépense d'une réparation faite par l'organisation (supportée par le
+		// locataire, récupérée sur la caution, règle 16) et lit les dépenses qui lui sont réclamées, sans lire cette table.
+		this.exitHooks.registerExpenses({
+			repairExpense: async (r) => {
+				await this.create({
+					id: r.id,
+					propertyId: r.propertyId,
+					unitId: r.unitId,
+					leaseId: r.leaseId,
+					spentOn: r.spentOn,
+					category: 'maintenance',
+					description: r.description,
+					supplier: null,
+					amount: r.amount,
+					documentId: r.documentId,
+					paidBy: 'organization',
+					borneBy: 'tenant',
+					recovery: 'deposit'
+				});
+			},
+			claimsOf: async (tx, leaseId) => {
+				const rows = await tx
+					.select()
+					.from(expenses)
+					.where(and(eq(expenses.leaseId, leaseId), eq(expenses.recovery, 'claimed_from_tenant')));
+				const out = [];
+				for (const e of rows) {
+					const { recovered, pending } = await this.payments.expenseRecovery(tx, e.id);
+					out.push({
+						expenseId: e.id,
+						category: e.category,
+						recovery: e.recovery,
+						status: e.status,
+						documentId: e.documentId,
+						outstanding: Math.max(0, e.amount - recovered - pending)
+					});
+				}
+				return out;
+			}
+		});
 		// Le module payments vérifie une dépense réclamée sans lire cette table (CLAUDE.md §4).
 		this.claims.register(async (tx, id) => {
 			const [e] = await tx.select().from(expenses).where(eq(expenses.id, id)).limit(1);

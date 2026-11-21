@@ -38,7 +38,7 @@ import { and, asc, eq, inArray } from 'drizzle-orm';
 import { AppError } from '../../common/app-error.js';
 import { RequestContext } from '../../common/request-context.js';
 import type { Tx } from '../../db/database.js';
-import { mandates, mandateScopes, mandateVersions, owners } from '../../db/schema/owners.js';
+import { managementTransfers, mandates, mandateScopes, mandateVersions, owners } from '../../db/schema/owners.js';
 import { AuditService, diff, type AuditActor } from '../audit/audit.service.js';
 import type { OrganizationCreated } from '../organizations/organization-hooks.js';
 import { expireDueMandates } from './mandate-expiry.js';
@@ -531,6 +531,86 @@ export class OwnersService {
 			viaProperty: r.viaProperty,
 			managementActive: r.managementActive
 		}));
+	}
+
+	/**
+	 * Lot 10 bis : un mandat et ses portées, pour un transfert de gestion (D16) ; introuvable : `null`. Seulement les
+	 * portées de gestion encore actives.
+	 */
+	async transferMandate(
+		mandateId: string
+	): Promise<{ id: string; status: string; scopes: { id: string; propertyId: string; unitId: string | null }[] } | null> {
+		const { tx, organizationId } = this.context();
+		const [mandate] = await tx
+			.select({ id: mandates.id, status: mandates.status, type: mandates.type })
+			.from(mandates)
+			.where(and(eq(mandates.organizationId, organizationId), eq(mandates.id, mandateId)))
+			.limit(1);
+		if (!mandate) return null;
+		const scopes = (await this.scopes(mandateId)).filter((s) => s.managementActive);
+		const management = mandate.type === 'rental_management' || mandate.type === 'self_managed';
+		return { id: mandate.id, status: management ? mandate.status : 'not_management', scopes };
+	}
+
+	/**
+	 * Lot 10 bis : transfert de gestion enregistré dans l'organisation seule (ajout seul, journalisé) ; fin du mandat
+	 * (il ne couvrait que la cible) ou de ses portées sur la cible (règle 12). Rien n'est écrit ailleurs (règle 15).
+	 */
+	async recordTransfer(input: {
+		id: string;
+		mandateId: string;
+		propertyId: string;
+		unitId: string | null;
+		transferOn: string;
+		newManagerName: string;
+		handedOverOn: string;
+		handedOverItems: string[];
+		note: string | null;
+		mandateAction: 'end_mandate' | 'end_scopes';
+		scopeIds: string[];
+	}): Promise<void> {
+		const { tx, organizationId, actor, userId } = this.context();
+		await tx.insert(managementTransfers).values({
+			id: input.id,
+			organizationId,
+			mandateId: input.mandateId,
+			propertyId: input.propertyId,
+			unitId: input.unitId,
+			transferOn: input.transferOn,
+			newManagerName: input.newManagerName,
+			handedOverOn: input.handedOverOn,
+			handedOverItems: input.handedOverItems,
+			mandateAction: input.mandateAction,
+			note: input.note,
+			recordedBy: userId
+		});
+		if (input.scopeIds.length) {
+			await tx
+				.update(mandateScopes)
+				.set({ endedOn: input.transferOn, managementTransferId: input.id })
+				.where(and(eq(mandateScopes.organizationId, organizationId), inArray(mandateScopes.id, input.scopeIds)));
+		}
+		await this.audit.record(tx, {
+			actor,
+			organizationId,
+			action: 'management.transfer',
+			objectType: 'mandate',
+			objectId: input.mandateId,
+			after: {
+				transferId: input.id,
+				propertyId: input.propertyId,
+				unitId: input.unitId,
+				transferOn: input.transferOn,
+				newManagerName: input.newManagerName,
+				handedOverOn: input.handedOverOn,
+				handedOverItems: input.handedOverItems,
+				mandateAction: input.mandateAction,
+				scopeIds: input.scopeIds
+			}
+		});
+		if (input.mandateAction === 'end_mandate') {
+			await this.revokeMandate(input.mandateId, `Transfert de gestion à ${input.newManagerName}`.slice(0, 500));
+		}
 	}
 
 	/**

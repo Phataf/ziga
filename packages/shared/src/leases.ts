@@ -218,6 +218,11 @@ export type DepositType = (typeof DEPOSIT_TYPES)[number];
 
 export const DEPOSIT_HOLDERS = ['organization', 'owner'] as const;
 export type DepositHolder = (typeof DEPOSIT_HOLDERS)[number];
+/**
+ * Détenteur d'un compte : en plus de l'organisation et du propriétaire, le nouveau gestionnaire après un transfert de
+ * gestion (lot 10 bis), nommé en texte (`holder_name`) ; jamais choisi à la création d'un compte.
+ */
+export type DepositAccountHolder = DepositHolder | 'third_party';
 
 export const DEPOSIT_ACCOUNT_STATUSES = ['pending', 'partially_received', 'held', 'settling', 'closed'] as const;
 export type DepositAccountStatus = (typeof DEPOSIT_ACCOUNT_STATUSES)[number];
@@ -654,8 +659,8 @@ export interface DepositMovementView {
 	accountId: string;
 	type: DepositMovementType;
 	amount: Fcfa;
-	previousHolder: DepositHolder | null;
-	newHolder: DepositHolder | null;
+	previousHolder: DepositAccountHolder | null;
+	newHolder: DepositAccountHolder | null;
 	reason: string | null;
 	occurredOn: string;
 	documentId: string | null;
@@ -669,7 +674,9 @@ export interface DepositAccountView {
 	type: DepositType;
 	agreedAmount: Fcfa;
 	agreedMonths: number | null;
-	holder: DepositHolder;
+	holder: DepositAccountHolder;
+	/** Nouveau gestionnaire, nommé en texte, après un transfert de gestion (lot 10 bis). */
+	holderName?: string | null;
 	status: DepositAccountStatus;
 	balances: DepositBalances;
 	/** Caution au-delà de deux mois de loyer (hors charges) : avertissement, jamais un blocage. */

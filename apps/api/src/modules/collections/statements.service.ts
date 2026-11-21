@@ -63,6 +63,7 @@ import { STORAGE, type StorageAdapter } from '../../storage/storage.js';
 import { AuditService, type AuditActor } from '../audit/audit.service.js';
 import { FeaturesService } from '../features/features.service.js';
 import { QuotasService } from '../features/quotas.service.js';
+import { ExitService } from '../leases/exit.service.js';
 import { LeasesService } from '../leases/leases.service.js';
 import { OrganizationsService } from '../organizations/organizations.service.js';
 import { OwnersService, type StatementMandateRow } from '../owners/owners.service.js';
@@ -179,6 +180,7 @@ export class StatementsService {
 		private readonly owners: OwnersService,
 		private readonly properties: PropertiesService,
 		private readonly leases: LeasesService,
+		private readonly exit: ExitService,
 		private readonly payments: PaymentsService,
 		private readonly expenses: ExpensesService,
 		@InjectQueue(STATEMENTS_QUEUE) private readonly queue: Queue<StatementPdfJobData>,
@@ -216,6 +218,8 @@ export class StatementsService {
 			tx,
 			data.leases.map((l) => l.id)
 		);
+		// Lot 10 bis (D32) : une imputation sur caution est perçue par le détenteur de la caution.
+		const offsetHolders = await this.exit.depositOffsetHolders(tx, [...new Set(ledger.map((r) => r.paymentId))]);
 		const issued = await this.issuedOf(tx, ownerId);
 		const last = issued.at(-1) ?? null;
 		const consumedRows = issued.length
@@ -273,7 +277,8 @@ export class StatementsService {
 					date,
 					paidOn: r.paidOn,
 					receiptNumber: r.receiptNumber,
-					mandate: mandateAt(mandates, lease.unitId, mandateDate, RENT_MANDATE_TYPES)
+					mandate: mandateAt(mandates, lease.unitId, mandateDate, RENT_MANDATE_TYPES),
+					depositHolder: offsetHolders.get(r.paymentId) ?? null
 				};
 			});
 			dues.push({
@@ -317,6 +322,11 @@ export class StatementsService {
 		}
 
 		const expenseRows = await this.expenses.ofProperties(tx, propertyIds);
+		// Lot 10 bis (D32) : réparation avancée par l'organisation, retenue par le propriétaire sur la caution qu'il détient.
+		const ownerRetentions = await this.exit.ownerRetentions(
+			tx,
+			expenseRows.filter((e) => e.recovery === 'deposit').map((e) => e.id)
+		);
 		const statementExpenses: StatementExpense[] = expenseRows.map((e) => ({
 			id: e.id,
 			spentOn: e.spentOn,
@@ -328,7 +338,8 @@ export class StatementsService {
 			propertyId: e.propertyId,
 			paidBy: e.paidBy,
 			borneBy: e.borneBy,
-			recovery: e.recovery
+			recovery: e.recovery,
+			ownerDepositRetention: ownerRetentions.get(e.id) ?? null
 		}));
 
 		const result = computeStatement({

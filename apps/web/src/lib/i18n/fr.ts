@@ -1482,7 +1482,10 @@ export const fr = {
 			leases: 'Bail',
 			deposit_accounts: 'Compte de caution',
 			deposit_movements: 'Mouvement de caution',
-			payments: 'Encaissement'
+			payments: 'Encaissement',
+			inspections: 'État des lieux',
+			inspection_items: 'Ligne d’état des lieux',
+			deposit_settlement_lines: 'Ligne du décompte de sortie'
 		} as Record<string, string>,
 		columns: {
 			legal_name: 'Raison sociale',
@@ -1574,7 +1577,23 @@ export const fr = {
 			operator: 'Opérateur',
 			transaction_reference: 'Référence de la transaction',
 			paid_on: 'Date du paiement',
-			note: 'Note'
+			note: 'Note',
+			inspected_on: 'Date de l’état des lieux',
+			furnished: 'Logement meublé',
+			organization_signed_at: 'Case cochée par l’organisation',
+			tenant_signed_at: 'Case cochée par le locataire',
+			inspection_id: 'État des lieux',
+			room: 'Pièce',
+			element: 'Élément',
+			position: 'Ordre',
+			description: 'Description de l’état',
+			finding: 'Constat',
+			entry_item_id: 'Ligne d’entrée correspondante',
+			settlement_id: 'Décompte de sortie',
+			kind: 'Nature de la ligne',
+			repair_id: 'Réparation',
+			rent_due_id: 'Échéance',
+			agreement_id: 'Accord'
 		} as Record<string, string>
 	},
 	admin: {

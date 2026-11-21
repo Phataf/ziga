@@ -120,6 +120,10 @@
 			"types": "./dist/tenant-exit.d.ts",
 			"default": "./dist/tenant-exit.js"
 		},
+		"./exit-schemas": {
+			"types": "./dist/exit-schemas.d.ts",
+			"default": "./dist/exit-schemas.js"
+		},
 		"./reminders": {
 			"types": "./dist/reminders.d.ts",
 			"default": "./dist/reminders.js"

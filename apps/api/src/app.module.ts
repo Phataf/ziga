@@ -19,6 +19,7 @@ import { OwnersModule } from './modules/owners/owners.module.js';
 import { PropertiesModule } from './modules/properties/properties.module.js';
 import { DocumentsModule } from './modules/documents/documents.module.js';
 import { LeasesModule } from './modules/leases/leases.module.js';
+import { ExitHooksModule } from './modules/leases/exit-hooks.js';
 import { LeaseEventsModule } from './modules/leases/rent-due-events.js';
 import { CollectionsModule } from './modules/collections/collections.module.js';
 import { PaymentsModule } from './modules/payments/payments.module.js';
@@ -49,6 +50,7 @@ export class AppModule {
 				PropertiesModule,
 				DocumentsModule,
 				LeaseEventsModule,
+				ExitHooksModule,
 				LeasesModule,
 				PaymentsModule,
 				CollectionsModule,

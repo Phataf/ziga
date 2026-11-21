@@ -9,6 +9,7 @@ import { JobsModule } from './jobs/jobs.module.js';
 import { PaymentsWorkerModule } from './jobs/receipts.processor.js';
 import { StatementsWorkerModule } from './jobs/statements.processor.js';
 import { AuditModule } from './modules/audit/audit.module.js';
+import { ExitHooksModule } from './modules/leases/exit-hooks.js';
 import { LeaseEventsModule } from './modules/leases/rent-due-events.js';
 import { NotificationsModule } from './modules/notifications/notifications.module.js';
 import { RedisModule } from './redis/redis.module.js';
@@ -30,6 +31,7 @@ export class WorkerModule {
 				// Lot 08 bis : la génération des contrats charge le module leases et ses dépendances (identité comprise).
 				NotificationsModule,
 				LeaseEventsModule,
+				ExitHooksModule,
 				JobsModule.register('worker'),
 				ContractsWorkerModule,
 				// Lot 09 : PDF des reçus et crédit du bail imputé sur les échéances émises la nuit.

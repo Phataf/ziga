@@ -82,3 +82,20 @@ export const mandateScopes = pgTable('mandate_scopes', {
 	managementTransferId: uuid('management_transfer_id'),
 	createdAt: tstz('created_at').notNull().defaultNow()
 });
+
+/** Lot 10 bis : transferts de gestion (migration 0019), ajout seul ; le nouveau gestionnaire n'est qu'un nom (règle 15). */
+export const managementTransfers = pgTable('management_transfers', {
+	id: uuid('id').primaryKey(),
+	organizationId: uuid('organization_id').notNull(),
+	mandateId: uuid('mandate_id').notNull(),
+	propertyId: uuid('property_id').notNull(),
+	unitId: uuid('unit_id'),
+	transferOn: date('transfer_on', { mode: 'string' }).notNull(),
+	newManagerName: text('new_manager_name').notNull(),
+	handedOverOn: date('handed_over_on', { mode: 'string' }).notNull(),
+	handedOverItems: text('handed_over_items').array().notNull(),
+	mandateAction: text('mandate_action').$type<'end_mandate' | 'end_scopes'>().notNull(),
+	note: text('note'),
+	recordedBy: uuid('recorded_by').notNull(),
+	createdAt: tstz('created_at').notNull().defaultNow()
+});

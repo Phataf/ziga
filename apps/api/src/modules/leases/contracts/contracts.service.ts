@@ -115,7 +115,7 @@ interface PlaceData {
 /** Conditions du bail et cautions convenues, telles que le contrat les cite (comparées pour savoir s'il est à jour). */
 function termsSnapshot(
 	lease: LeaseRow,
-	deposits: { type: string; agreedAmount: number; agreedMonths: number | null; holder: 'organization' | 'owner' }[]
+	deposits: { type: string; agreedAmount: number; agreedMonths: number | null; holder: 'organization' | 'owner' | 'third_party' }[]
 ): Pick<ContractData, 'lease' | 'deposits'> {
 	const security = deposits.find((d) => d.type === 'security_deposit');
 	const utilities = deposits.find((d) => d.type === 'utilities_guarantee');
@@ -150,7 +150,9 @@ function termsSnapshot(
 			version: lease.version
 		},
 		deposits: {
-			security: security ? { amount: security.agreedAmount, months: security.agreedMonths, holder: security.holder } : null,
+			security: security
+				? { amount: security.agreedAmount, months: security.agreedMonths, holder: security.holder === 'owner' ? 'owner' : 'organization' }
+				: null,
 			utilities: utilities ? { amount: utilities.agreedAmount } : null
 		}
 	};

@@ -13,6 +13,9 @@ import {
 	ContractTemplatesController,
 	LeaseContractsController
 } from './contracts/contracts.controller.js';
+import { ExitController } from './exit.controller.js';
+import { ExitService } from './exit.service.js';
+import { ExitSyncHandlers } from './exit.sync.js';
 import { ContractsService } from './contracts/contracts.service.js';
 import { createPdfConverter, PDF_CONVERTER } from './contracts/pdf-converter.js';
 import { HandwrittenScanProvider, SIGNATURE_PROVIDER } from './contracts/signature-provider.js';
@@ -30,6 +33,7 @@ import { occupancySignals } from './rent-dues.js';
 @Module({
 	imports: [OrganizationsModule, SyncModule, PropertiesModule, OwnersModule, DocumentsModule],
 	controllers: [
+		ExitController,
 		TenantsController,
 		LeasesController,
 		DepositAccountsController,
@@ -39,6 +43,8 @@ import { occupancySignals } from './rent-dues.js';
 		AmendmentsController
 	],
 	providers: [
+		ExitService,
+		ExitSyncHandlers,
 		LeasesService,
 		LeasesSyncHandlers,
 		ContractsService,
@@ -46,7 +52,7 @@ import { occupancySignals } from './rent-dues.js';
 		{ provide: PDF_CONVERTER, inject: [APP_CONFIG], useFactory: (config: AppConfig) => createPdfConverter(config) },
 		{ provide: SIGNATURE_PROVIDER, useClass: HandwrittenScanProvider }
 	],
-	exports: [LeasesService, ContractsService]
+	exports: [LeasesService, ContractsService, ExitService]
 })
 export class LeasesModule implements OnModuleInit {
 	constructor(private readonly occupancy: UnitOccupancy) {}

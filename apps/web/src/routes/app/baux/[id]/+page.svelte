@@ -231,7 +231,10 @@
 			reason: form.reason ?? ''
 		});
 		if (!parsed.success) return void (message = parsed.error.issues[0]!.message);
-		await run(async () => changeDepositHolder(await db(), org, { ...parsed.data, previousHolder: account.holder }));
+		// Un compte passé au nouveau gestionnaire (lot 10 bis) est soldé : il ne change plus de détenteur.
+		if (account.holder === 'third_party') return;
+		const previousHolder = account.holder;
+		await run(async () => changeDepositHolder(await db(), org, { ...parsed.data, previousHolder }));
 	}
 
 	function eventLabel(e: (typeof timeline)[number]): string {

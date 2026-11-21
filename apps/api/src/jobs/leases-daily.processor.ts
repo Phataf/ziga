@@ -6,6 +6,7 @@ import { PinoLogger } from 'nestjs-pino';
 import { DatabaseService } from '../db/database.module.js';
 import { AuditService } from '../modules/audit/audit.service.js';
 import { runLeasesDaily } from '../modules/leases/leases-daily.js';
+import { ExitHooks } from '../modules/leases/exit-hooks.js';
 import { RentDueEvents } from '../modules/leases/rent-due-events.js';
 import { LEASES_DAILY_JOB, LEASES_DAILY_PATTERN, LEASES_DAILY_SCHEDULER, LEASES_QUEUE, type LeasesDailyJobData } from './queues.js';
 
@@ -19,6 +20,7 @@ export class LeasesDailyProcessor extends WorkerHost implements OnApplicationBoo
 		private readonly database: DatabaseService,
 		private readonly audit: AuditService,
 		private readonly events: RentDueEvents,
+		private readonly hooks: ExitHooks,
 		@InjectQueue(LEASES_QUEUE) private readonly queue: Queue,
 		private readonly logger: PinoLogger
 	) {
@@ -36,7 +38,7 @@ export class LeasesDailyProcessor extends WorkerHost implements OnApplicationBoo
 
 	async process(job: Job<LeasesDailyJobData>) {
 		const today = job.data.today && isIsoDate(job.data.today) ? job.data.today : toIsoDate();
-		const result = await runLeasesDaily(this.database, this.audit, today, this.events);
+		const result = await runLeasesDaily(this.database, this.audit, today, this.events, this.hooks);
 		this.logger.info({ today, ...result }, 'Baux et échéances du jour');
 		return { today, ...result };
 	}
