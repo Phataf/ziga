@@ -201,7 +201,10 @@ test.describe('Sortie complète, du préavis à la restitution, sur les trois ap
 				.poll(async () => (await exitView(request, agency, leaseId)).inspections.find((i) => i.type === 'exit')?.status, { timeout: 20_000 })
 				.toBe('signed_both');
 
-			// 3. Décompte : retenue impossible sans montant ni devis ; deux réparations justifiées ; 85 000 restitués.
+			// 3. À la date de sortie, la tâche du jour termine le bail (échéances suivantes abandonnées, unité à remettre en
+			// état) ; puis le décompte : retenue impossible sans montant ni devis ; deux réparations justifiées ; 85 000 restitués.
+			expect(runDaily().ended).toBeGreaterThanOrEqual(1);
+			expect((await get<{ status: string }>(request, agency.headers, `/leases/${leaseId}`)).status).toBe('ended');
 			await page.getByTestId('terminer-edl').click();
 			await page.getByTestId('ouvrir-decompte').click();
 			await page.getByTestId('preparer-decompte').click();
@@ -248,8 +251,7 @@ test.describe('Sortie complète, du préavis à la restitution, sur les trois ap
 			await expect(page.getByTestId('mouvement')).toHaveCount(4, { timeout: 20_000 });
 			await expect(page.getByTestId('mouvements-caution')).toContainText('Restitution · 85');
 
-			// 4. Fin du bail par la tâche du jour : l'unité passe à remettre en état, jamais disponible avant d'être prête.
-			expect(runDaily().ended).toBeGreaterThanOrEqual(1);
+			// 4. Bail terminé par la tâche du jour : l'unité est à remettre en état, jamais disponible avant d'être prête.
 			await page.goto('/app/sorties');
 			await synced(page, 20_000);
 			const card = page.getByTestId('unite-a-remettre').filter({ hasText: (await get<{ label: string }>(request, agency.headers, `/units/${unitId}`)).label });
@@ -311,6 +313,7 @@ test.describe('Décompte contesté', () => {
 			estimatedAmount: 30000,
 			quoteDocumentId: quote
 		});
+		expect(runDaily().ended).toBeGreaterThanOrEqual(1);
 		const settlement = (await post(request, agency.headers, `/deposit-accounts/${accountId}/settlement`, {})) as { id: string };
 		await post(request, agency.headers, `/deposit-settlements/${settlement.id}/propose`, {});
 
