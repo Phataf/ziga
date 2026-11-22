@@ -923,3 +923,76 @@ describe('étape 4 : photos et scan d’un état des lieux (agent de terrain, sa
 		expect((await agent.call('POST', `/inspections/${insp.id}/documents/${photo}/uploaded`)).status).toBe(404);
 	});
 });
+
+describe('étape 4 : le décompte ne dépend jamais de la tâche du jour (porteur, 22/11/2026)', () => {
+	/** Échéances payées jusqu'au mois en cours compris (le locataire a payé tout le mois de sa sortie). */
+	async function payUntilToday(m: Member, leaseId: string) {
+		const l = await call<LeaseDetailView>(m, 'GET', `/leases/${leaseId}`);
+		const owed = l.rentDues
+			.filter((d) => d.status !== 'waived' && d.periodStart <= today)
+			.reduce((s, d) => s + d.amountDue - d.amountPaid, 0);
+		if (owed > 0) await pay(m, entry(leaseId, { amount: owed }));
+	}
+
+	it('le jour de la sortie, sans la tâche : la préparation termine le bail (même fonction, idempotente) ; restitution juste', async () => {
+		const u = await unitUnderMandate(manager);
+		const { lease, accountId } = await leaseWithDeposit(manager, u);
+		await payUntilToday(manager, lease.id);
+		await noticeExitingToday(manager, lease.id);
+		const { items } = await exitInspection(manager, lease.id, ['shower', 'door']);
+		await repair(manager, items[0]!, 10_000, await document(manager, { type: 'repair_quote', leaseId: lease.id }));
+		await repair(manager, items[1]!, 5_000, await document(manager, { type: 'repair_quote', leaseId: lease.id }));
+		const s = await call<Row & { lines: Row[] }>(manager, 'POST', `/deposit-accounts/${accountId}/settlement`);
+		const after = await call<LeaseDetailView>(manager, 'GET', `/leases/${lease.id}`);
+		expect(after.status).toBe('ended');
+		expect(after.rentDues.filter((d) => d.periodStart > today).every((d) => d.status === 'waived')).toBe(true);
+		const last = after.rentDues.find((d) => d.periodStart <= today && d.periodEnd >= today)!;
+		expect(last.periodEnd).toBe(today);
+		// Le mois de la sortie, payé en entier, est ramené au prorata : le surplus revient au locataire (point a).
+		const excess = 80_000 - last.amountDue;
+		expect(s.lines.map((l) => l.kind)).toEqual(['repair', 'repair']);
+		expect(s).toMatchObject({ received: 100_000, deductions: 15_000, credit: excess, refund: 85_000 + excess });
+		// Fin journalisée une seule fois, par la préparation ; la tâche du jour, rejouée, ne change rien.
+		const ends = async () =>
+			(await owner.query(`select origin from audit_log where object_id = $1 and action = 'lease.end'`, [lease.id])).rows.map(
+				(r) => r.origin
+			);
+		expect(await ends()).toEqual(['api']);
+		await call(manager, 'POST', `/deposit-accounts/${accountId}/settlement`);
+		await runDaily();
+		expect(await ends()).toEqual(['api']);
+		expect(JSON.stringify((await call<LeaseDetailView>(manager, 'GET', `/leases/${lease.id}`)).rentDues)).toBe(
+			JSON.stringify(after.rentDues)
+		);
+	});
+
+	it('avant la date de sortie : le décompte compte jusqu’à la sortie, sans rien écrire ; jamais les mois suivants comme impayés', async () => {
+		const u = await unitUnderMandate(manager);
+		const { lease, accountId } = await leaseWithDeposit(manager, u);
+		await payUntilToday(manager, lease.id);
+		const exitOn = addDays(today, 3);
+		await call(
+			manager,
+			'POST',
+			`/leases/${lease.id}/notice`,
+			{
+				id: newId(),
+				origin: 'tenant',
+				deliveryMode: 'hand_delivery',
+				notifiedOn: addDays(addMonths(exitOn, -3), 1),
+				plannedExitOn: exitOn
+			},
+			201
+		);
+		const before = await call<LeaseDetailView>(manager, 'GET', `/leases/${lease.id}`);
+		const s = await call<Row & { lines: Row[] }>(manager, 'POST', `/deposit-accounts/${accountId}/settlement`);
+		const after = await call<LeaseDetailView>(manager, 'GET', `/leases/${lease.id}`);
+		expect(after.status).toBe('notice');
+		expect(JSON.stringify(after.rentDues)).toBe(JSON.stringify(before.rentDues));
+		const unpaid = s.lines.filter((l) => l.kind === 'unpaid_rent');
+		const dueOf = (id: unknown) => before.rentDues.find((d) => d.id === id)!;
+		expect(unpaid.every((l) => dueOf(l.rentDueId).periodStart <= exitOn)).toBe(true);
+		expect(s.claim).toBe(0);
+		expect(s.refund).toBeGreaterThan(0);
+	});
+});

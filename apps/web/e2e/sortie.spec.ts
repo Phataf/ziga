@@ -134,6 +134,23 @@ async function endAndSettleRent(request: APIRequestContext, agency: Agency, leas
 	if (owed > 0) await pay(request, agency, leaseId, owed);
 }
 
+/** Devis déposé par l'API (justificatif d'une retenue). */
+async function uploadQuote(request: APIRequestContext, agency: Agency, subject: { leaseId: string; propertyId: string; unitId: string }) {
+	const id = newId();
+	const buffer = await pdf();
+	const created = (await post(request, agency.headers, '/documents', {
+		id,
+		type: 'repair_quote',
+		...subject,
+		fileName: 'devis.pdf',
+		mimeType: 'application/pdf',
+		byteSize: buffer.length
+	})) as { upload: { url: string } };
+	expect((await request.put(created.upload.url, { data: buffer, headers: { 'content-type': 'application/pdf' } })).status()).toBe(200);
+	await post(request, agency.headers, `/documents/${id}/uploaded`, {});
+	return id;
+}
+
 async function open(browser: Browser, options: BrowserContextOptions, who: Person, target: string) {
 	const ctx = await browser.newContext({ ...options, locale: 'fr-FR', timezoneId: 'Africa/Ouagadougou' });
 	await ctx.addInitScript(() => {
@@ -303,6 +320,73 @@ test.describe('Sortie complète, du préavis à la restitution, sur les trois ap
 			await ctx.close();
 		});
 	}
+});
+
+test.describe('Décompte le jour de la sortie, sans la tâche du jour', () => {
+	test('tablette : préparé avant la tâche de nuit, aucun mois suivant compté impayé ; restitution juste, bail terminé', async ({
+		browser,
+		request
+	}) => {
+		test.setTimeout(4 * 60_000);
+		const agency = await freshAgency(request, `Agence jour J ${newId().slice(-6)}`);
+		const manager = await addMember(request, agency, 'manager', 'Gestionnaire du jour J');
+		const { leaseId, accountId, propertyId, unitId } = await exitingLease(request, agency, { notice: true });
+		// Le locataire a payé tout le mois de sa sortie.
+		const dues = await get<{ rentDues: { amountDue: number; amountPaid: number; status: string; periodStart: string }[] }>(
+			request,
+			agency.headers,
+			`/leases/${leaseId}`
+		);
+		const owed = dues.rentDues
+			.filter((d) => d.status !== 'waived' && d.periodStart <= today)
+			.reduce((s, d) => s + d.amountDue - d.amountPaid, 0);
+		if (owed > 0) await pay(request, agency, leaseId, owed);
+		void accountId;
+		const inspectionId = newId();
+		await post(request, agency.headers, '/inspections', { id: inspectionId, leaseId, type: 'exit', inspectedOn: today });
+		const quote = await uploadQuote(request, agency, { leaseId, propertyId, unitId });
+		for (const [element, amount] of [
+			['shower', 10000],
+			['door', 5000]
+		] as const) {
+			const itemId = newId();
+			await post(request, agency.headers, `/inspections/${inspectionId}/items`, {
+				id: itemId,
+				room: 'Douche et WC',
+				element,
+				description: `${element} : cassé, à remplacer entièrement`,
+				finding: 'tenant_damage'
+			});
+			await post(request, agency.headers, '/repairs', {
+				id: newId(),
+				inspectionItemId: itemId,
+				description: 'Remplacer',
+				performedBy: 'organization',
+				estimatedAmount: amount,
+				quoteDocumentId: quote
+			});
+		}
+		await post(request, agency.headers, `/inspections/${inspectionId}/sign`, { party: 'organization' });
+		await post(request, agency.headers, `/inspections/${inspectionId}/sign`, { party: 'tenant' });
+
+		const { ctx, page } = await open(browser, tablet, manager, `/app/sorties/${leaseId}/decompte`);
+		await page.getByTestId('preparer-decompte').click();
+		await expect(page.getByTestId('ligne-decompte')).toHaveCount(2, { timeout: 20_000 });
+		const after = await get<{ status: string; rentDues: { amountDue: number; periodStart: string; periodEnd: string; status: string }[] }>(
+			request,
+			agency.headers,
+			`/leases/${leaseId}`
+		);
+		expect(after.status).toBe('ended');
+		expect(after.rentDues.filter((d) => d.periodStart > today).every((d) => d.status === 'waived')).toBe(true);
+		const last = after.rentDues.find((d) => d.periodStart <= today && d.periodEnd >= today)!;
+		const excess = 80000 - last.amountDue;
+		await expect(page.locator('[data-testid="ligne-decompte"][data-kept="oui"]')).toHaveCount(2);
+		await expect(page.getByTestId('a-restituer')).toHaveText(formatFcfa(85000 + excess), { timeout: 20_000 });
+		await expect(page.getByTestId('lignes-decompte')).not.toContainText('Loyer et charges impayés');
+		await expectNoHorizontalOverflow(page, 'Décompte le jour de la sortie (tablette)');
+		await ctx.close();
+	});
 });
 
 test.describe('Décompte contesté', () => {

@@ -15,11 +15,12 @@ import { automaticRenewalEnd } from '@ziga/shared/contracts';
 import { addDays } from '@ziga/shared/dates';
 import { refundAlert } from '@ziga/shared/deposit-settlement';
 import { generateRentSchedule } from '@ziga/shared/rent-schedule';
-import { exitDueAdjustments } from '@ziga/shared/tenant-exit';
+import { exitDueAdjustments, type ExitDueAdjustment } from '@ziga/shared/tenant-exit';
 import { and, asc, eq, inArray, isNotNull, isNull, lt, lte, ne, sql } from 'drizzle-orm';
 import type { DatabaseService } from '../../db/database.module.js';
 import type { Tx } from '../../db/database.js';
 import { depositSettlements, leaseNotices, leases, rentDues } from '../../db/schema/leases.js';
+import type { AuditOrigin } from '../../common/request-context.js';
 import type { AuditActor, AuditService } from '../audit/audit.service.js';
 import type { ExitHooks } from './exit-hooks.js';
 import type { RentDueEvents } from './rent-due-events.js';
@@ -40,6 +41,91 @@ export interface LeasesDailyResult {
 }
 
 /**
+ * Dernières échéances d'un bail à sa sortie (D32), sans rien écrire : le dernier mois ramené au dernier jour facturé
+ * selon le mode du bail, les suivants abandonnés, le surplus déjà payé rendu au crédit. La même règle pour la tâche du
+ * jour (qui l'écrit) et pour un décompte préparé avant elle (qui la lit) : le décompte ne dépend jamais de la tâche.
+ */
+export async function exitDuesPlan(
+	tx: Tx,
+	lease: typeof leases.$inferSelect,
+	lock = false
+): Promise<{ rentEndsOn: string; origin: string | null; adjustments: ExitDueAdjustment[] }> {
+	const [notice] = await tx
+		.select()
+		.from(leaseNotices)
+		.where(and(eq(leaseNotices.leaseId, lease.id), eq(leaseNotices.status, 'recorded')))
+		.limit(1);
+	const rentEndsOn = notice?.rentEndsOn ?? lease.exitOn!;
+	if (rentEndsOn < lease.duesStartOn) return { rentEndsOn, origin: notice?.origin ?? null, adjustments: [] };
+	const input = await scheduleInput(tx, lease, rentEndsOn);
+	const endOn = lease.endsOn && lease.endsOn < rentEndsOn ? lease.endsOn : rentEndsOn;
+	const regenerated = generateRentSchedule({ ...input, endOn, until: rentEndsOn });
+	const q = tx.select().from(rentDues).where(eq(rentDues.leaseId, lease.id));
+	const rows = lock ? await q.for('update') : await q;
+	return { rentEndsOn, origin: notice?.origin ?? null, adjustments: exitDueAdjustments(rows, regenerated, rentEndsOn) };
+}
+
+/**
+ * Fin d'un bail en préavis arrivé à sa date de sortie : dernières échéances écrites (une fois, `exit_adjusted_at`),
+ * surplus rendu au crédit, bail terminé (la base fait passer l'unité « à remettre en état »), journalisé. Appelée par
+ * la tâche du jour et à la préparation du décompte ; sans effet sur un bail déjà terminé ou pas encore à sa sortie.
+ */
+export async function endLeaseAtExit(
+	tx: Tx,
+	audit: AuditService,
+	organizationId: string,
+	lease: typeof leases.$inferSelect,
+	today: string,
+	hooks: ExitHooks,
+	actor: AuditActor = SYSTEM,
+	origin: AuditOrigin = 'job'
+): Promise<boolean> {
+	if (lease.status !== 'notice' || !lease.exitOn || lease.exitOn > today) return false;
+	const plan = await exitDuesPlan(tx, lease, true);
+	const now = new Date();
+	const adjustments: { id: string; action: string; amountDue: number; excessPaid: number }[] = [];
+	for (const a of plan.adjustments) {
+		// Surplus déjà payé : l'argent du locataire, rendu au crédit du bail avant de réduire l'échéance.
+		if (a.excessPaid > 0) {
+			await hooks.payments.releaseToCredit({ tx, organizationId, leaseId: lease.id, rentDueId: a.id, amount: a.excessPaid, actor, today });
+		}
+		await tx
+			.update(rentDues)
+			.set(
+				a.action === 'waive'
+					? { status: 'waived', exitAdjustedAt: now, updatedAt: now }
+					: {
+							rent: a.rent,
+							charges: a.charges,
+							amountDue: a.amountDue,
+							periodEnd: a.periodEnd,
+							prorated: true,
+							exitAdjustedAt: now,
+							updatedAt: now
+						}
+			)
+			.where(eq(rentDues.id, a.id));
+		adjustments.push({ id: a.id, action: a.action, amountDue: a.amountDue, excessPaid: a.excessPaid });
+	}
+	const endKind = plan.origin === 'lessor' ? 'lessor_notice' : 'tenant_exit';
+	await tx
+		.update(leases)
+		.set({ status: 'ended', endedAt: now, endKind, endReason: 'Sortie du locataire', updatedAt: now })
+		.where(eq(leases.id, lease.id));
+	await audit.record(tx, {
+		actor,
+		organizationId,
+		action: 'lease.end',
+		objectType: 'lease',
+		objectId: lease.id,
+		before: { status: 'notice' },
+		after: { status: 'ended', endKind, exitOn: lease.exitOn, rentEndsOn: plan.rentEndsOn, adjustments },
+		origin
+	});
+	return true;
+}
+
+/**
  * Lot 10 bis : fin des baux en préavis arrivés à leur date de sortie, et alertes du délai de restitution. Rejouée le même
  * jour, elle ne change rien (le bail est terminé, l'ajustement de la dernière période n'a lieu qu'une fois).
  */
@@ -57,69 +143,7 @@ export async function exitLeasesFor(
 		.where(and(eq(leases.organizationId, organizationId), eq(leases.status, 'notice'), lte(leases.exitOn, today)))
 		.orderBy(asc(leases.exitOn), asc(leases.id))
 		.for('update');
-	for (const lease of due) {
-		const [notice] = await tx
-			.select()
-			.from(leaseNotices)
-			.where(and(eq(leaseNotices.leaseId, lease.id), eq(leaseNotices.status, 'recorded')))
-			.limit(1);
-		const rentEndsOn = notice?.rentEndsOn ?? lease.exitOn!;
-		const adjustments: { id: string; action: string; amountDue: number; excessPaid: number }[] = [];
-		if (rentEndsOn >= lease.duesStartOn) {
-			const input = await scheduleInput(tx, lease, rentEndsOn);
-			const endOn = lease.endsOn && lease.endsOn < rentEndsOn ? lease.endsOn : rentEndsOn;
-			const regenerated = generateRentSchedule({ ...input, endOn, until: rentEndsOn });
-			const rows = await tx.select().from(rentDues).where(eq(rentDues.leaseId, lease.id)).for('update');
-			const now = new Date();
-			for (const a of exitDueAdjustments(rows, regenerated, rentEndsOn)) {
-				// Surplus déjà payé : l'argent du locataire, rendu au crédit du bail avant de réduire l'échéance.
-				if (a.excessPaid > 0) {
-					await hooks.payments.releaseToCredit({
-						tx,
-						organizationId,
-						leaseId: lease.id,
-						rentDueId: a.id,
-						amount: a.excessPaid,
-						actor: SYSTEM,
-						today
-					});
-				}
-				await tx
-					.update(rentDues)
-					.set(
-						a.action === 'waive'
-							? { status: 'waived', exitAdjustedAt: now, updatedAt: now }
-							: {
-									rent: a.rent,
-									charges: a.charges,
-									amountDue: a.amountDue,
-									periodEnd: a.periodEnd,
-									prorated: true,
-									exitAdjustedAt: now,
-									updatedAt: now
-								}
-					)
-					.where(eq(rentDues.id, a.id));
-				adjustments.push({ id: a.id, action: a.action, amountDue: a.amountDue, excessPaid: a.excessPaid });
-			}
-		}
-		const endKind = notice?.origin === 'lessor' ? 'lessor_notice' : 'tenant_exit';
-		await tx
-			.update(leases)
-			.set({ status: 'ended', endedAt: new Date(), endKind, endReason: 'Sortie du locataire', updatedAt: new Date() })
-			.where(eq(leases.id, lease.id));
-		await audit.record(tx, {
-			actor: SYSTEM,
-			organizationId,
-			action: 'lease.end',
-			objectType: 'lease',
-			objectId: lease.id,
-			before: { status: 'notice' },
-			after: { status: 'ended', endKind, exitOn: lease.exitOn, rentEndsOn, adjustments },
-			origin: 'job'
-		});
-		ended += 1;
-	}
+	for (const lease of due) if (await endLeaseAtExit(tx, audit, organizationId, lease, today, hooks)) ended += 1;
 	let refundAlerts = 0;
 	const open = await tx
 		.select()

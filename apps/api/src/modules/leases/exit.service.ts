@@ -71,6 +71,7 @@ import { OwnersService } from '../owners/owners.service.js';
 import { PropertiesService } from '../properties/properties.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { ExitHooks } from './exit-hooks.js';
+import { endLeaseAtExit, exitDuesPlan } from './leases-daily.js';
 
 type LeaseRow = typeof leases.$inferSelect;
 type SettlementRow = typeof depositSettlements.$inferSelect;
@@ -676,6 +677,7 @@ export class ExitService {
 		const alreadyRefunded = sum('refunded');
 		const exitOn = lease.exitOn ?? toIsoDate();
 		const lines: SettlementLine[] = [];
+		let exitExcess = 0;
 		if (account.type === 'security_deposit') {
 			// Réparations des lignes de sortie (règle 14) ; une réparation par le locataire, sur accord accepté.
 			const rows = await c.tx
@@ -713,11 +715,23 @@ export class ExitService {
 				});
 			}
 			// Loyers et charges impayés (les encaissements en attente d'abord) ; les mois couverts par un accord accepté.
-			const dues = await c.tx
-				.select()
-				.from(rentDues)
-				.where(and(eq(rentDues.leaseId, lease.id), ne(rentDues.status, 'waived')))
-				.orderBy(asc(rentDues.dueOn), asc(rentDues.periodStart));
+			// Toujours jusqu'à la date de sortie : un bail encore en préavis compte ses dernières échéances comme la tâche
+			// du jour les écrira (dernier mois au prorata, suivants exclus, surplus au crédit), sans rien écrire.
+			const exitPlan = lease.status === 'notice' && lease.exitOn ? await exitDuesPlan(c.tx, lease) : null;
+			const adjusted = new Map((exitPlan?.adjustments ?? []).map((a) => [a.id, a]));
+			exitExcess = (exitPlan?.adjustments ?? []).reduce((s, a) => s + a.excessPaid, 0);
+			const dues = (
+				await c.tx
+					.select()
+					.from(rentDues)
+					.where(and(eq(rentDues.leaseId, lease.id), ne(rentDues.status, 'waived')))
+					.orderBy(asc(rentDues.dueOn), asc(rentDues.periodStart))
+			)
+				.filter((d) => adjusted.get(d.id)?.action !== 'waive')
+				.map((d) => {
+					const a = adjusted.get(d.id);
+					return a ? { ...d, amountDue: a.amountDue, amountPaid: Math.min(d.amountPaid, a.amountDue) } : d;
+				});
 			let pending = await this.hooks.payments.pendingRent(c.tx, lease.id);
 			const outstanding = new Map<string, number>();
 			for (const d of dues) {
@@ -785,7 +799,7 @@ export class ExitService {
 				outstanding: claim.outstanding
 			});
 		}
-		const credit = account.type === 'security_deposit' ? await this.hooks.payments.credit(c.tx, lease.id) : 0;
+		const credit = account.type === 'security_deposit' ? (await this.hooks.payments.credit(c.tx, lease.id)) + exitExcess : 0;
 		return { input: { accountType: account.type, received, alreadyRefunded, credit, exitOn, lines }, lease, account, alreadyRefunded };
 	}
 
@@ -805,6 +819,12 @@ export class ExitService {
 	 */
 	async prepareSettlement(accountId: string, origin?: AuditOrigin): Promise<Row> {
 		const c = this.context(origin);
+		// Date de sortie atteinte, tâche du jour pas encore passée : le bail est terminé ici, par la même fonction (idempotente).
+		const [owning] = await c.tx.select({ leaseId: depositAccounts.leaseId }).from(depositAccounts).where(eq(depositAccounts.id, accountId)).limit(1);
+		if (owning) {
+			const lease = await this.lease(c, owning.leaseId, true);
+			await endLeaseAtExit(c.tx, this.audit, c.organizationId, lease, toIsoDate(), this.hooks, c.actor, c.origin ?? 'api');
+		}
 		const { input, lease, account } = await this.settlementInput(c, accountId);
 		const result = computeSettlement(input);
 		const totals = {
