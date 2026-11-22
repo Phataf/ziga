@@ -1391,3 +1391,12 @@ Prompt : `prompts/lot-10ter-espaces-personnels.md`.
 
 ### Étape 0
 - Titre du lot 10 bis : « (étape 4 en relecture) » retiré, le lot est terminé (validé par le porteur le 22/11/2026).
+
+### Correctif avant le lot 10 ter : page d'une sortie sur téléphone (22/11/2026)
+- **Symptôme** : en CI, `sortie.spec.ts:197` (téléphone) restait cinq minutes sur « Ouvrir le décompte » : le clic tombait tantôt sur la section, tantôt sur la pastille de l'état des lieux au-dessus.
+- **Mesure** : à 360 px, processeur ralenti ×4 puis ×12, les changements du DOM après « terminer-edl » tombent à 0 après le premier rendu ; en CI, la vérification de stabilité (une seconde sans changement) passe aussi avant le clic. Ce n'était donc pas une page qui change en boucle.
+- **Cause** : la page d'une sortie **débordait de 76 px** à 360 px de large : la pastille « Signé des deux parties : l'état des lieux est figé. » ne revient pas à la ligne et sa largeur minimale élargissait toute la colonne de la grille. Sur téléphone, la page débordante est dézoomée et le point du clic ne tombe plus sur le bouton ; en local, avec des polices plus étroites, le clic tombait encore juste. L'écran n'était pas vérifié sans débordement sur téléphone (`docs/UX.md` §8) : c'est l'écart qui l'a laissé passer.
+- **Correction** : libellés courts des pastilles de l'état des lieux sur cette page (« Signé des deux parties », « Contesté ») ; sections de la grille autorisées à rétrécir (`min-w-0`) ; abonnements à l'unité et au locataire par identifiant, jamais renouvelés à chaque version du bail.
+- **Tests** : `sortie.spec.ts` vérifie la page d'une sortie sans débordement sur téléphone (avant et après l'état des lieux, et vue par l'agent de terrain), et attend une page stable avant ses clics (l'échec nomme ce qui change).
+- **CI** : traces des tests Playwright en échec et `apps/web/test-results` publiés 7 jours (artefact `playwright-test-results`).
+

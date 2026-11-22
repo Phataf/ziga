@@ -263,6 +263,7 @@ test.describe('Sortie complète, du préavis à la restitution, sur les trois ap
 			await page.getByTestId('ouvrir-sortie').click();
 			await expect(page.getByTestId('sortie-conge')).toContainText('Le locataire');
 			await stable(page, `Page d’une sortie avant l’état des lieux (${label})`);
+			await expectNoHorizontalOverflow(page, `Page d’une sortie avant l’état des lieux (${label})`);
 
 			// 2. État des lieux de sortie, pièce par pièce.
 			await page.getByTestId('commencer-edl').click();
@@ -300,6 +301,7 @@ test.describe('Sortie complète, du préavis à la restitution, sur les trois ap
 			await endAndSettleRent(request, agency, leaseId);
 			await page.getByTestId('terminer-edl').click();
 			await stable(page, `Page d’une sortie (${label})`);
+			await expectNoHorizontalOverflow(page, `Page d’une sortie après l’état des lieux (${label})`);
 			await page.getByTestId('ouvrir-decompte').click();
 			await stable(page, `Décompte avant préparation (${label})`);
 			await page.getByTestId('preparer-decompte').click();
@@ -628,6 +630,7 @@ test.describe('État des lieux hors ligne par l’agent de terrain', () => {
 		const { ctx, page } = await open(browser, phone, agent, `/app/sorties/${leaseId}`);
 		await expect(page.getByTestId('sortie-decompte')).toContainText('Le décompte de caution est préparé par la gestion.');
 		await expect(page.getByTestId('ouvrir-decompte')).toHaveCount(0);
+		await expectNoHorizontalOverflow(page, 'Page d’une sortie (agent de terrain, téléphone)');
 		await page.getByTestId('commencer-edl').click();
 		await expect(page.getByTestId('etat-des-lieux')).toBeVisible();
 
