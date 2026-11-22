@@ -157,6 +157,23 @@ export class OrganizationsService implements OnModuleInit {
 
 	// ------------------------------------------------------------ appartenances (contexte personnel)
 
+	/**
+	 * Lot 10 ter : ce qu'un espace personnel montre d'une organisation (nom, type, contact, formule et statut pour les
+	 * interrupteurs), lu dans la transaction de cette organisation (withOrganization ouvert par le module portals).
+	 */
+	async partyOrganization(tx: Tx, organizationId: string) {
+		const [o] = await tx.select().from(organizations).where(eq(organizations.id, organizationId)).limit(1);
+		if (!o) return null;
+		return {
+			id: o.id,
+			name: o.tradeName ?? o.legalName,
+			type: o.type,
+			phone: o.phone,
+			planId: o.planId,
+			verificationStatus: o.verificationStatus
+		};
+	}
+
 	async listMine(userId: string): Promise<MembershipView[]> {
 		const rows = await this.database.withUser(userId, (tx) =>
 			tx

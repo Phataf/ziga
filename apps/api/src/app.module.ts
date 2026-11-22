@@ -22,6 +22,7 @@ import { LeasesModule } from './modules/leases/leases.module.js';
 import { ExitHooksModule } from './modules/leases/exit-hooks.js';
 import { LeaseEventsModule } from './modules/leases/rent-due-events.js';
 import { CollectionsModule } from './modules/collections/collections.module.js';
+import { PortalsModule } from './modules/portals/portals.module.js';
 import { PaymentsModule } from './modules/payments/payments.module.js';
 import { NotificationsModule } from './modules/notifications/notifications.module.js';
 import { RedisModule } from './redis/redis.module.js';
@@ -54,6 +55,7 @@ export class AppModule {
 				LeasesModule,
 				PaymentsModule,
 				CollectionsModule,
+				PortalsModule,
 				AdminModule,
 				SyncModule,
 				...extraModules,

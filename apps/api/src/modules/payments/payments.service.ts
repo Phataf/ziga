@@ -181,6 +181,19 @@ export interface CollectionLedgerRow {
 	receiptNumber: string | null;
 }
 
+/** Reçu vu par le locataire lié, dans son espace (lot 10 ter). */
+export interface PartyReceipt {
+	id: string;
+	leaseId: string;
+	purpose: string;
+	number: string | null;
+	status: string;
+	issuedOn: string | null;
+	paidOn: string;
+	amount: number;
+	hasPdf: boolean;
+}
+
 @Injectable()
 export class PaymentsService implements OnModuleInit {
 	constructor(
@@ -972,6 +985,67 @@ export class PaymentsService implements OnModuleInit {
 			},
 			...(event.origin ? { origin: event.origin } : {})
 		});
+	}
+
+	// ---------------------------------------------------------------- lot 10 ter : espace du locataire (module portals)
+
+	/** Reçus émis (valables ou annulés) des baux d'un locataire lié, dans l'organisation de la transaction. */
+	async partyReceipts(tx: Tx, organizationId: string, leaseIds: readonly string[]): Promise<PartyReceipt[]> {
+		if (!leaseIds.length) return [];
+		const rows = await tx
+			.select({ r: receipts, amount: payments.amount, paidOn: payments.paidOn })
+			.from(receipts)
+			.innerJoin(payments, and(eq(payments.organizationId, receipts.organizationId), eq(payments.id, receipts.paymentId)))
+			.where(and(eq(receipts.organizationId, organizationId), inArray(receipts.leaseId, [...leaseIds]), ne(receipts.status, 'provisional')))
+			.orderBy(desc(receipts.issuedOn), desc(receipts.id));
+		return rows.map(({ r, amount, paidOn }) => ({
+			id: r.id,
+			leaseId: r.leaseId,
+			purpose: r.purpose,
+			number: r.number,
+			status: r.status,
+			issuedOn: r.issuedOn,
+			paidOn,
+			amount,
+			hasPdf: !!r.pdfA6Key
+		}));
+	}
+
+	/**
+	 * URL signée (5 minutes) du PDF d'un reçu, pour le locataire lié : seulement un reçu de l'un de ses baux ; journalisé
+	 * dans l'organisation (origine portal, la personne en sujet).
+	 */
+	async partyReceiptPdfUrl(
+		tx: Tx,
+		organizationId: string,
+		receiptId: string,
+		leaseIds: readonly string[],
+		userId: string
+	): Promise<{ url: string; expiresInSeconds: number }> {
+		const [receipt] = await tx
+			.select()
+			.from(receipts)
+			.where(and(eq(receipts.organizationId, organizationId), eq(receipts.id, receiptId)))
+			.limit(1);
+		if (!receipt || !leaseIds.includes(receipt.leaseId) || receipt.status === 'provisional') throw RECEIPT_NOT_FOUND();
+		if (!receipt.pdfA6Key)
+			throw new AppError('RECEIPT_PDF_PENDING', 'Le PDF du reçu est en préparation : réessayez dans quelques secondes.', 409);
+		await this.audit.record(tx, {
+			actor: { type: 'user', userId },
+			organizationId,
+			subjectUserId: userId,
+			action: 'receipt.download',
+			objectType: 'receipt',
+			objectId: receipt.id,
+			after: { format: 'a6', number: receipt.number },
+			origin: 'portal'
+		});
+		const url = await this.storage.presignGet(receipt.pdfA6Key, {
+			expiresInSeconds: 300,
+			fileName: `recu-${receipt.number ?? receipt.provisionalNumber}.pdf`,
+			contentType: 'application/pdf'
+		});
+		return { url, expiresInSeconds: 300 };
 	}
 
 	// ---------------------------------------------------------------- reçus : PDF, partage
