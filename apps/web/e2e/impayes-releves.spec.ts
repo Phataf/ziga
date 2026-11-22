@@ -508,7 +508,7 @@ test.describe('Relevés propriétaires', () => {
 		await page.getByTestId('enregistrer-reversement').click();
 		await expect(page.getByLabel('Montant reversé')).toHaveValue('72500', { timeout: 20_000 });
 		await page.getByTestId('formulaire-reversement').getByRole('button', { name: 'Enregistrer un reversement' }).click();
-		await expect(page.getByText('Reversement enregistré.')).toBeVisible();
+		await expect(page.getByText('Reversement enregistré.', { exact: true })).toBeVisible();
 		await expect(page.getByTestId('reste-a-reverser')).toHaveText(formatFcfa(0), { timeout: 20_000 });
 		await expectNoHorizontalOverflow(page, 'Relevé émis et reversé (direction, ordinateur)');
 
