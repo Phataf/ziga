@@ -7,6 +7,7 @@
  * - Propre fiche du bailleur liée à son numéro vérifié, par son directeur (réponse 2), journalisée.
  * - Révocation par l'organisation et par la personne ; accès croisé ; permissions ; interrupteur de l'espace.
  */
+import { randomUUID } from 'node:crypto';
 import { newId } from '@ziga/shared/ids';
 import type pg from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -412,5 +413,110 @@ describe('révocation, accès croisé, propre fiche du bailleur, interrupteur', 
 			await owner.query(`update feature_overrides set revoked_at = now(), revoked_by = created_by where id = $1`, [override]);
 			await t.app.get(FeaturesService).invalidate();
 		}
+	});
+});
+
+describe('invitation expirée : la fiche n’est jamais bloquée (correctif avant l’étape 2b)', () => {
+	/** Invitation de l'organisation, jamais réclamée, expirée depuis une minute (la base fige l'expiration : posée à l'insertion). */
+	async function expiredInvite(org: Org, by: Member, record: { ownerId?: string; tenantId?: string }, phone: string): Promise<string> {
+		const id = newId();
+		await seedIn(owner, org.id, (c) =>
+			c.query(
+				`insert into person_links (id, organization_id, record_type, owner_id, tenant_id, status, origin, phone, requested_by, accepted_by,
+					accepted_at, invite_token_hash, invite_expires_at)
+				 values ($1, $2, $3, $4, $5, 'requested', 'organization_invite', $6, $7, $7, now(), $8, now() - interval '1 minute')`,
+				[
+					id,
+					org.id,
+					record.ownerId ? 'owner' : 'tenant',
+					record.ownerId ?? null,
+					record.tenantId ?? null,
+					phone,
+					by.userId,
+					sha256(`${org.id}.${randomUUID()}${randomUUID()}`)
+				]
+			)
+		);
+		return id;
+	}
+
+	async function expectExpiredRevoked(org: Org, linkId: string) {
+		const r = await seedIn(owner, org.id, async (c) => ({
+			link: (await c.query(`select status, revoked_by_party, revoked_by, revocation_reason from person_links where id = $1`, [linkId]))
+				.rows[0],
+			audit: (
+				await c.query(
+					`select actor_type, organization_id, action, after from audit_log where object_id = $1 and action = 'person_link.revoke'`,
+					[linkId]
+				)
+			).rows
+		}));
+		expect(r.link).toEqual({ status: 'revoked', revoked_by_party: 'system', revoked_by: null, revocation_reason: 'Invitation expirée' });
+		expect(r.audit).toEqual([
+			expect.objectContaining({
+				actor_type: 'system',
+				organization_id: org.id,
+				after: expect.objectContaining({ status: 'revoked', revokedByParty: 'system', cause: 'invitation_expired' })
+			})
+		]);
+	}
+
+	it('réinviter après expiration : l’ancienne invitation est révoquée (« Invitation expirée », audit), la nouvelle part', async () => {
+		const p = await person();
+		const tenant = await tenantIn(a, p.phone);
+		const old = await expiredInvite(a, managerA, { tenantId: tenant }, p.phone);
+		const r = await invite(a, managerA, tenant);
+		expect(r.status).toBe(201);
+		await expectExpiredRevoked(a, old);
+		const list = await managerA.call<Link[]>('GET', `/person-links?recordType=tenant&recordId=${tenant}`);
+		expect(list.body.map((l) => [l.id, l.status])).toEqual([
+			[r.body.link.id, 'requested'],
+			[old, 'revoked']
+		]);
+	});
+
+	it('demande de la personne après expiration : le code part et la demande est enregistrée', async () => {
+		await verifyOrg(b);
+		const p = await person();
+		const tenant = await tenantIn(b, p.phone);
+		const old = await expiredInvite(b, b.director, { tenantId: tenant }, p.phone);
+		const sent = t.sms.messages.length;
+		const r = await p.client.call('POST', '/me/person-links/requests', { id: newId(), organizationId: b.id, recordType: 'tenant' });
+		expect(r.status).toBe(202);
+		expect(noSmsSince(p.phone, sent)).toBe(false);
+		await expectExpiredRevoked(b, old);
+		const mine = await p.client.call<{ status: string; organizationId: string }[]>('GET', '/me/person-links');
+		expect(mine.body).toEqual([expect.objectContaining({ organizationId: b.id, status: 'requested' })]);
+	});
+
+	it('liaison automatique du bailleur après expiration d’une invitation sur sa propre fiche', async () => {
+		const landlord = await createOrg(t, 'landlord', 'Mariam Zongo');
+		const selfOwner = await seedIn(owner, landlord.id, async (c) => {
+			const r = await c.query(`select owner_id from mandates where organization_id = $1 and type = 'self_managed'`, [landlord.id]);
+			await c.query(`update owners set phone = $2 where id = $1`, [r.rows[0].owner_id, landlord.director.phone]);
+			return r.rows[0].owner_id as string;
+		});
+		const old = await expiredInvite(landlord, landlord.director, { ownerId: selfOwner }, landlord.director.phone);
+		const mine = await landlord.director.client.call<{ status: string; recordType: string }[]>('GET', '/me/person-links');
+		expect(mine.body).toEqual([expect.objectContaining({ organizationId: landlord.id, recordType: 'owner', status: 'active' })]);
+		await expectExpiredRevoked(landlord, old);
+	});
+
+	it('une invitation réclamée par une personne mais au code non validé reste en l’état, même expirée : elle lui appartient', async () => {
+		const p = await person();
+		const tenant = await tenantIn(a, p.phone);
+		// Invitation déjà à elle (sa personne posée), expirée, code jamais validé.
+		const mineId = newId();
+		await seedIn(owner, a.id, (c) =>
+			c.query(
+				`insert into person_links (id, organization_id, user_id, record_type, tenant_id, status, origin, phone, requested_by, accepted_by,
+					accepted_at, invite_token_hash, invite_expires_at)
+				 values ($1, $2, $3, 'tenant', $4, 'requested', 'organization_invite', $5, $6, $6, now(), $7, now() - interval '1 minute')`,
+				[mineId, a.id, p.userId, tenant, p.phone, managerA.userId, sha256(`${a.id}.${randomUUID()}${randomUUID()}`)]
+			)
+		);
+		expect((await invite(a, managerA, tenant)).body).toMatchObject({ code: 'PERSON_LINK_EXISTS' });
+		const still = await seedIn(owner, a.id, (c) => c.query(`select status, user_id from person_links where id = $1`, [mineId]));
+		expect(still.rows[0]).toEqual({ status: 'requested', user_id: p.userId });
 	});
 });
