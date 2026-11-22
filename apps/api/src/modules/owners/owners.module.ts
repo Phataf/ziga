@@ -1,6 +1,7 @@
 import { Module, type OnModuleInit } from '@nestjs/common';
 import { OrganizationCreationHooks } from '../organizations/organization-hooks.js';
 import { OrganizationsModule } from '../organizations/organizations.module.js';
+import { PersonLinkRecords } from '../organizations/person-link-records.js';
 import { SyncModule } from '../sync/sync.module.js';
 import { MandatesController, OwnersController } from './owners.controller.js';
 import { OwnersService } from './owners.service.js';
@@ -19,10 +20,13 @@ import { OwnersSyncHandlers } from './owners.sync.js';
 export class OwnersModule implements OnModuleInit {
 	constructor(
 		private readonly hooks: OrganizationCreationHooks,
-		private readonly owners: OwnersService
+		private readonly owners: OwnersService,
+		private readonly linkable: PersonLinkRecords
 	) {}
 
 	onModuleInit(): void {
 		this.hooks.register((tx, event) => this.owners.createLandlordSelfManaged(tx, event));
+		// Lot 10 ter : les fiches propriétaire se lient au compte d'une personne (module organizations).
+		this.linkable.register('owner', this.owners.linkableRecords);
 	}
 }

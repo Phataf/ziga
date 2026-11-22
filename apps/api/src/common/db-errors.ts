@@ -58,6 +58,21 @@ const RULES: Record<string, { status: number; message: string }> = {
 	NOTICE_PROOF_INVALID: { status: 400, message: 'La preuve est un document « preuve du congé » de ce bail.' },
 	LEASE_NOTICE_REQUIRED: { status: 409, message: 'Le préavis suit un congé enregistré.' },
 	LEASE_NOTICE_LOCKED: { status: 409, message: 'Les dates du préavis ne changent pas.' },
+	// Lot 10 ter : liens entre fiches et comptes, signalements (migrations 0022 et 0023). Clés longues d'abord (préfixes).
+	PERSON_LINK_REQUEST_ORGANIZATION: { status: 409, message: 'Une demande de liaison ne vise qu’une agence vérifiée.' },
+	PERSON_LINK_REQUEST: { status: 409, message: 'La personne demande elle-même ; l’organisation accepte ensuite.' },
+	PERSON_LINK_LANDLORD_SELF: { status: 409, message: 'Seule la propre fiche d’un bailleur particulier se lie ainsi, par son directeur.' },
+	PERSON_LINK_REVOKED: { status: 409, message: 'Ce lien est révoqué : une nouvelle liaison crée un nouveau lien.' },
+	PERSON_LINK_REVOKE: { status: 403, message: 'Vous ne révoquez que vos propres liens.' },
+	PERSON_LINK_IMMUTABLE: { status: 409, message: 'Ce lien ne change plus.' },
+	PERSON_LINK_STATUS: { status: 409, message: 'Ce changement de statut n’est pas permis.' },
+	PERSON_LINK_MEMBER: { status: 403, message: 'Seules la direction et la gestion invitent, acceptent ou révoquent un lien.' },
+	PERSON_LINK_INVITE: { status: 409, message: 'Cette invitation n’est plus valable.' },
+	LINK_PHONE_MISMATCH: { status: 409, message: 'Le numéro de votre compte n’est pas celui de la fiche.' },
+	MAINTENANCE_STATUS: { status: 409, message: 'Ce changement de statut n’est pas permis.' },
+	MAINTENANCE_IMMUTABLE: { status: 409, message: 'Un signalement ne se réécrit pas ; seul son suivi change.' },
+	MAINTENANCE_LEASE: { status: 409, message: 'Un signalement vise un bail en vigueur ou en préavis.' },
+	MAINTENANCE_MEMBER: { status: 403, message: 'Seules la direction et la gestion traitent un signalement.' },
 	INSPECTION_BORN_DRAFT: { status: 409, message: 'Un état des lieux naît brouillon.' },
 	INSPECTION_LEASE: { status: 409, message: 'Pas d’état des lieux sur ce bail à ce stade.' },
 	INSPECTION_IMMUTABLE: { status: 409, message: 'Le bail et le type d’un état des lieux ne changent pas.' },
@@ -221,7 +236,10 @@ const CONSTRAINTS: Record<string, { code: string; status: number; message: strin
 		message: 'Un élément de ce relevé est déjà repris dans un autre relevé.'
 	},
 	owner_statements_version_unique: { code: 'STATEMENT_EXISTS', status: 409, message: 'Ce relevé existe déjà.' },
-	owner_payouts_reversed_once: { code: 'PAYOUT_ALREADY_CANCELLED', status: 409, message: 'Ce reversement est déjà annulé.' }
+	owner_payouts_reversed_once: { code: 'PAYOUT_ALREADY_CANCELLED', status: 409, message: 'Ce reversement est déjà annulé.' },
+	// Lot 10 ter : une fiche n'est liée qu'à une personne à la fois.
+	person_links_one_per_owner: { code: 'PERSON_LINK_EXISTS', status: 409, message: 'Cette fiche est déjà liée ou en cours de liaison.' },
+	person_links_one_per_tenant: { code: 'PERSON_LINK_EXISTS', status: 409, message: 'Cette fiche est déjà liée ou en cours de liaison.' }
 };
 
 /** Clés étrangères composites : la ligne visée n'existe pas dans l'organisation (règle 1). */
@@ -243,7 +261,11 @@ const FOREIGN_KEYS: Record<string, { code: string; message: string }> = {
 	expenses_lease_fk: { code: 'LEASE_NOT_FOUND', message: 'Bail introuvable.' },
 	expenses_document_fk: { code: 'DOCUMENT_NOT_FOUND', message: 'Justificatif introuvable.' },
 	owner_statements_owner_fk: { code: 'OWNER_NOT_FOUND', message: 'Propriétaire introuvable.' },
-	owner_payouts_statement_fk: { code: 'STATEMENT_NOT_FOUND', message: 'Relevé introuvable.' }
+	owner_payouts_statement_fk: { code: 'STATEMENT_NOT_FOUND', message: 'Relevé introuvable.' },
+	// Lot 10 ter.
+	person_links_owner_fk: { code: 'OWNER_NOT_FOUND', message: 'Propriétaire introuvable.' },
+	person_links_tenant_fk: { code: 'TENANT_NOT_FOUND', message: 'Locataire introuvable.' },
+	maintenance_requests_lease_fk: { code: 'LEASE_NOT_FOUND', message: 'Bail introuvable.' }
 };
 
 interface PgLike {

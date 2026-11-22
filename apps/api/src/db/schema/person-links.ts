@@ -5,14 +5,17 @@
  * du schéma. Le module portals ne lit que les identifiants de ses propres liens, par la fonction SQL my_person_links.
  */
 import type { PersonLinkOrigin, PersonLinkRecordType, PersonLinkRevoker, PersonLinkStatus } from '@ziga/shared/person-links';
-import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { customType, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+
+const bytea = customType<{ data: Buffer }>({ dataType: () => 'bytea' });
 
 const tstz = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
 export const personLinks = pgTable('person_links', {
 	id: uuid('id').primaryKey(),
 	organizationId: uuid('organization_id').notNull(),
-	userId: uuid('user_id').notNull(),
+	/** Vide pour une invitation pas encore réclamée (migration 0023). */
+	userId: uuid('user_id'),
 	recordType: text('record_type').$type<PersonLinkRecordType>().notNull(),
 	ownerId: uuid('owner_id'),
 	tenantId: uuid('tenant_id'),
@@ -27,6 +30,10 @@ export const personLinks = pgTable('person_links', {
 	revokedByParty: text('revoked_by_party').$type<PersonLinkRevoker>(),
 	revokedAt: tstz('revoked_at'),
 	revocationReason: text('revocation_reason'),
+	/** Empreinte SHA-256 du jeton d'invitation (`<organisation>.<secret>`), et son expiration (migration 0023). */
+	inviteTokenHash: bytea('invite_token_hash'),
+	inviteExpiresAt: tstz('invite_expires_at'),
+	claimedAt: tstz('claimed_at'),
 	createdAt: tstz('created_at').notNull().defaultNow(),
 	updatedAt: tstz('updated_at').notNull().defaultNow()
 });

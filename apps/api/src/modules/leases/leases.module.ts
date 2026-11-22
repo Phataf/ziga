@@ -1,6 +1,7 @@
 import { Module, type OnModuleInit } from '@nestjs/common';
 import { DocumentsModule } from '../documents/documents.module.js';
 import { OrganizationsModule } from '../organizations/organizations.module.js';
+import { PersonLinkRecords } from '../organizations/person-link-records.js';
 import { OwnersModule } from '../owners/owners.module.js';
 import { UnitOccupancy } from '../properties/occupancy.js';
 import { PropertiesModule } from '../properties/properties.module.js';
@@ -55,9 +56,15 @@ import { occupancySignals } from './rent-dues.js';
 	exports: [LeasesService, ContractsService, ExitService]
 })
 export class LeasesModule implements OnModuleInit {
-	constructor(private readonly occupancy: UnitOccupancy) {}
+	constructor(
+		private readonly occupancy: UnitOccupancy,
+		private readonly leases: LeasesService,
+		private readonly linkable: PersonLinkRecords
+	) {}
 
 	onModuleInit(): void {
 		this.occupancy.register(occupancySignals);
+		// Lot 10 ter : les fiches locataire se lient au compte d'une personne (module organizations).
+		this.linkable.register('tenant', this.leases.linkableRecords);
 	}
 }

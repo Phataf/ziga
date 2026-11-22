@@ -67,6 +67,7 @@ import { depositAccounts, depositMovements, leaseContracts, leases, leaseVersion
 import { AuditService, diff, type AuditActor } from '../audit/audit.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { OrganizationsService } from '../organizations/organizations.service.js';
+import type { LinkableRecordResolver } from '../organizations/person-link-records.js';
 import { OwnersService } from '../owners/owners.service.js';
 import { PropertiesService } from '../properties/properties.service.js';
 import { RentDueEvents } from './rent-due-events.js';
@@ -332,6 +333,26 @@ export interface DueForPayment {
 
 @Injectable()
 export class LeasesService {
+	// ---------------------------------------------------------------- lot 10 ter : fiches liables à un compte
+
+	/** Fiches locataire que le module organizations peut lier à un compte (PersonLinkRecords), dans la transaction donnée. */
+	readonly linkableRecords: LinkableRecordResolver = {
+		byId: async (tx, id) => {
+			const [r] = await tx
+				.select({ id: tenants.id, name: tenants.fullName, phone: tenants.phone })
+				.from(tenants)
+				.where(and(eq(tenants.id, id), eq(tenants.status, 'active')))
+				.limit(1);
+			return r ?? null;
+		},
+		byPhone: async (tx, phone) =>
+			tx
+				.select({ id: tenants.id, name: tenants.fullName, phone: tenants.phone })
+				.from(tenants)
+				.where(and(eq(tenants.phone, phone), eq(tenants.status, 'active')))
+				.orderBy(desc(tenants.updatedAt), desc(tenants.id))
+	};
+
 	constructor(
 		private readonly audit: AuditService,
 		private readonly properties: PropertiesService,

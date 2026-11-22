@@ -134,7 +134,7 @@ export class AuthService {
 
 	// ---------------------------------------------------------------- codes SMS
 
-	private async issueOtp(phone: string, purpose: OtpPurpose, userId?: string): Promise<void> {
+	private async issueOtp(phone: string, purpose: OtpPurpose, userId?: string, personLinkId?: string): Promise<void> {
 		const code = newOtpCode();
 		const now = new Date();
 		await this.db.transaction(async (tx) => {
@@ -147,8 +147,9 @@ export class AuthService {
 				id: newId(),
 				phone,
 				purpose,
-				// Changement de numéro : le code est lié à la personne qui l'a demandé.
-				userId: purpose === 'change_phone' ? userId : null,
+				// Changement de numéro et liaison d'une fiche : le code est lié à la personne qui l'a demandé (et au lien).
+				userId: purpose === 'change_phone' || purpose === 'link_record' ? userId : null,
+				personLinkId: purpose === 'link_record' ? personLinkId : null,
 				codeHash: hashOtp(this.otpSecret, phone, code),
 				expiresAt: new Date(now.getTime() + this.config.OTP_TTL_MINUTES * MINUTE)
 			});
@@ -157,7 +158,7 @@ export class AuthService {
 	}
 
 	/** Vérifie et consomme un code : 5 essais au plus, 10 minutes, usage unique. */
-	private async consumeOtp(phone: string, purpose: OtpPurpose, code: string, userId?: string): Promise<boolean> {
+	private async consumeOtp(phone: string, purpose: OtpPurpose, code: string, userId?: string, personLinkId?: string): Promise<boolean> {
 		return this.db.transaction(async (tx) => {
 			const [otp] = await tx
 				.select()
@@ -167,7 +168,10 @@ export class AuthService {
 						eq(otpCodes.phone, phone),
 						eq(otpCodes.purpose, purpose),
 						isNull(otpCodes.consumedAt),
-						purpose === 'change_phone' ? eq(otpCodes.userId, userId ?? '00000000-0000-0000-0000-000000000000') : undefined
+						purpose === 'change_phone' || purpose === 'link_record'
+							? eq(otpCodes.userId, userId ?? '00000000-0000-0000-0000-000000000000')
+							: undefined,
+						purpose === 'link_record' ? eq(otpCodes.personLinkId, personLinkId ?? '00000000-0000-0000-0000-000000000000') : undefined
 					)
 				)
 				.orderBy(desc(otpCodes.createdAt))
@@ -184,6 +188,21 @@ export class AuthService {
 			await tx.update(otpCodes).set({ consumedAt: new Date() }).where(eq(otpCodes.id, otp.id));
 			return true;
 		});
+	}
+
+	/**
+	 * Lot 10 ter : code de liaison d'une fiche, envoyé au numéro de la fiche (celui du compte), lié à la personne et au
+	 * lien. Mêmes limites que les autres codes (un par intervalle, N par heure et par numéro).
+	 */
+	async sendLinkCode(userId: string, phone: string, personLinkId: string): Promise<void> {
+		await this.limitSms(phone);
+		await this.issueOtp(phone, 'link_record', userId, personLinkId);
+	}
+
+	/** Vérifie et consomme le code de liaison d'un lien : 5 essais au plus, durée limitée, usage unique. */
+	async consumeLinkCode(userId: string, phone: string, personLinkId: string, code: string, ip: string): Promise<boolean> {
+		await this.limitIp(ip);
+		return this.consumeOtp(phone, 'link_record', code, userId, personLinkId);
 	}
 
 	// ---------------------------------------------------------------- sessions

@@ -181,11 +181,15 @@ export function canReportOnLease(leaseStatus: string): boolean {
 
 const reason = z.string().trim().min(5, { error: 'Motif trop court (5 caractères au moins).' }).max(500, { error: 'Motif trop long.' });
 
-/** L'organisation invite la personne depuis sa fiche : le code part au numéro de la fiche. */
+/** Durée de validité du lien d'invitation envoyé par WhatsApp ou SMS au numéro de la fiche. */
+export const PERSON_LINK_INVITE_TTL_DAYS = 7;
+
+/** L'organisation invite la personne depuis sa fiche : le lien part au numéro de la fiche (WhatsApp, ou SMS par le serveur). */
 export const invitePersonLinkSchema = z.object({
 	id: idSchema,
 	recordType: z.enum(PERSON_LINK_RECORD_TYPES),
-	recordId: idSchema
+	recordId: idSchema,
+	sendSms: z.boolean().default(false)
 });
 
 /** La personne demande la liaison depuis son espace : une agence vérifiée, un type de fiche. */
@@ -195,9 +199,65 @@ export const requestPersonLinkSchema = z.object({
 	recordType: z.enum(PERSON_LINK_RECORD_TYPES)
 });
 
-export const verifyPersonLinkSchema = z.object({ code: otpCodeSchema });
+/** Code reçu au numéro de la fiche, pour un lien d'une organisation. */
+export const verifyPersonLinkSchema = z.object({ organizationId: idSchema, code: otpCodeSchema });
 
+/** Nouveau code, pour un lien d'une organisation. */
+export const personLinkActionSchema = z.object({ organizationId: idSchema });
+
+/** Révocation par l'organisation (motif obligatoire). */
 export const revokePersonLinkSchema = z.object({ reason });
+
+/** Révocation par la personne, depuis son espace (motif obligatoire). */
+export const personRevokeLinkSchema = z.object({ organizationId: idSchema, reason });
+
+// ---------------------------------------------------------------- vues (étape 2)
+
+/** Lien vu par l'organisation, sur la fiche (section « Compte lié ») : jamais le compte lui-même. */
+export interface PersonLinkView {
+	id: string;
+	recordType: PersonLinkRecordType;
+	recordId: string;
+	status: PersonLinkStatus;
+	origin: PersonLinkOrigin;
+	phoneVerified: boolean;
+	accepted: boolean;
+	/** Invitation réclamée par une personne (son compte au numéro de la fiche). */
+	claimed: boolean;
+	inviteExpiresAt: string | null;
+	createdAt: string;
+	acceptedAt: string | null;
+	revokedAt: string | null;
+	revokedByParty: PersonLinkRevoker | null;
+	revocationReason: string | null;
+}
+
+/** Lien vu par la personne, dans son espace : l'organisation, le type de fiche, où en est la liaison. */
+export interface MyPersonLinkView {
+	id: string;
+	organizationId: string;
+	organizationName: string;
+	recordType: PersonLinkRecordType;
+	status: Exclude<PersonLinkStatus, 'revoked'>;
+	phoneVerified: boolean;
+	accepted: boolean;
+	createdAt: string;
+}
+
+/** Agence proposée à une demande de liaison (réponse 1) : le nom seulement. */
+export interface LinkRequestOrganization {
+	id: string;
+	name: string;
+}
+
+/** Invitation vue avant de se connecter (lien reçu par WhatsApp ou SMS) : le numéro masqué, jamais la fiche. */
+export interface PersonLinkInvitationPreview {
+	organizationName: string;
+	recordType: PersonLinkRecordType;
+	phone: string;
+	expiresAt: string;
+	usable: boolean;
+}
 
 export const createMaintenanceRequestSchema = z.object({
 	id: idSchema,
