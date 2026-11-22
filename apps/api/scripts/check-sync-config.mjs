@@ -1,8 +1,11 @@
 /**
  * Vérifie les Sync Streams (infra/powersync/sync-config.yaml) avec le moteur de PowerSync lui-même
  * (@powersync/service-sync-rules, même version que le service) contre le schéma réel de la base :
- * syntaxe, colonnes et tables existantes. Écrit en JSON : erreurs et avertissements, tables lues, et tables du
- * client telles que PowerSync les déduit des streams (nom, colonnes, type SQLite).
+ * syntaxe, colonnes et tables existantes. Écrit en JSON : erreurs et avertissements, tables lues, tables du
+ * client telles que PowerSync les déduit des streams (nom, colonnes, type SQLite), et les recherches de paramètres
+ * sans clé (`unkeyedLookups`) : une telle recherche renvoie toutes les lignes de sa table qui passent ses filtres, pour
+ * chaque connexion. Sur `organizations`, c'est toute la plateforme : au-delà de 1 000 résultats par connexion,
+ * PowerSync refuse la synchronisation (PSYNC_S2305), pour tout le monde.
  *
  * Lancé par test/sync-streams.int.test.ts, avec `--js-explicit-resource-management` : le moteur utilise
  * `using`, que Node 22 n'accepte qu'avec ce drapeau.
@@ -52,4 +55,5 @@ class ClientTables extends SchemaGenerator {
 	}
 }
 const clientTables = JSON.parse(new ClientTables().generate(config, schema));
-process.stdout.write(JSON.stringify({ problems, sourceTables, clientTables }));
+const unkeyedLookups = (config.plan?.parameterIndexes ?? []).filter((p) => p.parameters.length === 0).map((p) => p.sourceTable.tablePattern);
+process.stdout.write(JSON.stringify({ problems, sourceTables, clientTables, unkeyedLookups }));

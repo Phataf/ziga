@@ -6,9 +6,13 @@
  * - Déconnexion : base locale vide.
  * Étapes 3 et 4 : écriture hors ligne, puis refus (« Modifications non acceptées », valeur du serveur revenue).
  */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { parseEnv } from 'node:util';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { newId } from '@ziga/shared/ids';
 import { formatPhone } from '@ziga/shared/phone';
+import pg from 'pg';
 import { accounts, API_URL, expectNoHorizontalOverflow, registerViaApi, signInWith, synced, type Account } from './support';
 
 test.use({ viewport: { width: 1440, height: 900 }, isMobile: false, hasTouch: false });
@@ -291,6 +295,31 @@ test.describe('Synchronisation des biens (lot 07) : l’agent de terrain ne reç
 });
 
 test.describe('Synchronisation : la base locale du navigateur', () => {
+	test('plateforme de plus de 150 organisations : un nouveau directeur se synchronise toujours', async ({ page, request }) => {
+		// Une recherche de paramètres sans clé lisait toutes les organisations non suspendues, pour chaque stream : au-delà
+		// d'environ 80 organisations, plus de 1 000 résultats par connexion et PowerSync refusait toute synchronisation
+		// (PSYNC_S2305). Les organisations ajoutées ici restent dans la base : toute la suite tourne au-delà du seuil.
+		test.setTimeout(90_000);
+		const env = parseEnv(readFileSync(join(import.meta.dirname, '../../../.env'), 'utf8'));
+		const url = new URL(process.env.DATABASE_MIGRATION_URL ?? env.DATABASE_MIGRATION_URL!);
+		url.pathname = '/ziga_e2e';
+		const db = new pg.Client({ connectionString: url.toString() });
+		await db.connect();
+		try {
+			await db.query(
+				`insert into organizations (id, type, legal_name, phone, commune, created_by)
+				 select gen_random_uuid(), 'landlord', 'Bailleur de charge ' || n, '+22625300000', 'Ouagadougou', (select id from users order by created_at limit 1)
+				 from generate_series(1, 150) as n`
+			);
+		} finally {
+			await db.end();
+		}
+		const agency = await freshAgency(request, `Agence au-delà du seuil ${newId().slice(-6)}`);
+		await signInWith(page, agency.director, '/app/organisation');
+		await synced(page, 20_000);
+		await expect(page.getByTestId('apercu-entete')).toContainText('Agence au-delà du seuil');
+	});
+
 	test('membre retiré : ses données locales de l’organisation disparaissent à la synchronisation suivante', async ({ page, request }) => {
 		const agency = await freshAgency(request, `Agence retrait ${newId().slice(-6)}`);
 		// Formule Pro : la formule Découverte ne permet qu'un utilisateur (lot 04). Gestionnaire : il voit l'équipe.

@@ -20,6 +20,7 @@ function check(file = CONFIG): {
 	problems: { type: string; message: string }[];
 	sourceTables: string[];
 	clientTables: Record<string, Record<string, string>>;
+	unkeyedLookups: string[];
 } {
 	const out = execFileSync(process.execPath, ['--js-explicit-resource-management', SCRIPT, process.env.DATABASE_MIGRATION_URL!, file], {
 		encoding: 'utf8'
@@ -30,6 +31,36 @@ function check(file = CONFIG): {
 describe('Sync Streams (lot 05, D30)', () => {
 	it('valides pour le moteur de PowerSync, sans erreur ni avertissement, contre le schéma réel', () => {
 		expect(check().problems).toEqual([]);
+	});
+
+	it('chaque recherche de paramètres a une clé : jamais toutes les organisations de la plateforme par connexion', () => {
+		// Une recherche sans clé renvoie toutes les lignes de sa table qui passent ses filtres, pour chaque connexion et
+		// chaque stream qui l'utilise. Avec `JOIN organizations … verification_status != 'suspended'` en second, c'était
+		// toutes les organisations non suspendues : au-delà d'environ 80 organisations, plus de 1 000 résultats et
+		// PowerSync refusait la synchronisation de tout le monde (PSYNC_S2305, vu en CI sur la PR de l'étape 3b).
+		expect(check().unkeyedLookups).toEqual([]);
+	});
+
+	it('la vérification détecte bien une recherche sans clé (garde-fou du test lui-même)', () => {
+		const unkeyed = join(tmpdir(), `ziga-sync-config-unkeyed-${process.pid}.yaml`);
+		writeFileSync(
+			unkeyed,
+			[
+				'config:',
+				'  edition: 3',
+				'streams:',
+				'  s:',
+				'    auto_subscribe: true',
+				'    with:',
+				'      mine: |',
+				'        SELECT organization_members.organization_id FROM organization_members',
+				'          JOIN organizations ON organizations.id = organization_members.organization_id',
+				"        WHERE organization_members.user_id = auth.user_id() AND organizations.verification_status != 'suspended'",
+				'    query: SELECT id, legal_name FROM organizations WHERE id IN mine',
+				''
+			].join('\n')
+		);
+		expect(check(unkeyed).unkeyedLookups).toEqual(['organizations']);
 	});
 
 	it('la vérification détecte bien une colonne inexistante (garde-fou du test lui-même)', () => {
