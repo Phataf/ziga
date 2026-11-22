@@ -1244,7 +1244,7 @@ Quatre pull requests, chacune aussi envoyée sur `claude/lot10-sauvegarde` :
 ### Questions ouvertes pour le porteur
 Aucune.
 
-## Lot 10 bis — Sortie du locataire : préavis, états des lieux, décompte de caution, remise en état, transfert de gestion — terminé (étape 4 en relecture)
+## Lot 10 bis — Sortie du locataire : préavis, états des lieux, décompte de caution, remise en état, transfert de gestion — terminé
 
 Prompt : `prompts/lot-10bis-sortie-locataire.md`.
 
@@ -1368,3 +1368,21 @@ Prompt : `prompts/lot-10bis-sortie-locataire.md`.
 - Le catalogue de l'organisation (`inspection_catalog_entries`) n'a pas encore d'écran d'édition : l'état des lieux propose les pièces et éléments par défaut de `packages/shared` (hors périmètre du prompt de l'étape).
 - La part non contestée affichée est la restitution proposée moins ce qui a déjà été restitué ; la plateforme n'arbitre pas le montant contesté.
 - Une photo arrivée après la signature n'est acceptée que si elle a été prise avant la dernière case cochée (heure de l'appareil, même confiance que l'heure d'une case cochée) ; jamais après un scan signé.
+
+## Lot 10 ter — Espaces propriétaire et locataire avec compte, regroupant toutes les organisations — en cours
+
+Prompt : `prompts/lot-10ter-espaces-personnels.md`.
+
+### Réponses du porteur aux questions ouvertes du prompt (22/11/2026)
+1. **Prestataire SMS** : pas encore choisi. L'implémentation `console` reste derrière `SmsSender` ; le choix se fera au lot 13.
+2. **Formalités de la loi sur les données personnelles** : à traiter avec le juriste avant la mise en production (lot 13) ; elles ne bloquent pas ce lot.
+
+### Points d'attention du porteur
+- a. Aucune requête ne lit deux organisations à la fois : le test d'isolement le prouve, y compris avec le rôle `app_api` en SQL, et il tourne en CI.
+- b. Numéro de la fiche différent de celui du compte : liaison refusée. Si un locataire a changé de numéro, l'organisation corrige d'abord sa fiche (modification auditée), puis la liaison se fait.
+- c. Le propriétaire ne voit jamais le téléphone ni la pièce d'identité d'un locataire, ni dans l'espace, ni dans un document téléchargé.
+- d. Révocation : les données disparaissent de l'espace immédiatement, y compris du cache court du module `portals`.
+- e. Une pull request par étape, de la branche de travail vers main, suivie jusqu'au vert ; suite Playwright complète, puis `pnpm lint`, `pnpm typecheck` et `pnpm test` avant chaque envoi ; sauvegarde sur `claude/lot10ter-sauvegarde` ; rien sur main.
+
+### Étape 0
+- Titre du lot 10 bis : « (étape 4 en relecture) » retiré, le lot est terminé (validé par le porteur le 22/11/2026).
