@@ -39,8 +39,8 @@ Ce document fait foi pour toute interface du projet (maquette et produit). `CLAU
 | Lecture et comptabilité | Accueil, Biens, Encaissements, Plus | Comme le gestionnaire, en lecture, sans l'équipe |
 | Agent de terrain | Tournée, Biens, Encaissements, Plus | Terrain : tournée, mes biens, mes encaissements, retards |
 | Bailleur particulier | Accueil, Logements, Loyers, Plus | Mes logements |
-| Propriétaire | Patrimoine, Revenus, Relevés, Plus | Mon patrimoine (filtre par gestionnaire), revenus, relevés, reversements, approbations |
-| Locataire | Logement, Reçus, Caution, Plus | Mon logement, historique, reçus, caution et décompte, signalements, préavis |
+| Propriétaire | Patrimoine, Revenus, Relevés, Plus | Mon patrimoine (filtre par gestionnaire), revenus, relevés, reversements, contrats et documents |
+| Locataire | Logement, Reçus, Caution, Plus | Mon logement, contrats et documents, historique, reçus, caution et décompte, signalements, préavis |
 | Visiteur ou acheteur | Pas d'onglets : en-tête de site avec Louer et Acheter | Même en-tête, filtres à gauche |
 | Administrateur plateforme | Non prévu (back-office pensé pour l'ordinateur, utilisable sur tablette) | Organisations, formules et abonnements, fonctionnalités, journal, accès d'assistance |
 

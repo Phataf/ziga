@@ -40,6 +40,7 @@ Ces lots ne sont pas détaillés volontairement : leur contenu dépendra du pilo
 - Publication par les particuliers avec modération (`listings.private_sellers`).
 - Visites 360° (`media.virtual_tour_360`).
 - Extension à Bobo-Dioulasso.
+- Approbation d’une dépense par le propriétaire avant engagement (circuit d’accord de `docs/UX.md` §10).
 
 ## Règle de priorité pendant le pilote
 
