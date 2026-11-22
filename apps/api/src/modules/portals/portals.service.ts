@@ -1,0 +1,314 @@
+/**
+ * Espaces personnels (lot 10 ter, étape 2b) : le propriétaire voit tous ses biens, le locataire tout son historique,
+ * quelle que soit l'organisation (D13, D17, règle 15 de CLAUDE.md). Lecture seule.
+ *
+ * - La seule lecture hors organisation : my_person_links(), les identifiants des liens actifs de la personne connectée.
+ * - Puis chaque organisation, l'une après l'autre, dans sa propre transaction (withOrganization) : une ligne d'audit
+ *   `portal.read` y est écrite (origine portal, la personne en acteur et en sujet), puis seule la fiche liée est lue,
+ *   par les services publics des modules (properties, leases, payments, organizations). Aucune requête ne lit deux
+ *   organisations ; une organisation suspendue reste lisible (réponse du porteur au lot 03).
+ * - Interrupteurs : l'espace (`portals.owner_space`, `portals.tenant_space`) pour la personne, puis pour chaque
+ *   organisation lue (une organisation qui l'a coupé n'est pas lue).
+ * - Cache court (30 s) dans Redis : sa clé contient l'empreinte de l'ensemble des liens actifs. Une révocation change
+ *   cet ensemble : la lecture suivante ne retrouve jamais l'ancienne réponse (point d) ; les clés de la personne sont
+ *   aussi effacées dès qu'un de ses liens change. Une réponse servie par le cache a été lue et journalisée moins de
+ *   30 secondes plus tôt.
+ */
+import { createHash } from 'node:crypto';
+import { Injectable, type OnModuleInit } from '@nestjs/common';
+import type { FeatureKey } from '@ziga/shared/features';
+import { linkSetFingerprint, type ActivePersonLink, type PersonLinkRecordType } from '@ziga/shared/person-links';
+import { sql } from 'drizzle-orm';
+import { AppError } from '../../common/app-error.js';
+import { RequestContext } from '../../common/request-context.js';
+import { DatabaseService } from '../../db/database.module.js';
+import type { Tx } from '../../db/database.js';
+import { RedisService } from '../../redis/redis.module.js';
+import { AuditService } from '../audit/audit.service.js';
+import { FeaturesService } from '../features/features.service.js';
+import { LeasesService, type PartyCurrentLease } from '../leases/leases.service.js';
+import { OrganizationsService } from '../organizations/organizations.service.js';
+import { PersonLinksService } from '../organizations/person-links.service.js';
+import { PaymentsService } from '../payments/payments.service.js';
+import { PropertiesService, type PartyProperty } from '../properties/properties.service.js';
+
+const CACHE_SECONDS = 30;
+const PAGE_SIZE = 50;
+
+export type PortalSpace = 'owner' | 'tenant';
+
+const SPACE_FEATURE: Record<PortalSpace, FeatureKey> = { owner: 'portals.owner_space', tenant: 'portals.tenant_space' };
+const SPACE_RECORD: Record<PortalSpace, PersonLinkRecordType> = { owner: 'owner', tenant: 'tenant' };
+
+interface PortalOrganization {
+	organizationId: string;
+	organizationName: string;
+	organizationType: 'agency' | 'landlord';
+	organizationPhone: string;
+}
+
+export interface OwnerAssetsView {
+	organizations: (PortalOrganization & {
+		managedBy: 'agency' | 'self';
+		properties: (Omit<PartyProperty, 'units'> & { units: (PartyProperty['units'][number] & { lease: PartyCurrentLease | null })[] })[];
+	})[];
+}
+
+export type HistoryItem = PortalOrganization & { kind: 'lease' | 'rent_due' | 'receipt' | 'deposit'; id: string; date: string } & Record<
+		string,
+		unknown
+	>;
+
+export interface TenantHistoryView {
+	items: HistoryItem[];
+	nextCursor: string | null;
+}
+
+@Injectable()
+export class PortalsService implements OnModuleInit {
+	constructor(
+		private readonly database: DatabaseService,
+		private readonly audit: AuditService,
+		private readonly features: FeaturesService,
+		private readonly redis: RedisService,
+		private readonly organizations: OrganizationsService,
+		private readonly links: PersonLinksService,
+		private readonly properties: PropertiesService,
+		private readonly leases: LeasesService,
+		private readonly payments: PaymentsService
+	) {}
+
+	onModuleInit(): void {
+		// Un lien qui change (révocation, activation) : les réponses en cache de la personne sont effacées aussitôt.
+		this.links.onLinkChanged((userId) => this.forget(userId));
+	}
+
+	// ---------------------------------------------------------------- liens et cache
+
+	/** La seule lecture hors organisation : identifiants des liens actifs de la personne connectée. */
+	private async activeLinks(userId: string): Promise<ActivePersonLink[]> {
+		const r = await this.database.withUser(userId, (tx) =>
+			tx.execute<{
+				link_id: string;
+				organization_id: string;
+				record_type: PersonLinkRecordType;
+				owner_id: string | null;
+				tenant_id: string | null;
+			}>(sql`select link_id, organization_id, record_type, owner_id, tenant_id from my_person_links()`)
+		);
+		return r.rows.map((l) => ({
+			linkId: l.link_id,
+			organizationId: l.organization_id,
+			recordType: l.record_type,
+			recordId: (l.owner_id ?? l.tenant_id)!
+		}));
+	}
+
+	private async client() {
+		const c = this.redis.client;
+		if (c.status === 'wait' || c.status === 'end') await c.connect();
+		return c;
+	}
+
+	private cacheKey(userId: string, route: string, links: readonly ActivePersonLink[]): string {
+		const fingerprint = createHash('sha256').update(linkSetFingerprint(links)).digest('hex').slice(0, 32);
+		return `ziga:portal:${userId}:${route}:${fingerprint}`;
+	}
+
+	private async cached<T>(key: string, read: () => Promise<T>): Promise<T> {
+		try {
+			const hit = await (await this.client()).get(key);
+			if (hit) return JSON.parse(hit) as T;
+		} catch {
+			// Redis indisponible : la base reste la source, sans cache.
+			return read();
+		}
+		const value = await read();
+		try {
+			await (await this.client()).set(key, JSON.stringify(value), 'EX', CACHE_SECONDS);
+		} catch {
+			// Sans cache : la réponse est juste.
+		}
+		return value;
+	}
+
+	/** Efface les réponses en cache d'une personne (un de ses liens a changé). */
+	async forget(userId: string): Promise<void> {
+		try {
+			const c = await this.client();
+			let cursor = '0';
+			do {
+				const [next, keys] = await c.scan(cursor, 'MATCH', `ziga:portal:${userId}:*`, 'COUNT', 100);
+				if (keys.length) await c.del(...keys);
+				cursor = next;
+			} while (cursor !== '0');
+		} catch {
+			// La clé contient l'empreinte des liens : une révocation ne retrouve jamais l'ancienne réponse.
+		}
+	}
+
+	// ---------------------------------------------------------------- lecture organisation par organisation
+
+	private async assertSpace(space: PortalSpace, userId: string): Promise<void> {
+		await this.features.assertEnabled(SPACE_FEATURE[space], userId, null);
+	}
+
+	/**
+	 * Lit chaque organisation des liens de la personne pour cet espace, l'une après l'autre, dans sa propre transaction :
+	 * ligne d'audit `portal.read`, puis `read` avec la fiche liée. Une organisation qui a coupé l'espace n'est pas lue.
+	 */
+	private async eachOrganization<T>(
+		userId: string,
+		space: PortalSpace,
+		route: string,
+		links: readonly ActivePersonLink[],
+		read: (tx: Tx, org: PortalOrganization, recordIds: string[]) => Promise<T>
+	): Promise<T[]> {
+		const byOrg = new Map<string, ActivePersonLink[]>();
+		for (const l of links.filter((x) => x.recordType === SPACE_RECORD[space]))
+			byOrg.set(l.organizationId, [...(byOrg.get(l.organizationId) ?? []), l]);
+		const out: T[] = [];
+		for (const [organizationId, orgLinks] of byOrg) {
+			const result = await this.database.withOrganization(organizationId, (tx) =>
+				RequestContext.run({ ...RequestContext.get(), origin: 'portal', userId }, async () => {
+					const o = await this.organizations.partyOrganization(tx, organizationId);
+					if (!o) return null;
+					const orgContext = await this.features.organizationContext(organizationId, o.planId, tx);
+					if (!(await this.features.resolve(SPACE_FEATURE[space], userId, orgContext)).enabled) return null;
+					await this.audit.record(tx, {
+						actor: { type: 'user', userId },
+						organizationId,
+						subjectUserId: userId,
+						action: 'portal.read',
+						objectType: 'person_link',
+						objectId: orgLinks[0]!.linkId,
+						after: { space, route, links: orgLinks.map((l) => l.linkId) },
+						origin: 'portal'
+					});
+					return read(
+						tx,
+						{ organizationId, organizationName: o.name, organizationType: o.type, organizationPhone: o.phone },
+						orgLinks.map((l) => l.recordId)
+					);
+				})
+			);
+			if (result !== null) out.push(result);
+		}
+		return out;
+	}
+
+	/** Espaces ouverts à la personne (choix de l'espace) : un lien actif du bon type et l'interrupteur ouvert. */
+	async spaces(userId: string): Promise<Record<PortalSpace, boolean>> {
+		const links = await this.activeLinks(userId);
+		const out = { owner: false, tenant: false };
+		for (const space of ['owner', 'tenant'] as const) {
+			out[space] =
+				links.some((l) => l.recordType === SPACE_RECORD[space]) &&
+				(await this.features.resolve(SPACE_FEATURE[space], userId, null)).enabled;
+		}
+		return out;
+	}
+
+	// ---------------------------------------------------------------- espace du propriétaire
+
+	/** Patrimoine : tous ses biens, groupés par gestionnaire ; disponibilité, loyer, bail en cours (nom du locataire seul). */
+	async ownerAssets(userId: string): Promise<OwnerAssetsView> {
+		await this.assertSpace('owner', userId);
+		const links = await this.activeLinks(userId);
+		return this.cached(this.cacheKey(userId, 'owner-assets', links), async () => ({
+			organizations: await this.eachOrganization(userId, 'owner', 'owner/assets', links, async (tx, org, ownerIds) => {
+				const properties = (await Promise.all(ownerIds.map((id) => this.properties.partyOwnerAssets(tx, org.organizationId, id)))).flat();
+				const current = await this.leases.partyCurrentLeases(
+					tx,
+					org.organizationId,
+					properties.flatMap((p) => p.units.map((u) => u.id))
+				);
+				return {
+					...org,
+					managedBy: org.organizationType === 'landlord' ? ('self' as const) : ('agency' as const),
+					properties: properties.map((p) => ({ ...p, units: p.units.map((u) => ({ ...u, lease: current.get(u.id) ?? null })) }))
+				};
+			})
+		}));
+	}
+
+	// ---------------------------------------------------------------- espace du locataire
+
+	private async tenantTimeline(userId: string, links: readonly ActivePersonLink[]): Promise<HistoryItem[]> {
+		const perOrg = await this.eachOrganization(userId, 'tenant', 'tenant/history', links, async (tx, org, tenantIds) => {
+			const leases = (await Promise.all(tenantIds.map((id) => this.leases.partyTenantLeases(tx, org.organizationId, id)))).flat();
+			const labels = await this.properties.partyUnitLabels(
+				tx,
+				org.organizationId,
+				leases.map((l) => l.unitId)
+			);
+			const receipts = await this.payments.partyReceipts(
+				tx,
+				org.organizationId,
+				leases.map((l) => l.id)
+			);
+			const items: HistoryItem[] = [];
+			for (const l of leases) {
+				const place = labels.get(l.unitId);
+				items.push({
+					...org,
+					kind: 'lease',
+					id: l.id,
+					date: l.startsOn,
+					status: l.status,
+					startsOn: l.startsOn,
+					endsOn: l.endsOn,
+					exitOn: l.exitOn,
+					rent: l.rent,
+					charges: l.charges,
+					unitLabel: place?.unitLabel ?? null,
+					propertyName: place?.propertyName ?? null
+				});
+				for (const d of l.dues) items.push({ ...org, ...d, kind: 'rent_due', date: d.dueOn, leaseId: l.id });
+				if (l.deposit) items.push({ ...org, ...l.deposit, kind: 'deposit', date: l.startsOn, leaseId: l.id });
+			}
+			for (const r of receipts) items.push({ ...org, kind: 'receipt', date: r.issuedOn ?? r.paidOn, ...r });
+			return items;
+		});
+		// Chronologie unique, la plus récente d'abord ; ordre stable (date, puis identifiant).
+		return perOrg.flat().sort((x, y) => (x.date === y.date ? (x.id < y.id ? 1 : -1) : x.date < y.date ? 1 : -1));
+	}
+
+	/** Historique, toutes agences confondues, par pages (curseur : date et identifiant du dernier élément). */
+	async tenantHistory(userId: string, cursor: string | null): Promise<TenantHistoryView> {
+		await this.assertSpace('tenant', userId);
+		const links = await this.activeLinks(userId);
+		const all = await this.cached(this.cacheKey(userId, 'tenant-history', links), () => this.tenantTimeline(userId, links));
+		let start = 0;
+		if (cursor) {
+			const [date, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('|');
+			start = all.findIndex((i) => i.date < date! || (i.date === date && i.id < id!));
+			if (start < 0) start = all.length;
+		}
+		const items = all.slice(start, start + PAGE_SIZE);
+		const last = items.at(-1);
+		return {
+			items,
+			nextCursor: last && start + PAGE_SIZE < all.length ? Buffer.from(`${last.date}|${last.id}`).toString('base64url') : null
+		};
+	}
+
+	/** Critère d'acceptation : le reçu d'un loyer, payé à une organisation où la personne est (ou a été) locataire liée. */
+	async tenantReceiptPdf(userId: string, organizationId: string, receiptId: string) {
+		await this.assertSpace('tenant', userId);
+		const links = (await this.activeLinks(userId)).filter((l) => l.recordType === 'tenant' && l.organizationId === organizationId);
+		if (!links.length) throw new AppError('RECEIPT_NOT_FOUND', 'Reçu introuvable.', 404);
+		return this.database.withOrganization(organizationId, (tx) =>
+			RequestContext.run({ ...RequestContext.get(), origin: 'portal', userId }, async () => {
+				const leases = (await Promise.all(links.map((l) => this.leases.partyTenantLeases(tx, organizationId, l.recordId)))).flat();
+				return this.payments.partyReceiptPdfUrl(
+					tx,
+					organizationId,
+					receiptId,
+					leases.map((l) => l.id),
+					userId
+				);
+			})
+		);
+	}
+}

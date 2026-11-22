@@ -242,14 +242,19 @@ describe('isolement des espaces personnels par l’API (lot 10 ter, étape 2b)',
 
 	it('organisation suspendue : ses propriétaires et ses locataires gardent la lecture (réponse du porteur au lot 03)', async () => {
 		await seedIn(owner, w.b.org.id, (c) =>
-			c.query(`update organizations set verification_status = 'suspended' where id = $1`, [w.b.org.id])
+			c.query(
+				`update organizations set verification_status = 'suspended', suspended_at = now(), suspended_reason = 'Test de suspension' where id = $1`,
+				[w.b.org.id]
+			)
 		);
 		try {
 			const r = await w.t.client.call<History>('GET', '/me/portal/tenant/history');
 			expect(r.body.items.some((i) => i.organizationId === w.b.org.id)).toBe(true);
 		} finally {
 			await seedIn(owner, w.b.org.id, (c) =>
-				c.query(`update organizations set verification_status = 'pending' where id = $1`, [w.b.org.id])
+				c.query(`update organizations set verification_status = 'pending', suspended_at = null, suspended_reason = null where id = $1`, [
+					w.b.org.id
+				])
 			);
 		}
 	});

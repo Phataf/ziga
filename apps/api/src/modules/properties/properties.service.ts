@@ -45,6 +45,23 @@ import { assertCan } from '../organizations/organization-context.js';
 import { OwnersService } from '../owners/owners.service.js';
 import { UnitOccupancy } from './occupancy.js';
 
+/** Bien d'un propriétaire, vu dans son espace (lot 10 ter). */
+export interface PartyProperty {
+	id: string;
+	name: string;
+	type: string;
+	units: {
+		id: string;
+		label: string;
+		type: string;
+		rent: number | null;
+		charges: number | null;
+		occupancy: string;
+		technicalStatus: string;
+		available: boolean;
+	}[];
+}
+
 type PropertyRow = typeof properties.$inferSelect;
 type UnitRow = typeof units.$inferSelect;
 
@@ -599,6 +616,76 @@ export class PropertiesService {
 		return this.unitViewOf(c, updated!);
 	}
 	// ---------------------------------------------------------------- lot 10 : impayés et relevés (lecture seule)
+
+	// ---------------------------------------------------------------- lot 10 ter : espace du propriétaire (module portals)
+
+	/**
+	 * Biens et unités d'un propriétaire lié à son compte, dans l'organisation de la transaction (withOrganization ouvert
+	 * par le module portals) : disponibilité calculée, loyer ; jamais l'agent affecté ni les notes. Fiches archivées exclues.
+	 */
+	async partyOwnerAssets(tx: Tx, organizationId: string, ownerId: string): Promise<PartyProperty[]> {
+		const rows = await tx
+			.select()
+			.from(properties)
+			.where(and(eq(properties.organizationId, organizationId), eq(properties.ownerId, ownerId), ne(properties.recordStatus, 'archived')))
+			.orderBy(asc(properties.name), asc(properties.id));
+		if (!rows.length) return [];
+		const unitRows = await tx
+			.select()
+			.from(units)
+			.where(
+				and(
+					eq(units.organizationId, organizationId),
+					inArray(
+						units.propertyId,
+						rows.map((p) => p.id)
+					),
+					ne(units.recordStatus, 'archived')
+				)
+			)
+			.orderBy(asc(units.label), asc(units.id));
+		const signals = await this.occupancy.signals(
+			tx,
+			organizationId,
+			unitRows.map((u) => u.id),
+			toIsoDate()
+		);
+		return rows.map((p) => ({
+			id: p.id,
+			name: p.name,
+			type: p.type,
+			units: unitRows
+				.filter((u) => u.propertyId === p.id)
+				.map((u) => {
+					const v = unitView(u, signals.get(u.id));
+					return {
+						id: v.id,
+						label: v.label,
+						type: v.type,
+						rent: v.rent,
+						charges: v.charges,
+						occupancy: v.occupancy,
+						technicalStatus: v.technicalStatus,
+						available: v.available
+					};
+				})
+		}));
+	}
+
+	/** Libellés d'unités et noms de leurs biens (espace du locataire), dans l'organisation de la transaction. */
+	async partyUnitLabels(
+		tx: Tx,
+		organizationId: string,
+		unitIds: readonly string[]
+	): Promise<Map<string, { unitLabel: string; propertyName: string }>> {
+		if (!unitIds.length) return new Map();
+		const rows = await tx
+			.select({ id: units.id, label: units.label, propertyName: properties.name })
+			.from(units)
+			.innerJoin(properties, and(eq(properties.organizationId, units.organizationId), eq(properties.id, units.propertyId)))
+			.where(and(eq(units.organizationId, organizationId), inArray(units.id, [...unitIds])));
+		return new Map(rows.map((r) => [r.id, { unitLabel: r.label, propertyName: r.propertyName }]));
+	}
 
 	/**
 	 * Unités de l'organisation (ou des biens donnés) avec leur libellé, le nom et le propriétaire du bien, le quartier et

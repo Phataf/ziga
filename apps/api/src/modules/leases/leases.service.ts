@@ -68,6 +68,7 @@ import { AuditService, diff, type AuditActor } from '../audit/audit.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { OrganizationsService } from '../organizations/organizations.service.js';
 import type { LinkableRecordResolver } from '../organizations/person-link-records.js';
+import { ownerVisibleTenant, type OwnerVisibleTenant } from '@ziga/shared/person-links';
 import { OwnersService } from '../owners/owners.service.js';
 import { PropertiesService } from '../properties/properties.service.js';
 import { RentDueEvents } from './rent-due-events.js';
@@ -331,8 +332,152 @@ export interface DueForPayment {
 	overdueFrom: string;
 }
 
+/** Caution d'un bail vue dans un espace personnel (lot 10 ter). */
+export interface PartyDeposit {
+	id: string;
+	agreedAmount: number;
+	holder: string;
+	holderName: string | null;
+	status: string;
+}
+
+/** Bail en cours d'une unité, vu par son propriétaire : le nom du locataire seulement (réponse 5, point c). */
+export interface PartyCurrentLease {
+	id: string;
+	status: string;
+	startsOn: string;
+	endsOn: string | null;
+	exitOn: string | null;
+	rent: number;
+	charges: number;
+	tenant: OwnerVisibleTenant;
+	deposit: PartyDeposit | null;
+}
+
+/** Bail vu par son locataire, avec ses échéances émises et sa caution. */
+export interface PartyTenantLease {
+	id: string;
+	unitId: string;
+	status: string;
+	startsOn: string;
+	endsOn: string | null;
+	exitOn: string | null;
+	rent: number;
+	charges: number;
+	deposit: PartyDeposit | null;
+	dues: { id: string; periodStart: string; periodEnd: string; dueOn: string; amountDue: number; amountPaid: number; status: string }[];
+}
+
 @Injectable()
 export class LeasesService {
+	// ---------------------------------------------------------------- lot 10 ter : espaces personnels (module portals)
+
+	/**
+	 * Bail en cours (signé, en vigueur ou en préavis) de chaque unité d'un propriétaire, dans l'organisation de la
+	 * transaction : du locataire, le nom et la civilité seulement (réponse 5, point c) ; la caution convenue et son détenteur.
+	 */
+	async partyCurrentLeases(tx: Tx, organizationId: string, unitIds: readonly string[]): Promise<Map<string, PartyCurrentLease>> {
+		if (!unitIds.length) return new Map();
+		const rows = await tx
+			.select({ l: leases, fullName: tenants.fullName, civility: tenants.civility })
+			.from(leases)
+			.innerJoin(tenants, and(eq(tenants.organizationId, leases.organizationId), eq(tenants.id, leases.tenantId)))
+			.where(
+				and(
+					eq(leases.organizationId, organizationId),
+					inArray(leases.unitId, [...unitIds]),
+					inArray(leases.status, ['signed', 'active', 'notice'])
+				)
+			)
+			.orderBy(desc(leases.startsOn), desc(leases.id));
+		const deposits = await this.partyDeposits(
+			tx,
+			organizationId,
+			rows.map((r) => r.l.id)
+		);
+		const out = new Map<string, PartyCurrentLease>();
+		for (const { l, fullName, civility } of rows) {
+			if (out.has(l.unitId)) continue;
+			out.set(l.unitId, {
+				id: l.id,
+				status: l.status,
+				startsOn: l.startsOn,
+				endsOn: l.endsOn,
+				exitOn: l.exitOn,
+				rent: l.rent,
+				charges: l.charges,
+				tenant: ownerVisibleTenant({ fullName, civility }),
+				deposit: deposits.get(l.id) ?? null
+			});
+		}
+		return out;
+	}
+
+	private async partyDeposits(tx: Tx, organizationId: string, leaseIds: readonly string[]): Promise<Map<string, PartyDeposit>> {
+		if (!leaseIds.length) return new Map();
+		const rows = await tx
+			.select()
+			.from(depositAccounts)
+			.where(
+				and(
+					eq(depositAccounts.organizationId, organizationId),
+					inArray(depositAccounts.leaseId, [...leaseIds]),
+					eq(depositAccounts.type, 'security_deposit')
+				)
+			);
+		return new Map(
+			rows.map((d) => [d.leaseId, { id: d.id, agreedAmount: d.agreedAmount, holder: d.holder, holderName: d.holderName, status: d.status }])
+		);
+	}
+
+	/**
+	 * Baux d'un locataire lié à son compte (tous, sauf les brouillons et les annulés), leurs échéances et leur caution,
+	 * dans l'organisation de la transaction.
+	 */
+	async partyTenantLeases(tx: Tx, organizationId: string, tenantId: string): Promise<PartyTenantLease[]> {
+		const rows = await tx
+			.select()
+			.from(leases)
+			.where(
+				and(
+					eq(leases.organizationId, organizationId),
+					eq(leases.tenantId, tenantId),
+					inArray(leases.status, ['signed', 'active', 'notice', 'ended'])
+				)
+			)
+			.orderBy(desc(leases.startsOn), desc(leases.id));
+		if (!rows.length) return [];
+		const ids = rows.map((l) => l.id);
+		const dues = await tx
+			.select()
+			.from(rentDues)
+			.where(and(eq(rentDues.organizationId, organizationId), inArray(rentDues.leaseId, ids), ne(rentDues.status, 'upcoming')))
+			.orderBy(desc(rentDues.dueOn), desc(rentDues.id));
+		const deposits = await this.partyDeposits(tx, organizationId, ids);
+		return rows.map((l) => ({
+			id: l.id,
+			unitId: l.unitId,
+			status: l.status,
+			startsOn: l.startsOn,
+			endsOn: l.endsOn,
+			exitOn: l.exitOn,
+			rent: l.rent,
+			charges: l.charges,
+			deposit: deposits.get(l.id) ?? null,
+			dues: dues
+				.filter((d) => d.leaseId === l.id)
+				.map((d) => ({
+					id: d.id,
+					periodStart: d.periodStart,
+					periodEnd: d.periodEnd,
+					dueOn: d.dueOn,
+					amountDue: d.amountDue,
+					amountPaid: d.amountPaid,
+					status: d.status
+				}))
+		}));
+	}
+
 	// ---------------------------------------------------------------- lot 10 ter : fiches liables à un compte
 
 	/** Fiches locataire que le module organizations peut lier à un compte (PersonLinkRecords), dans la transaction donnée. */

@@ -113,6 +113,26 @@ export class PersonLinksService {
 		@Inject(APP_CONFIG) private readonly config: AppConfig
 	) {}
 
+	readonly #listeners: ((userId: string) => Promise<void> | void)[] = [];
+
+	/** Un lien d'une personne a changé (activé, révoqué) : le module portals efface ses réponses en cache. */
+	onLinkChanged(listener: (userId: string) => Promise<void> | void): void {
+		this.#listeners.push(listener);
+	}
+
+	/** Après la validation de la transaction en cours (ou tout de suite hors transaction de requête). */
+	private changed(userId: string | null): void {
+		if (!userId) return;
+		RequestContext.afterCommit(async () => {
+			for (const l of this.#listeners) await l(userId);
+		});
+	}
+
+	/** Hors transaction de requête (routes de la personne) : une fois la transaction de l'organisation validée. */
+	private async notify(userId: string): Promise<void> {
+		for (const l of this.#listeners) await l(userId);
+	}
+
 	/** La base a refusé : son code métier (dernier rempart), sinon l'erreur telle quelle. */
 	private async guard<T>(fn: () => Promise<T>): Promise<T> {
 		try {
@@ -305,6 +325,7 @@ export class PersonLinksService {
 			before: auditView(l),
 			after: auditView(row!)
 		});
+		this.changed(l.userId);
 		return toView(row!);
 	}
 
@@ -337,6 +358,7 @@ export class PersonLinksService {
 			before: auditView(l),
 			after: { ...auditView(row!), revokedByParty: 'organization', reason }
 		});
+		this.changed(l.userId);
 		return toView(row!);
 	}
 
@@ -650,6 +672,7 @@ export class PersonLinksService {
 				});
 			})
 		);
+		await this.notify(userId);
 		const mine = await this.mine(userId, []);
 		const view = mine.find((m) => m.id === linkId);
 		if (!view) throw linkNotFound();
@@ -682,5 +705,6 @@ export class PersonLinksService {
 				});
 			})
 		);
+		await this.notify(userId);
 	}
 }
