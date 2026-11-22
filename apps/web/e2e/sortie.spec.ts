@@ -152,12 +152,14 @@ async function uploadQuote(request: APIRequestContext, agency: Agency, subject: 
 }
 
 /**
- * Changements du DOM de la page pendant `ms` : nombre, et quelques exemples (élément, attribut ou texte), pour vérifier
- * qu'un écran est stable avant de cliquer (une page qui change de disposition en boucle n'est jamais cliquable).
+ * Changements de la page pendant `ms` : changements du DOM (nombre, et quelques exemples : élément, attribut ou texte),
+ * et, pour l'élément `target` (data-testid) qu'on va toucher, déplacements de sa position, du défilement ou de la
+ * largeur de la zone d'affichage, relevés tous les 100 ms. Un DOM immobile ne suffit pas : la page peut défiler, une
+ * image changer de hauteur, ou la zone d'affichage s'élargir (page qui déborde sur téléphone, dézoomée).
  */
-async function domChanges(page: Page, ms: number): Promise<{ count: number; samples: string[] }> {
+async function pageChanges(page: Page, ms: number, target?: string): Promise<{ count: number; samples: string[] }> {
 	return page.evaluate(
-		(ms) =>
+		([ms, target]) =>
 			new Promise<{ count: number; samples: string[] }>((resolve) => {
 				let count = 0;
 				const samples: string[] = [];
@@ -175,24 +177,39 @@ async function domChanges(page: Page, ms: number): Promise<{ count: number; samp
 					}
 				});
 				observer.observe(document.body, { subtree: true, childList: true, attributes: true, characterData: true });
+				const geometry = () => {
+					const r = target ? document.querySelector(`[data-testid="${target}"]`)?.getBoundingClientRect() : undefined;
+					const box = r ? `${Math.round(r.top)},${Math.round(r.left)} ${Math.round(r.width)}×${Math.round(r.height)}` : 'absent';
+					return `${target ?? 'page'} ${box} défilement ${Math.round(scrollY)} largeur ${innerWidth}`;
+				};
+				let last = geometry();
+				const timer = setInterval(() => {
+					const now = geometry();
+					if (now !== last) {
+						count += 1;
+						if (samples.length < 15) samples.push(`déplacement ${last} → ${now}`);
+						last = now;
+					}
+				}, 100);
 				setTimeout(() => {
+					clearInterval(timer);
 					observer.disconnect();
 					resolve({ count, samples });
 				}, ms);
 			}),
-		ms
+		[ms, target] as const
 	);
 }
 
 /**
- * La page est stable avant un clic : une seconde entière sans aucun changement du DOM (20 secondes au plus). Une page
- * qui change de disposition en boucle n'est jamais cliquable : l'échec nomme ce qui change.
+ * La page est stable avant un clic : une seconde entière sans changement du DOM ni déplacement de l'élément visé ou du
+ * défilement (20 secondes au plus). Une page qui change en boucle n'est jamais cliquable : l'échec nomme ce qui change.
  */
-async function stable(page: Page, label: string): Promise<void> {
+async function stable(page: Page, label: string, target?: string): Promise<void> {
 	const deadline = Date.now() + 20_000;
 	let last = { count: 0, samples: [] as string[] };
 	while (Date.now() < deadline) {
-		last = await domChanges(page, 1000);
+		last = await pageChanges(page, 1000, target);
 		if (last.count === 0) return;
 	}
 	throw new Error(`${label} : la page change encore (${last.count} changements en 1 s) : ${last.samples.join(' | ')}`);
@@ -259,10 +276,10 @@ test.describe('Sortie complète, du préavis à la restitution, sur les trois ap
 			await expectNoHorizontalOverflow(page, `Congé (${label})`);
 			await page.getByTestId('enregistrer-conge').click();
 			await expect(page.getByTestId('ouvrir-sortie')).toBeVisible({ timeout: 20_000 });
-			await stable(page, `Fiche bail après le congé (${label})`);
+			await stable(page, `Fiche bail après le congé (${label})`, 'ouvrir-sortie');
 			await page.getByTestId('ouvrir-sortie').click();
 			await expect(page.getByTestId('sortie-conge')).toContainText('Le locataire');
-			await stable(page, `Page d’une sortie avant l’état des lieux (${label})`);
+			await stable(page, `Page d’une sortie avant l’état des lieux (${label})`, 'commencer-edl');
 			await expectNoHorizontalOverflow(page, `Page d’une sortie avant l’état des lieux (${label})`);
 
 			// 2. État des lieux de sortie, pièce par pièce.
@@ -300,10 +317,13 @@ test.describe('Sortie complète, du préavis à la restitution, sur les trois ap
 			// état) ; puis le décompte : retenue impossible sans montant ni devis ; deux réparations justifiées ; 85 000 restitués.
 			await endAndSettleRent(request, agency, leaseId);
 			await page.getByTestId('terminer-edl').click();
-			await stable(page, `Page d’une sortie (${label})`);
+			// Le lien mène à la page de la sortie : la stabilité se mesure sur cette page, une fois arrivée, pas sur l'état des lieux.
+			await expect(page).toHaveURL(new RegExp(`/app/sorties/${leaseId}$`));
+			await expect(page.getByTestId('ouvrir-decompte')).toBeVisible();
+			await stable(page, `Page d’une sortie (${label})`, 'ouvrir-decompte');
 			await expectNoHorizontalOverflow(page, `Page d’une sortie après l’état des lieux (${label})`);
 			await page.getByTestId('ouvrir-decompte').click();
-			await stable(page, `Décompte avant préparation (${label})`);
+			await stable(page, `Décompte avant préparation (${label})`, 'preparer-decompte');
 			await page.getByTestId('preparer-decompte').click();
 			await expect(page.getByTestId('a-restituer')).toHaveText(formatFcfa(100000), { timeout: 20_000 });
 			for (const [element, amount] of [
