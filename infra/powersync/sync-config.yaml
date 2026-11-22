@@ -5,7 +5,9 @@
 #
 # Chaque requête ne sélectionne que les colonnes utiles à l'application (jamais SELECT *). Le représentant légal
 # (pièce d'identité) n'est pas dans ce stream, ouvert à tous les membres. Ajouter une table :
-# docs/SYNC.md. apps/api/test/sync-streams.int.test.ts les vérifie avec le moteur de PowerSync contre le schéma
+# docs/SYNC.md. Une requête de `with` part toujours de la personne (`organizations` joint à `organization_members`,
+# filtré par auth.user_id()) : une table jointe sans clé serait lue en entier pour chaque connexion (docs/SYNC.md §2,
+# PSYNC_S2305 au-delà de 1 000 résultats). apps/api/test/sync-streams.int.test.ts les vérifie avec le moteur de PowerSync contre le schéma
 # réel ; ce que chaque personne reçoit est vérifié contre le service par les tests Playwright (lot 05, étape 2).
 config:
   edition: 3
@@ -16,8 +18,8 @@ streams:
     auto_subscribe: true
     with:
       my_organizations: |
-        SELECT organization_members.organization_id FROM organization_members
-          JOIN organizations ON organizations.id = organization_members.organization_id
+        SELECT organizations.id FROM organizations
+          JOIN organization_members ON organization_members.organization_id = organizations.id
         WHERE organization_members.user_id = auth.user_id()
           AND organization_members.status = 'active'
           AND organizations.verification_status != 'suspended'
@@ -54,8 +56,8 @@ streams:
     auto_subscribe: true
     with:
       managed_organizations: |
-        SELECT organization_members.organization_id FROM organization_members
-          JOIN organizations ON organizations.id = organization_members.organization_id
+        SELECT organizations.id FROM organizations
+          JOIN organization_members ON organization_members.organization_id = organizations.id
         WHERE organization_members.user_id = auth.user_id()
           AND organization_members.status = 'active'
           AND organization_members.role != 'field_agent'
@@ -108,8 +110,8 @@ streams:
     with:
       my_units: |
         SELECT units.id FROM units
-          JOIN organization_members ON organization_members.organization_id = units.organization_id
           JOIN organizations ON organizations.id = units.organization_id
+          JOIN organization_members ON organization_members.organization_id = organizations.id
         WHERE units.assigned_agent_id = auth.user_id()
           AND organization_members.user_id = auth.user_id()
           AND organization_members.status = 'active'
@@ -117,8 +119,8 @@ streams:
           AND organizations.verification_status != 'suspended'
       my_unit_properties: |
         SELECT units.property_id FROM units
-          JOIN organization_members ON organization_members.organization_id = units.organization_id
           JOIN organizations ON organizations.id = units.organization_id
+          JOIN organization_members ON organization_members.organization_id = organizations.id
         WHERE units.assigned_agent_id = auth.user_id()
           AND organization_members.user_id = auth.user_id()
           AND organization_members.status = 'active'
@@ -127,8 +129,8 @@ streams:
       my_unit_leases: |
         SELECT leases.id FROM leases
           JOIN units ON units.id = leases.unit_id
-          JOIN organization_members ON organization_members.organization_id = units.organization_id
           JOIN organizations ON organizations.id = units.organization_id
+          JOIN organization_members ON organization_members.organization_id = organizations.id
         WHERE units.assigned_agent_id = auth.user_id()
           AND organization_members.user_id = auth.user_id()
           AND organization_members.status = 'active'
@@ -138,8 +140,8 @@ streams:
         SELECT inspections.id FROM inspections
           JOIN leases ON leases.id = inspections.lease_id
           JOIN units ON units.id = leases.unit_id
-          JOIN organization_members ON organization_members.organization_id = units.organization_id
           JOIN organizations ON organizations.id = units.organization_id
+          JOIN organization_members ON organization_members.organization_id = organizations.id
         WHERE units.assigned_agent_id = auth.user_id()
           AND organization_members.user_id = auth.user_id()
           AND organization_members.status = 'active'
@@ -148,8 +150,8 @@ streams:
       my_unit_tenants: |
         SELECT leases.tenant_id FROM leases
           JOIN units ON units.id = leases.unit_id
-          JOIN organization_members ON organization_members.organization_id = units.organization_id
           JOIN organizations ON organizations.id = units.organization_id
+          JOIN organization_members ON organization_members.organization_id = organizations.id
         WHERE units.assigned_agent_id = auth.user_id()
           AND organization_members.user_id = auth.user_id()
           AND organization_members.status = 'active'
@@ -183,15 +185,15 @@ streams:
     auto_subscribe: true
     with:
       directed_organizations: |
-        SELECT organization_members.organization_id FROM organization_members
-          JOIN organizations ON organizations.id = organization_members.organization_id
+        SELECT organizations.id FROM organizations
+          JOIN organization_members ON organization_members.organization_id = organizations.id
         WHERE organization_members.user_id = auth.user_id()
           AND organization_members.status = 'active'
           AND organization_members.role = 'director'
           AND organizations.verification_status != 'suspended'
       managed_organizations: |
-        SELECT organization_members.organization_id FROM organization_members
-          JOIN organizations ON organizations.id = organization_members.organization_id
+        SELECT organizations.id FROM organizations
+          JOIN organization_members ON organization_members.organization_id = organizations.id
         WHERE organization_members.user_id = auth.user_id()
           AND organization_members.status = 'active'
           AND organization_members.role = 'manager'
@@ -207,8 +209,8 @@ streams:
     auto_subscribe: true
     with:
       contract_organizations: |
-        SELECT organization_members.organization_id FROM organization_members
-          JOIN organizations ON organizations.id = organization_members.organization_id
+        SELECT organizations.id FROM organizations
+          JOIN organization_members ON organization_members.organization_id = organizations.id
         WHERE organization_members.user_id = auth.user_id()
           AND organization_members.status = 'active'
           AND organization_members.role != 'field_agent'
@@ -225,8 +227,8 @@ streams:
     auto_subscribe: true
     with:
       directed_organizations: |
-        SELECT organization_members.organization_id FROM organization_members
-          JOIN organizations ON organizations.id = organization_members.organization_id
+        SELECT organizations.id FROM organizations
+          JOIN organization_members ON organization_members.organization_id = organizations.id
         WHERE organization_members.user_id = auth.user_id()
           AND organization_members.status = 'active'
           AND organization_members.role = 'director'
@@ -239,8 +241,8 @@ streams:
     auto_subscribe: true
     with:
       identity_organizations: |
-        SELECT organization_members.organization_id FROM organization_members
-          JOIN organizations ON organizations.id = organization_members.organization_id
+        SELECT organizations.id FROM organizations
+          JOIN organization_members ON organization_members.organization_id = organizations.id
         WHERE organization_members.user_id = auth.user_id()
           AND organization_members.status = 'active'
           AND organization_members.role != 'field_agent'
