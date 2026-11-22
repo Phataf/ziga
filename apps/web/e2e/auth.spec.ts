@@ -39,7 +39,11 @@ test.describe('Téléphone : parcours complet', () => {
 		await expect(page).toHaveURL('/espace');
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Bonjour Issa Kaboré');
 		await expect(page.getByTestId('espaces-gestion')).toContainText('Vous n’êtes membre d’aucune organisation.');
-		await page.getByTestId('espace-owner').click();
+		// Aucune fiche liée : aucun espace personnel proposé, seulement la liaison de ses fiches (lot 10 ter).
+		await expect(page.getByTestId('lien-liaisons')).toBeVisible();
+		await expect(page.getByTestId('espace-owner')).toHaveCount(0);
+		await expect(page.getByTestId('espace-tenant')).toHaveCount(0);
+		await page.goto('/espace/proprietaire');
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Mon patrimoine');
 		await expect(page.getByTestId('patrimoine-vide')).toBeVisible();
 

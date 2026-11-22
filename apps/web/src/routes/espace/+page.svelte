@@ -1,11 +1,24 @@
 <script lang="ts">
 	/**
 	 * Choix de l'espace (docs/UX.md §2) : les organisations dont la personne est membre (une seule active à la fois),
-	 * ses espaces personnels (propriétaire, locataire : vides jusqu'au lot 10 ter) et son compte.
+	 * ses espaces personnels (propriétaire, locataire : seulement ceux que ses fiches liées ouvrent, lot 10 ter), la liaison
+	 * de ses fiches et son compte.
 	 */
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Building2, ChevronRight, CircleUserRound, House, KeyRound, Lock, MonitorSmartphone, Plus, TriangleAlert } from '@lucide/svelte';
+	import { onMount } from 'svelte';
+	import {
+		Building2,
+		ChevronRight,
+		CircleUserRound,
+		House,
+		KeyRound,
+		Link2,
+		Lock,
+		MonitorSmartphone,
+		Plus,
+		TriangleAlert
+	} from '@lucide/svelte';
 	import type { MembershipView } from '@ziga/shared/organizations';
 	import { ROLE_LABELS } from '@ziga/shared/organizations';
 	import LogoutButton from '#lib/components/auth/LogoutButton.svelte';
@@ -13,6 +26,7 @@
 	import { auth } from '#lib/auth/auth.svelte.ts';
 	import { fr } from '#lib/i18n/fr.ts';
 	import { organizations } from '#lib/org/organizations.svelte.ts';
+	import { personalSpaces } from '#lib/portals/links.ts';
 
 	const t = fr.spaceChoice;
 	const o = fr.organizations;
@@ -22,6 +36,20 @@
 		organizations.select(m.organizationId);
 		await goto(resolve('app'));
 	}
+
+	// Espaces personnels ouverts à la personne (lot 10 ter) : ses liens d'abord (la propre fiche d'un bailleur particulier
+	// s'y lie d'elle-même, réponse 2), puis les espaces que le serveur ouvre ; hors ligne, les deux restent proposés.
+	let spaces = $state<{ owner: boolean; tenant: boolean } | null>(null);
+	let spacesFailed = $state(false);
+	onMount(async () => {
+		try {
+			await auth.request('GET', '/me/person-links');
+			spaces = await auth.request<{ owner: boolean; tenant: boolean }>('GET', '/me/portal');
+		} catch {
+			spacesFailed = true;
+		}
+	});
+	const shown = $derived(personalSpaces(spaces, spacesFailed));
 
 	const row =
 		'flex min-h-20 w-full items-center gap-4 rounded-xl border-2 border-input bg-card p-4 text-left hover:border-primary hover:bg-accent';
@@ -73,22 +101,32 @@
 	<section class="space-y-3" aria-labelledby="titre-personnels">
 		<h2 id="titre-personnels" class="text-lg font-semibold">{o.personalSpaces}</h2>
 		<ul class="space-y-3" data-testid="choix-espace">
+			{#if shown.includes('owner')}<li>
+					<a href={resolve('espace/proprietaire')} class={row} data-testid="espace-owner">
+						<span class={icon}><Building2 class="size-6" aria-hidden="true" /></span>
+						<span class="min-w-0 flex-1">
+							<span class="block text-lg font-semibold">{t.owner}</span>
+							<span class="block text-base text-muted-foreground">{t.ownerHint}</span>
+						</span>
+						<ChevronRight class="size-6 shrink-0 text-muted-foreground" aria-hidden="true" />
+					</a>
+				</li>{/if}
+			{#if shown.includes('tenant')}<li>
+					<a href={resolve('espace/locataire')} class={row} data-testid="espace-tenant">
+						<span class={icon}><KeyRound class="size-6" aria-hidden="true" /></span>
+						<span class="min-w-0 flex-1">
+							<span class="block text-lg font-semibold">{t.tenant}</span>
+							<span class="block text-base text-muted-foreground">{t.tenantHint}</span>
+						</span>
+						<ChevronRight class="size-6 shrink-0 text-muted-foreground" aria-hidden="true" />
+					</a>
+				</li>{/if}
 			<li>
-				<a href={resolve('espace/proprietaire')} class={row} data-testid="espace-owner">
-					<span class={icon}><Building2 class="size-6" aria-hidden="true" /></span>
+				<a href={resolve('espace/liaisons')} class="{row} border-dashed" data-testid="lien-liaisons">
+					<span class={icon}><Link2 class="size-6" aria-hidden="true" /></span>
 					<span class="min-w-0 flex-1">
-						<span class="block text-lg font-semibold">{t.owner}</span>
-						<span class="block text-base text-muted-foreground">{t.ownerHint}</span>
-					</span>
-					<ChevronRight class="size-6 shrink-0 text-muted-foreground" aria-hidden="true" />
-				</a>
-			</li>
-			<li>
-				<a href={resolve('espace/locataire')} class={row} data-testid="espace-tenant">
-					<span class={icon}><KeyRound class="size-6" aria-hidden="true" /></span>
-					<span class="min-w-0 flex-1">
-						<span class="block text-lg font-semibold">{t.tenant}</span>
-						<span class="block text-base text-muted-foreground">{t.tenantHint}</span>
+						<span class="block text-lg font-semibold">{fr.myLinks.entry}</span>
+						<span class="block text-base text-muted-foreground">{fr.myLinks.entryHint}</span>
 					</span>
 					<ChevronRight class="size-6 shrink-0 text-muted-foreground" aria-hidden="true" />
 				</a>

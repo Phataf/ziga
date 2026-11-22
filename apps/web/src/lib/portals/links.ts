@@ -3,7 +3,7 @@
  * pure (CLAUDE.md §6 : pas de logique dans les composants), à partir des liens de la fiche lus en ligne
  * (`GET /person-links`), du plus récent au plus ancien.
  */
-import type { PersonLinkView } from '@ziga/shared/person-links';
+import type { MyPersonLinkView, PersonLinkView } from '@ziga/shared/person-links';
 
 export type LinkStateKind = 'none' | 'invited' | 'invite_expired' | 'claimed' | 'requested_unverified' | 'requested_verified' | 'active';
 
@@ -57,4 +57,19 @@ export function toMaintenanceRequest(r: Record<string, unknown>): LocalMaintenan
 		statusNote: typeof r.status_note === 'string' && r.status_note ? r.status_note : null,
 		createdAt: String(r.created_at ?? '')
 	};
+}
+
+/** Un lien vu par la personne, dans son espace (« Mes fiches liées ») : ce qu'il lui reste à faire. */
+export type MyLinkStep = 'active' | 'enter_code' | 'awaiting_organization';
+
+export function myLinkStep(link: Pick<MyPersonLinkView, 'status' | 'phoneVerified'>): MyLinkStep {
+	if (link.status === 'active') return 'active';
+	return link.phoneVerified ? 'awaiting_organization' : 'enter_code';
+}
+
+/** Les espaces personnels proposés dans le choix de l'espace : ceux que le serveur ouvre ; hors ligne, les deux. */
+export function personalSpaces(spaces: { owner: boolean; tenant: boolean } | null, failed: boolean): ('owner' | 'tenant')[] {
+	if (failed) return ['owner', 'tenant'];
+	if (!spaces) return [];
+	return (['owner', 'tenant'] as const).filter((s) => spaces[s]);
 }

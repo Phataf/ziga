@@ -1506,6 +1506,36 @@ Prompt : `prompts/lot-10ter-espaces-personnels.md`.
 - **Règles pures** : `lib/portals/tenant.ts` (groupes de contrats, reçus de l'historique, pages sans doublon, baux ouverts au préavis, observation possible, libellé du logement, ordre des signalements), testées dans `tenant.test.ts`.
 - **Tests** : Playwright `espace-locataire.spec.ts` sur téléphone, tablette et ordinateur : une personne locataire de l'agence A (bail de trois mois, congé, fin par la vraie tâche du jour, décompte proposé) puis de l'agence B (bail en cours), liée aux deux par le vrai parcours, voit son logement de B avec le paiement direct désactivé et expliqué, ses contrats en vigueur et terminé, un historique des deux agences, télécharge le reçu de l'ancienne agence, conteste le décompte avec une observation, envoie un signalement et une demande de préavis (une seconde refusée tant que la première est en cours) ; aucun débordement sur téléphone.
 
+### Étape 3d : liaison par la personne, choix de l'espace, liens publics ; critères du lot
+- **Écrans** :
+  - **`/lier/<jeton>`** (invitation reçue par WhatsApp ou SMS) : organisation, type de fiche, numéro masqué, validité ; sans session, connexion ou inscription puis retour à la page (`/lier` ajouté aux chemins de retour acceptés, test d'abord rouge) ; connectée avec ce numéro : « Recevoir mon code », le code reçu au numéro de la fiche, liaison active, ouverture de l'espace.
+  - **« Mes fiches liées »** (`/espace/liaisons`) : ses liens en cours et actifs (code à saisir, en attente de l'organisation, liée) ; demande à une agence vérifiée (réponse 1 : même réponse que la fiche existe ou non), code, nouveau code ; retrait motivé d'une liaison.
+  - **Choix de l'espace** (`/espace`) : seulement les espaces personnels que le serveur ouvre (`GET /me/portal`), après la lecture de ses liens (la propre fiche d'un bailleur particulier s'y lie d'elle-même, réponse 2) ; hors ligne, les deux restent proposés ; « Lier une fiche à mon compte » toujours proposé.
+  - **Liens publics** : la page de vérification d'un reçu (`/r/`) propose maintenant de créer un compte, comme le reçu partagé (`/recu/`) et le relevé (`/s/`) ; l'inscription revient sur « Mes fiches liées ».
+  - **Avertissement au dépôt** (réponse du porteur au point c) : au dépôt d'un document que la matrice montre au propriétaire ou au locataire lié (bail signé, preuve du congé, devis, accord, issue d'une contestation, scan d'un état des lieux, documents d'un bien), l'organisation lit qu'il leur sera montré tel quel (`DocumentVisibilityNotice`, règle `partiesWhoSee`).
+- **Règles pures** : `myLinkStep` et `personalSpaces` dans `lib/portals/links.ts`, testées.
+- **Tests** : Playwright `liaison-personne.spec.ts` sur téléphone, tablette et ordinateur (lien `/r/`, invitation `/lier` sans session puis connexion et code, choix de l'espace, demande à une agence vérifiée, code puis acceptation, retrait motivé, avertissement au dépôt du bail signé ; aucun débordement sur téléphone) ; `portals-api.int.test.ts` vérifie qu'un lien de relevé reste valable quand `portals.owner_space` est coupé (attendu par le prompt, jusque-là non couvert) ; `coque.spec.ts` et `auth.spec.ts` suivent le choix de l'espace.
+- **Écarts et dette** :
+  - Le jeu de démonstration (`pnpm db:seed`) ne crée ni fiche propriétaire ni fiche locataire : ses comptes n'ont donc aucun espace personnel proposé tant qu'aucune fiche n'est liée. À compléter avec le seed des tables du lot 03 et suivants.
+  - Le signal à l'écran d'une fiche en double au même numéro (journal de l'étape 2) n'est pas fait : le doublon est nommé au journal de la demande, l'écran est à prévoir.
+  - Question ouverte de l'étape 3b sur « approbations » dans `docs/UX.md`.
+
+### Lot 10 ter : tests attendus et critères d'acceptation
+Tests attendus :
+- [x] Isolement (P liée dans A et dans B voit ses biens des deux ; un membre de A ne voit rien de B par l'API, par SQL avec `app_api`, ni par la synchronisation ; `portals` ne fait aucune requête sur deux organisations) : `portals-isolation.int.test.ts`, `portals-db.int.test.ts`, `portals-api.int.test.ts` (point a), test d'architecture.
+- [x] Liaison : numéro différent refusé, code expiré refusé, lien non accepté sans effet, lien révoqué : données disparues aussitôt, cache compris : `person-links.int.test.ts`, `portals-api.int.test.ts` (point d).
+- [x] Locataire passé de A à B : son espace montre les deux baux ; B ne voit pas le bail de A : `portals-api.int.test.ts`, `portals-tenant.int.test.ts`, `espace-locataire.spec.ts`.
+- [x] Le propriétaire ne voit jamais le téléphone ni la pièce d'identité d'un locataire : `portals-api.int.test.ts` (point c), `portals-owner.int.test.ts`, `espace-proprietaire.spec.ts`.
+- [x] `portals.owner_space` coupé : espace inaccessible, liens de relevé toujours valables : `portals-api.int.test.ts`.
+- [x] Chaque lecture de `portals` écrit une ligne d'audit dans l'organisation lue (et chaque téléchargement, même deux fois en moins de 30 secondes) : `portals-api.int.test.ts`, `portals-owner.int.test.ts`.
+- [x] Playwright sur les trois appareils : propriétaire avec des biens dans deux agences et en gestion directe (`espace-proprietaire.spec.ts`) ; locataire avec deux baux successifs dans deux agences (`espace-locataire.spec.ts`) ; côté organisation (`compte-lie.spec.ts`) et liaison par la personne (`liaison-personne.spec.ts`).
+
+Critères d'acceptation :
+- [x] Un propriétaire lié à deux agences et à sa propre organisation voit tous ses biens sur un même écran, avec le gestionnaire de chacun, en moins de 3 secondes en 3G (`espace-proprietaire.spec.ts`, profil « 3G » de Chrome : 1,19 à 1,24 seconde en local).
+- [x] Un locataire retrouve le reçu d'un loyer payé à son ancienne agence depuis son téléphone (`espace-locataire.spec.ts`, téléphone 360 × 800 ; `portals-api.int.test.ts`).
+- [x] Le test d'isolement du module `portals` passe et fait partie de la CI (`portals-isolation.int.test.ts`, dans `pnpm test`).
+- [x] Journal des lots mis à jour.
+
 ### Correctif avant le lot 10 ter : page d'une sortie sur téléphone (22/11/2026)
 - **Symptôme** : en CI, `sortie.spec.ts:197` (téléphone) restait cinq minutes sur « Ouvrir le décompte » : le clic tombait tantôt sur la section, tantôt sur la pastille de l'état des lieux au-dessus.
 - **Mesure** : à 360 px, processeur ralenti ×4, ×6 puis ×12, juste après « terminer-edl », une fois arrivé sur la page de la sortie : aucun changement du DOM, et pendant 5 secondes, avant comme après le défilement, la position du bouton (`getBoundingClientRect`), `window.scrollY` et l'élément sous le centre du bouton (`elementFromPoint` : le bouton lui-même) ne bougent pas. En revanche `innerWidth` vaut 436 pour un `clientWidth` de 360 : la page déborde, et le navigateur mobile élargit la zone d'affichage. L'artefact de la CI n'a pas pu être téléchargé depuis la session (hôte des artefacts refusé par le proxy) ; l'échec a été reproduit en local en imposant la police DejaVu Sans, plus large que la police locale : même message, clic intercepté tour à tour par `sortie-decompte` et par la pastille de l'état des lieux, avec `innerWidth` à 459. Sur la page corrigée, avec la même police : aucun débordement (360 partout), défilement normal, clic réussi.

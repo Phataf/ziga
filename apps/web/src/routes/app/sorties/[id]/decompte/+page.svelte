@@ -27,6 +27,7 @@
 	import type { UnitView } from '@ziga/shared/properties';
 	import FormAlert from '#lib/components/auth/FormAlert.svelte';
 	import ReceiptPicker from '#lib/components/collections/ReceiptPicker.svelte';
+	import DocumentVisibilityNotice from '#lib/components/portals/DocumentVisibilityNotice.svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.ts';
 	import { Button } from '#lib/components/ui/button/index.ts';
@@ -686,6 +687,7 @@
 			<Input id="reparation-montant" inputmode="numeric" bind:value={repairAmount} class="tabular-nums" data-testid="reparation-montant" />
 		</div>
 		<ReceiptPicker bind:files={repairFiles} title={t.repairQuote} hint={t.proofPanelHint} testid="reparation-devis" />
+		<DocumentVisibilityNotice type="repair_quote" />
 		{#if !repairJustified}<p class="flex items-start gap-2 text-base text-destructive" role="status" data-testid="retenue-impossible">
 				<CircleAlert class="mt-0.5 size-5 shrink-0" aria-hidden="true" />{t.repairRefused}
 			</p>{/if}
@@ -774,6 +776,7 @@
 			</div>
 		{/if}
 		<ReceiptPicker bind:files={decisionFiles} title={ta.document} hint={ta.hint} testid="accord-document" />
+		<DocumentVisibilityNotice type="agreement_document" />
 		<Button type="submit" class="w-full" disabled={busy || !sync.online} data-testid="enregistrer-decision">{ta.decide}</Button>
 	</form>
 </Sheet>
@@ -836,6 +839,7 @@
 				hint={fr.exit.inspection.disputed}
 				testid="issue-document"
 			/>
+			<DocumentVisibilityNotice type="settlement_outcome" />
 		{/if}
 		{#if refundMode === 'partial' || refundRemaining > 0}
 			<p class="text-base font-medium">{t.refundForm}{refundMode === 'close' ? ` : ${formatFcfa(refundRemaining)}` : ''}</p>

@@ -2600,6 +2600,57 @@ export const fr = {
 		sendNotice: 'Envoyer la demande',
 		noticeSent: 'Demande de préavis envoyée à votre organisation.'
 	},
+	/** Lot 10 ter, étape 3d : liaison de ses fiches par la personne (invitation reçue, demande, code). */
+	myLinks: {
+		inviteTitle: 'Retrouver mes logements',
+		invites: (org: string) => `${org} vous invite à retrouver vos données dans votre espace personnel.`,
+		as: { owner: 'Pour votre fiche de propriétaire', tenant: 'Pour votre fiche de locataire' } as Record<string, string>,
+		phone: (phone: string) => `Pour le numéro ${phone}`,
+		expires: (date: string) => `Valable jusqu’au ${date}`,
+		unusable: 'Cette invitation n’est plus valable : demandez-en une nouvelle à votre organisation.',
+		loginFirst: 'Connectez-vous avec ce numéro, ou créez votre compte, pour continuer.',
+		login: 'Se connecter',
+		register: 'Créer mon compte',
+		claim: 'Recevoir mon code',
+		codeSent: 'Un code vient de vous être envoyé par SMS.',
+		verify: 'Valider le code',
+		resend: 'Recevoir un nouveau code',
+		linked: 'C’est fait : vos données apparaissent dans votre espace.',
+		awaiting: 'Code validé : l’organisation doit encore accepter la liaison.',
+		openSpace: { owner: 'Ouvrir mon patrimoine', tenant: 'Ouvrir mon logement' } as Record<string, string>,
+		title: 'Mes fiches liées',
+		subtitle: 'Les organisations dont vous voyez les données dans vos espaces personnels.',
+		entry: 'Lier une fiche à mon compte',
+		entryHint: 'Retrouvez vos logements gérés par une agence de la plateforme',
+		none: 'Aucune fiche liée pour l’instant.',
+		recordTypes: { owner: 'Propriétaire', tenant: 'Locataire' } as Record<string, string>,
+		steps: {
+			active: 'Liée',
+			enter_code: 'Code à saisir',
+			awaiting_organization: 'En attente de l’organisation'
+		} as Record<string, string>,
+		requestTitle: 'Demander une liaison',
+		requestHelp:
+			'Choisissez l’agence qui gère votre logement. Si l’une de ses fiches porte votre numéro, un code vous est envoyé par SMS ; l’agence accepte ensuite la liaison.',
+		organization: 'Agence',
+		recordType: 'Je suis',
+		noOrganization: 'Aucune agence vérifiée ne peut encore recevoir de demande.',
+		request: 'Envoyer la demande',
+		revoke: 'Retirer la liaison',
+		revokeTitle: 'Retirer la liaison',
+		revokeHelp: 'Vous ne verrez plus les données de cette organisation dans votre espace. Rien n’est supprimé chez elle.',
+		reason: 'Motif',
+		revokeConfirm: 'Retirer la liaison',
+		revoked: 'Liaison retirée.',
+		verified: 'Code validé.'
+	},
+	/** Lot 10 ter, étape 3d : avertissement au dépôt d'un document que la matrice montre au propriétaire ou au locataire. */
+	documentVisibility: {
+		parties: { owner: 'le propriétaire', tenant: 'le locataire' } as Record<string, string>,
+		notice: (who: string) =>
+			`Ce document sera visible tel quel par ${who} dans son espace, s’il a lié sa fiche : vérifiez qu’il ne porte pas de coordonnées à ne pas partager.`,
+		and: ' et '
+	},
 	/** Lot 10 ter, étape 3 : section « Compte lié » d'une fiche (direction et gestion). */
 	personLinks: {
 		title: 'Compte lié',

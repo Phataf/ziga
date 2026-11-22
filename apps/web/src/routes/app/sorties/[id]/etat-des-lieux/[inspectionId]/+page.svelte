@@ -25,6 +25,7 @@
 	} from '@ziga/shared/tenant-exit';
 	import FormAlert from '#lib/components/auth/FormAlert.svelte';
 	import ReceiptPicker from '#lib/components/collections/ReceiptPicker.svelte';
+	import DocumentVisibilityNotice from '#lib/components/portals/DocumentVisibilityNotice.svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.ts';
 	import { Button } from '#lib/components/ui/button/index.ts';
@@ -598,6 +599,7 @@
 					<p class="text-base text-muted-foreground">{queuedScan.error ? t.photoRefused(queuedScan.error) : t.scanQueued}</p>
 				{:else}
 					<ReceiptPicker bind:files={scanFiles} title={t.scan} hint={t.signHint} testid="scan-edl" />
+					<DocumentVisibilityNotice type="inspection_scan" />
 					{#if scanFiles.length}<Button variant="outline" onclick={depositScan} data-testid="deposer-scan">{t.scan}</Button>{/if}
 				{/if}
 			{/if}
@@ -624,6 +626,7 @@
 								<option value="court_decision">{t.outcomes.court_decision}</option>
 							</select>
 							<ReceiptPicker bind:files={outcomeFiles} title={t.outcomeDocument} hint={t.outcomeDocument} testid="issue-document" />
+							<DocumentVisibilityNotice type="settlement_outcome" />
 							<Button type="submit" disabled={busy || !sync.online}>{t.outcomeSubmit}</Button>
 						</form>
 					{/if}

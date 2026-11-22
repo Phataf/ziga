@@ -24,6 +24,7 @@
 	import { MAX_UPLOAD_BYTES } from '@ziga/shared/properties';
 	import FormAlert from '#lib/components/auth/FormAlert.svelte';
 	import CheckField from '#lib/components/owners/CheckField.svelte';
+	import DocumentVisibilityNotice from '#lib/components/portals/DocumentVisibilityNotice.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.ts';
 	import { Button } from '#lib/components/ui/button/index.ts';
 	import { messageOf } from '#lib/auth/forms.ts';
@@ -171,6 +172,7 @@
 					{#each TYPES as d (d)}<option value={d}>{t.types[d]}</option>{/each}
 				</select>
 			</div>
+			<DocumentVisibilityNotice {type} />
 			<div class="space-y-1">
 				<label for="document-fichier" class="block font-medium">{t.file}</label>
 				<input

@@ -36,7 +36,11 @@
 		{/if}
 		<aside class="space-y-2 rounded-2xl border bg-card p-5">
 			<p class="text-base">{t.invite}</p>
-			<Button href={resolve('/(auth)/inscription')} class="w-full"><UserPlus class="size-5" aria-hidden="true" />{t.inviteAction}</Button>
+			<Button
+				href={`${resolve('/(auth)/inscription')}?retour=${encodeURIComponent('/espace/liaisons')}`}
+				class="w-full"
+				data-testid="creer-compte"><UserPlus class="size-5" aria-hidden="true" />{t.inviteAction}</Button
+			>
 		</aside>
 	{:else}
 		<h1 class="text-2xl font-bold">{t.title}</h1>
