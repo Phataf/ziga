@@ -723,6 +723,16 @@ export class OwnersService {
 
 	// ---------------------------------------------------------------- bailleur particulier
 
+	/** Lot 10 ter : noms des propriétaires (bailleur désigné d'un bail, vu par son locataire), dans la transaction donnée. */
+	async partyOwnerNames(tx: Tx, ownerIds: readonly string[]): Promise<Map<string, string>> {
+		if (!ownerIds.length) return new Map();
+		const rows = await tx
+			.select({ id: owners.id, name: owners.name })
+			.from(owners)
+			.where(inArray(owners.id, [...new Set(ownerIds)]));
+		return new Map(rows.map((r) => [r.id, r.name]));
+	}
+
 	// ---------------------------------------------------------------- lot 10 ter : fiches liables à un compte
 
 	/** Fiches propriétaire que le module organizations peut lier à un compte (PersonLinkRecords), dans la transaction donnée. */

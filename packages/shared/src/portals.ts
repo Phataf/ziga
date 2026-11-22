@@ -10,6 +10,10 @@
  * rattachée à une unité reste sur son bien ; une dépense sans unité est répartie comme la commission. Le report d'un
  * solde négatif reste au niveau du relevé.
  */
+import { z } from 'zod';
+import { isIsoDate } from './dates.js';
+import { idSchema } from './ids.js';
+import { createMaintenanceRequestSchema } from './person-links.js';
 import { addMonthsToMonth, type StatementMonth } from './statements.js';
 
 export interface IncomeStatement {
@@ -123,3 +127,29 @@ export function ownerIncome(
 		)
 	};
 }
+
+// ---------------------------------------------------------------- espace du locataire : demandes à l'organisation (étape 2b-3)
+
+/** Signalement depuis l'espace : l'organisation du bail en plus (une seule organisation par écriture). */
+export const portalMaintenanceRequestSchema = createMaintenanceRequestSchema.extend({ organizationId: idSchema });
+
+/** Demande de préavis : une demande à traiter par l'organisation, jamais un congé enregistré. */
+export const portalNoticeRequestSchema = z.object({
+	organizationId: idSchema,
+	leaseId: idSchema,
+	plannedExitOn: z.string().refine(isIsoDate, { error: 'Date invalide.' }),
+	reason: z.string().trim().min(5, { error: 'Précisez le motif (5 caractères au moins).' }).max(500, { error: 'Motif trop long.' })
+});
+
+/** Observation du locataire en cas de désaccord sur un décompte proposé : le décompte passe « contesté ». */
+export const settlementObservationSchema = z.object({
+	observations: z
+		.string()
+		.trim()
+		.min(5, { error: 'Précisez votre désaccord (5 caractères au moins).' })
+		.max(2000, { error: 'Texte trop long.' })
+});
+
+/** Explication affichée à côté du bouton « Payer par Mobile Money », désactivé tant que le paiement direct est coupé. */
+export const DIRECT_PAYMENT_DISABLED_REASON =
+	'Le paiement par Mobile Money depuis votre espace n’est pas encore ouvert par cette organisation. Payez comme d’habitude ; votre reçu apparaîtra ici.';

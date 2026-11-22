@@ -63,7 +63,17 @@ import { and, asc, desc, eq, gt, inArray, isNull, ne } from 'drizzle-orm';
 import { AppError } from '../../common/app-error.js';
 import { RequestContext, type AuditOrigin } from '../../common/request-context.js';
 import type { Tx } from '../../db/database.js';
-import { depositAccounts, depositMovements, leaseContracts, leases, leaseVersions, rentDues, tenants } from '../../db/schema/leases.js';
+import {
+	depositAccounts,
+	depositMovements,
+	leaseContracts,
+	leases,
+	leaseVersions,
+	maintenanceRequests,
+	rentDues,
+	tenants
+} from '../../db/schema/leases.js';
+import { fromDatabaseError } from '../../common/db-errors.js';
 import { AuditService, diff, type AuditActor } from '../audit/audit.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { OrganizationsService } from '../organizations/organizations.service.js';
@@ -354,6 +364,16 @@ export interface PartyCurrentLease {
 	deposit: PartyDeposit | null;
 }
 
+/** Contrat ou avenant d'un bail, vu par une partie (cycle du contrat, scan signé). */
+export interface PartyContract {
+	id: string;
+	kind: 'contract' | 'amendment';
+	status: string;
+	signedDocumentId: string | null;
+	legalizedOn: string | null;
+	registeredOn: string | null;
+}
+
 /** Bail vu par son locataire, avec ses échéances émises et sa caution. */
 export interface PartyTenantLease {
 	id: string;
@@ -364,6 +384,8 @@ export interface PartyTenantLease {
 	exitOn: string | null;
 	rent: number;
 	charges: number;
+	/** Bailleur désigné au contrat : le propriétaire (représenté) ou l'organisation en son nom (D24). */
+	lessorType: string;
 	deposit: PartyDeposit | null;
 	dues: { id: string; periodStart: string; periodEnd: string; dueOn: string; amountDue: number; amountPaid: number; status: string }[];
 }
@@ -411,6 +433,97 @@ export class LeasesService {
 			});
 		}
 		return out;
+	}
+
+	/** Contrat de base (hors avenants) et avenants de chaque bail : statut du cycle, scan signé (lot 08 bis). */
+	async partyContracts(tx: Tx, organizationId: string, leaseIds: readonly string[]): Promise<Map<string, PartyContract[]>> {
+		if (!leaseIds.length) return new Map();
+		const rows = await tx
+			.select()
+			.from(leaseContracts)
+			.where(and(eq(leaseContracts.organizationId, organizationId), inArray(leaseContracts.leaseId, [...leaseIds])))
+			.orderBy(asc(leaseContracts.createdAt), asc(leaseContracts.id));
+		const out = new Map<string, PartyContract[]>();
+		for (const c of rows) {
+			out.set(c.leaseId, [
+				...(out.get(c.leaseId) ?? []),
+				{
+					id: c.id,
+					kind: c.amendmentId ? 'amendment' : 'contract',
+					status: c.status,
+					signedDocumentId: c.signedDocumentId,
+					legalizedOn: c.legalizedOn,
+					registeredOn: c.registeredOn
+				}
+			]);
+		}
+		return out;
+	}
+
+	/** Signalements des baux d'un locataire lié, du plus récent au plus ancien, avec leur suivi. */
+	async partyMaintenanceRequests(tx: Tx, organizationId: string, leaseIds: readonly string[]) {
+		if (!leaseIds.length) return [];
+		return tx
+			.select({
+				id: maintenanceRequests.id,
+				leaseId: maintenanceRequests.leaseId,
+				title: maintenanceRequests.title,
+				description: maintenanceRequests.description,
+				status: maintenanceRequests.status,
+				plannedOn: maintenanceRequests.plannedOn,
+				doneAt: maintenanceRequests.doneAt,
+				statusNote: maintenanceRequests.statusNote,
+				createdAt: maintenanceRequests.createdAt
+			})
+			.from(maintenanceRequests)
+			.where(and(eq(maintenanceRequests.organizationId, organizationId), inArray(maintenanceRequests.leaseId, [...leaseIds])))
+			.orderBy(desc(maintenanceRequests.createdAt), desc(maintenanceRequests.id));
+	}
+
+	/**
+	 * Signalement du locataire lié sur l'un de ses baux (en vigueur ou en préavis, vérifié par la base) : une demande à
+	 * traiter, enregistrée dans l'organisation du bail. Idempotent par identifiant ; journalisé (origine portal).
+	 */
+	async partyCreateMaintenanceRequest(
+		tx: Tx,
+		organizationId: string,
+		leaseIds: readonly string[],
+		userId: string,
+		input: { id: string; leaseId: string; title: string; description: string }
+	): Promise<{ id: string; status: 'received' }> {
+		if (!leaseIds.includes(input.leaseId)) throw new AppError('LEASE_NOT_FOUND', 'Bail introuvable.', 404);
+		const [existing] = await tx
+			.select({ id: maintenanceRequests.id, leaseId: maintenanceRequests.leaseId })
+			.from(maintenanceRequests)
+			.where(eq(maintenanceRequests.id, input.id))
+			.limit(1);
+		if (existing) {
+			if (existing.leaseId !== input.leaseId) throw new AppError('CONFLICT', 'Cet identifiant est déjà utilisé.', 409);
+			return { id: existing.id, status: 'received' };
+		}
+		try {
+			await tx.insert(maintenanceRequests).values({
+				id: input.id,
+				organizationId,
+				leaseId: input.leaseId,
+				reportedBy: userId,
+				title: input.title,
+				description: input.description
+			});
+		} catch (error) {
+			throw fromDatabaseError(error) ?? error;
+		}
+		await this.audit.record(tx, {
+			actor: { type: 'user', userId },
+			organizationId,
+			subjectUserId: userId,
+			action: 'maintenance_request.create',
+			objectType: 'maintenance_request',
+			objectId: input.id,
+			after: { leaseId: input.leaseId, title: input.title, status: 'received' },
+			origin: 'portal'
+		});
+		return { id: input.id, status: 'received' };
 	}
 
 	/** Tous les baux validés des unités d'un propriétaire (pour ses documents : contrat signé, avenants, états des lieux). */
@@ -479,6 +592,7 @@ export class LeasesService {
 			exitOn: l.exitOn,
 			rent: l.rent,
 			charges: l.charges,
+			lessorType: l.lessorType,
 			deposit: deposits.get(l.id) ?? null,
 			dues: dues
 				.filter((d) => d.leaseId === l.id)

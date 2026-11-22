@@ -26,13 +26,16 @@ import type { Tx } from '../../db/database.js';
 import { RedisService } from '../../redis/redis.module.js';
 import { AuditService } from '../audit/audit.service.js';
 import { FeaturesService } from '../features/features.service.js';
-import { LeasesService, type PartyCurrentLease } from '../leases/leases.service.js';
+import { ExitService } from '../leases/exit.service.js';
+import { LeasesService, type PartyCurrentLease, type PartyTenantLease } from '../leases/leases.service.js';
+import { OwnersService } from '../owners/owners.service.js';
 import { OrganizationsService } from '../organizations/organizations.service.js';
 import { PersonLinksService } from '../organizations/person-links.service.js';
 import { PaymentsService } from '../payments/payments.service.js';
 import { StatementsService } from '../collections/statements.service.js';
 import { DocumentsService, type PartyDocument } from '../documents/documents.service.js';
-import { ownerIncome, type IncomeMonth, type IncomeProperty } from '@ziga/shared/portals';
+import { DIRECT_PAYMENT_DISABLED_REASON, ownerIncome, type IncomeMonth, type IncomeProperty } from '@ziga/shared/portals';
+import type { ContractStatus } from '@ziga/shared/contracts';
 import { toIsoDate } from '@ziga/shared/dates';
 import { PropertiesService, type PartyProperty } from '../properties/properties.service.js';
 
@@ -81,7 +84,9 @@ export class PortalsService implements OnModuleInit {
 		private readonly leases: LeasesService,
 		private readonly payments: PaymentsService,
 		private readonly statements: StatementsService,
-		private readonly documents: DocumentsService
+		private readonly documents: DocumentsService,
+		private readonly exit: ExitService,
+		private readonly owners: OwnersService
 	) {}
 
 	onModuleInit(): void {
@@ -331,13 +336,12 @@ export class PortalsService implements OnModuleInit {
 					const { scope } = await this.ownerScope(tx, organizationId, recordIds);
 					return this.documents.partyDownload(tx, organizationId, documentId, 'owner', scope, userId);
 				}
-				const leases = (await Promise.all(recordIds.map((id) => this.leases.partyTenantLeases(tx, organizationId, id)))).flat();
 				return this.documents.partyDownload(
 					tx,
 					organizationId,
 					documentId,
 					'tenant',
-					{ tenantIds: recordIds, leaseIds: leases.map((l) => l.id) },
+					await this.tenantDocumentScope(tx, organizationId, recordIds),
 					userId
 				);
 			})
@@ -422,5 +426,261 @@ export class PortalsService implements OnModuleInit {
 				);
 			})
 		);
+	}
+
+	// ---------------------------------------------------------------- espace du locataire : logement, contrats, caution (2b-3)
+
+	private async tenantLeasesIn(tx: Tx, organizationId: string, tenantIds: readonly string[]): Promise<PartyTenantLease[]> {
+		return (await Promise.all(tenantIds.map((id) => this.leases.partyTenantLeases(tx, organizationId, id)))).flat();
+	}
+
+	/** Périmètre des documents du locataire : sa fiche, ses baux ; un projet de contrat se lit à partir de « prêt à signer ». */
+	private async tenantDocumentScope(tx: Tx, organizationId: string, tenantIds: readonly string[]) {
+		const leaseIds = (await this.tenantLeasesIn(tx, organizationId, tenantIds)).map((l) => l.id);
+		const contracts = new Map(
+			[...(await this.leases.partyContracts(tx, organizationId, leaseIds)).values()].flat().map((c) => [c.id, c.status])
+		);
+		return {
+			tenantIds,
+			leaseIds,
+			contractStatus: (d: { leaseContractId: string | null }) =>
+				d.leaseContractId ? ((contracts.get(d.leaseContractId) as ContractStatus | undefined) ?? null) : null
+		};
+	}
+
+	/** Logement actuel : solde, prochaine échéance, contact de l'organisation ; paiement direct selon son interrupteur. */
+	async tenantHome(userId: string) {
+		await this.assertSpace('tenant', userId);
+		const links = await this.activeLinks(userId);
+		return this.cached(this.cacheKey(userId, 'tenant-home', links), async () => ({
+			homes: (
+				await this.eachOrganization(userId, 'tenant', 'tenant/home', links, async (tx, org, tenantIds) => {
+					const current = (await this.tenantLeasesIn(tx, org.organizationId, tenantIds)).filter(
+						(l) => l.status === 'active' || l.status === 'notice'
+					);
+					if (!current.length) return [];
+					const labels = await this.properties.partyUnitLabels(
+						tx,
+						org.organizationId,
+						current.map((l) => l.unitId)
+					);
+					const o = await this.organizations.partyOrganization(tx, org.organizationId);
+					const direct = (
+						await this.features.resolve(
+							'payments.direct',
+							userId,
+							await this.features.organizationContext(org.organizationId, o!.planId, tx)
+						)
+					).enabled;
+					return current.map((l) => {
+						const open = l.dues
+							.filter((d) => d.amountDue > d.amountPaid && d.status !== 'waived')
+							.sort((a, b) => (a.dueOn < b.dueOn ? -1 : 1));
+						return {
+							...org,
+							leaseId: l.id,
+							status: l.status,
+							unitLabel: labels.get(l.unitId)?.unitLabel ?? null,
+							propertyName: labels.get(l.unitId)?.propertyName ?? null,
+							rent: l.rent,
+							charges: l.charges,
+							balance: open.reduce((sum, d) => sum + (d.amountDue - d.amountPaid), 0),
+							nextDue: open[0] ? { id: open[0].id, dueOn: open[0].dueOn, remaining: open[0].amountDue - open[0].amountPaid } : null,
+							directPayment: { enabled: direct, reason: direct ? null : DIRECT_PAYMENT_DISABLED_REASON }
+						};
+					});
+				})
+			).flat()
+		}));
+	}
+
+	/** Contrats : en vigueur, à signer, terminés ; organisation, bailleur désigné, dates, loyer, caution, statuts. */
+	async tenantContracts(userId: string) {
+		await this.assertSpace('tenant', userId);
+		const links = await this.activeLinks(userId);
+		return this.cached(this.cacheKey(userId, 'tenant-contracts', links), async () =>
+			(
+				await this.eachOrganization(userId, 'tenant', 'tenant/contracts', links, async (tx, org, tenantIds) => {
+					const leases = await this.tenantLeasesIn(tx, org.organizationId, tenantIds);
+					const labels = await this.properties.partyUnitLabels(
+						tx,
+						org.organizationId,
+						leases.map((l) => l.unitId)
+					);
+					const owners = await this.owners.partyOwnerNames(
+						tx,
+						[...labels.values()].map((v) => v.ownerId)
+					);
+					const contracts = await this.leases.partyContracts(
+						tx,
+						org.organizationId,
+						leases.map((l) => l.id)
+					);
+					return leases.map((l) => {
+						const place = labels.get(l.unitId);
+						const docs = contracts.get(l.id) ?? [];
+						const base = docs.find((d) => d.kind === 'contract') ?? null;
+						const group = l.status === 'ended' ? 'ended' : base?.status === 'ready_to_sign' ? 'to_sign' : 'in_force';
+						const next = l.dues
+							.filter((d) => d.amountDue > d.amountPaid && d.status !== 'waived')
+							.sort((a, b) => (a.dueOn < b.dueOn ? -1 : 1))[0];
+						return {
+							...org,
+							leaseId: l.id,
+							group,
+							leaseStatus: l.status,
+							contractStatus: base?.status ?? null,
+							signed: !!base?.signedDocumentId,
+							amendments: docs.filter((d) => d.kind === 'amendment').map((d) => ({ id: d.id, status: d.status })),
+							unitLabel: place?.unitLabel ?? null,
+							propertyName: place?.propertyName ?? null,
+							lessorType: l.lessorType,
+							lessorName:
+								l.lessorType === 'organization' ? org.organizationName : ((place && owners.get(place.ownerId)) ?? org.organizationName),
+							startsOn: l.startsOn,
+							endsOn: l.endsOn,
+							exitOn: l.exitOn,
+							rent: l.rent,
+							charges: l.charges,
+							deposit: l.deposit
+								? { agreedAmount: l.deposit.agreedAmount, holder: l.deposit.holder, holderName: l.deposit.holderName }
+								: null,
+							nextDueOn: next?.dueOn ?? null
+						};
+					});
+				})
+			).flat()
+		);
+	}
+
+	/** Caution et décompte de chaque bail : montant convenu, détenteur, décompte et ses lignes. */
+	async tenantDeposits(userId: string) {
+		await this.assertSpace('tenant', userId);
+		const links = await this.activeLinks(userId);
+		return this.cached(this.cacheKey(userId, 'tenant-deposits', links), async () =>
+			(
+				await this.eachOrganization(userId, 'tenant', 'tenant/deposits', links, async (tx, org, tenantIds) => {
+					const leases = (await this.tenantLeasesIn(tx, org.organizationId, tenantIds)).filter((l) => l.deposit);
+					const settlements = await this.exit.partySettlements(
+						tx,
+						org.organizationId,
+						leases.map((l) => l.id)
+					);
+					return leases.map((l) => ({ ...org, leaseId: l.id, ...l.deposit!, settlement: settlements.get(l.id) ?? null }));
+				})
+			).flat()
+		);
+	}
+
+	/** Documents permis par la matrice : son contrat signé, ses avenants, sa pièce d'identité, ses états des lieux. */
+	async tenantDocuments(userId: string) {
+		await this.assertSpace('tenant', userId);
+		const links = await this.activeLinks(userId);
+		return this.cached(this.cacheKey(userId, 'tenant-documents', links), async () =>
+			(
+				await this.eachOrganization(userId, 'tenant', 'tenant/documents', links, async (tx, org, tenantIds) => {
+					const scope = await this.tenantDocumentScope(tx, org.organizationId, tenantIds);
+					return (await this.documents.partyDocuments(tx, org.organizationId, 'tenant', scope)).map((d) => ({
+						...org,
+						...d
+					}));
+				})
+			).flat()
+		);
+	}
+
+	/** Signalements suivis (reçu, planifié, fait). */
+	async tenantRequests(userId: string) {
+		await this.assertSpace('tenant', userId);
+		const links = await this.activeLinks(userId);
+		return (
+			await this.eachOrganization(userId, 'tenant', 'tenant/requests', links, async (tx, org, tenantIds) => {
+				const leases = await this.tenantLeasesIn(tx, org.organizationId, tenantIds);
+				return (
+					await this.leases.partyMaintenanceRequests(
+						tx,
+						org.organizationId,
+						leases.map((l) => l.id)
+					)
+				).map((r) => ({
+					...org,
+					...r,
+					createdAt: r.createdAt.toISOString(),
+					doneAt: r.doneAt?.toISOString() ?? null
+				}));
+			})
+		).flat();
+	}
+
+	/** Une écriture de la personne dans l'organisation d'un de ses baux (demande à traiter), puis ses réponses en cache effacées. */
+	private async tenantWrite<T>(userId: string, organizationId: string, fn: (tx: Tx, tenantIds: string[]) => Promise<T>): Promise<T> {
+		await this.assertSpace('tenant', userId);
+		const tenantIds = (await this.activeLinks(userId))
+			.filter((l) => l.recordType === 'tenant' && l.organizationId === organizationId)
+			.map((l) => l.recordId);
+		if (!tenantIds.length) throw new AppError('LEASE_NOT_FOUND', 'Bail introuvable.', 404);
+		const result = await this.database.withOrganization(organizationId, (tx) =>
+			RequestContext.run({ ...RequestContext.get(), origin: 'portal', userId }, async () => {
+				const o = await this.organizations.partyOrganization(tx, organizationId);
+				if (
+					!o ||
+					!(
+						await this.features.resolve(
+							'portals.tenant_space',
+							userId,
+							await this.features.organizationContext(organizationId, o.planId, tx)
+						)
+					).enabled
+				) {
+					throw new AppError('FEATURE_DISABLED', 'Cet espace n’est pas ouvert par cette organisation.', 403);
+				}
+				return fn(tx, tenantIds);
+			})
+		);
+		await this.forget(userId);
+		return result;
+	}
+
+	createMaintenanceRequest(
+		userId: string,
+		input: { organizationId: string; id: string; leaseId: string; title: string; description: string }
+	) {
+		return this.tenantWrite(userId, input.organizationId, async (tx, tenantIds) => {
+			const leases = await this.tenantLeasesIn(tx, input.organizationId, tenantIds);
+			return this.leases.partyCreateMaintenanceRequest(
+				tx,
+				input.organizationId,
+				leases.map((l) => l.id),
+				userId,
+				input
+			);
+		});
+	}
+
+	requestNotice(userId: string, input: { organizationId: string; leaseId: string; plannedExitOn: string; reason: string }) {
+		return this.tenantWrite(userId, input.organizationId, async (tx, tenantIds) => {
+			const leases = await this.tenantLeasesIn(tx, input.organizationId, tenantIds);
+			return this.exit.partyNoticeRequest(
+				tx,
+				input.organizationId,
+				leases.map((l) => l.id),
+				userId,
+				input
+			);
+		});
+	}
+
+	settlementObservation(userId: string, organizationId: string, settlementId: string, observations: string) {
+		return this.tenantWrite(userId, organizationId, async (tx, tenantIds) => {
+			const leases = await this.tenantLeasesIn(tx, organizationId, tenantIds);
+			return this.exit.partySettlementObservation(
+				tx,
+				organizationId,
+				leases.map((l) => l.id),
+				settlementId,
+				userId,
+				observations
+			);
+		});
 	}
 }

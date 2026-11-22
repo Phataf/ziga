@@ -4,6 +4,7 @@
  */
 import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { idSchema } from '@ziga/shared/ids';
+import { portalMaintenanceRequestSchema, portalNoticeRequestSchema, settlementObservationSchema } from '@ziga/shared/portals';
 import { z } from 'zod';
 import { Auth } from '../identity/auth.guard.js';
 import type { AccessClaims } from '../identity/token.service.js';
@@ -85,5 +86,64 @@ export class PortalsController {
 	@HttpCode(200)
 	receiptPdf(@Auth() claims: AccessClaims, @Param('organizationId') organizationId: string, @Param('receiptId') receiptId: string) {
 		return this.portals.tenantReceiptPdf(claims.sub, idSchema.parse(organizationId), idSchema.parse(receiptId));
+	}
+
+	// ---------------------------------------------------------------- espace du locataire (étape 2b-3)
+
+	/** Logement actuel : solde, prochaine échéance, contact ; paiement direct selon son interrupteur. */
+	@Get('tenant/home')
+	tenantHome(@Auth() claims: AccessClaims) {
+		return this.portals.tenantHome(claims.sub);
+	}
+
+	@Get('tenant/contracts')
+	tenantContracts(@Auth() claims: AccessClaims) {
+		return this.portals.tenantContracts(claims.sub);
+	}
+
+	@Get('tenant/deposits')
+	tenantDeposits(@Auth() claims: AccessClaims) {
+		return this.portals.tenantDeposits(claims.sub);
+	}
+
+	@Get('tenant/documents')
+	tenantDocuments(@Auth() claims: AccessClaims) {
+		return this.portals.tenantDocuments(claims.sub);
+	}
+
+	@Get('tenant/requests')
+	tenantRequests(@Auth() claims: AccessClaims) {
+		return this.portals.tenantRequests(claims.sub);
+	}
+
+	/** Signalement, enregistré dans l'organisation du bail comme demande à traiter. */
+	@Post('tenant/requests')
+	@HttpCode(201)
+	createRequest(@Auth() claims: AccessClaims, @Body() body: unknown) {
+		return this.portals.createMaintenanceRequest(claims.sub, portalMaintenanceRequestSchema.parse(body));
+	}
+
+	/** Demande de préavis : une demande à traiter, jamais un congé enregistré. */
+	@Post('tenant/notice-requests')
+	@HttpCode(201)
+	requestNotice(@Auth() claims: AccessClaims, @Body() body: unknown) {
+		return this.portals.requestNotice(claims.sub, portalNoticeRequestSchema.parse(body));
+	}
+
+	/** Observation sur un décompte proposé : le décompte passe « contesté ». */
+	@Post('tenant/settlements/:organizationId/:settlementId/observation')
+	@HttpCode(200)
+	settlementObservation(
+		@Auth() claims: AccessClaims,
+		@Param('organizationId') organizationId: string,
+		@Param('settlementId') settlementId: string,
+		@Body() body: unknown
+	) {
+		return this.portals.settlementObservation(
+			claims.sub,
+			idSchema.parse(organizationId),
+			idSchema.parse(settlementId),
+			settlementObservationSchema.parse(body).observations
+		);
 	}
 }
