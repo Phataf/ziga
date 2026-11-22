@@ -55,5 +55,7 @@ class ClientTables extends SchemaGenerator {
 	}
 }
 const clientTables = JSON.parse(new ClientTables().generate(config, schema));
-const unkeyedLookups = (config.plan?.parameterIndexes ?? []).filter((p) => p.parameters.length === 0).map((p) => p.sourceTable.tablePattern);
+const unkeyedLookups = (config.plan?.parameterIndexes ?? [])
+	.filter((p) => p.parameters.length === 0)
+	.map((p) => p.sourceTable.tablePattern);
 process.stdout.write(JSON.stringify({ problems, sourceTables, clientTables, unkeyedLookups }));
