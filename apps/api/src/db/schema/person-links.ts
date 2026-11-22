@@ -2,7 +2,7 @@
  * Liens entre une fiche d'organisation et le compte d'une personne (lot 10 ter, module organizations). La migration SQL
  * (0022) fait foi : RLS, clés composites, transitions et numéros vérifiés par déclencheur, révocation à un changement de
  * numéro. Lu et écrit par le seul module organizations (règle ESLint d'import, CLAUDE.md §4) ; pas exporté par l'index
- * du schéma. Le module portals ne lit que les identifiants de ses propres liens, par my_person_links().
+ * du schéma. Le module portals ne lit que les identifiants de ses propres liens, par la fonction SQL my_person_links.
  */
 import type { PersonLinkOrigin, PersonLinkRecordType, PersonLinkRevoker, PersonLinkStatus } from '@ziga/shared/person-links';
 import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
