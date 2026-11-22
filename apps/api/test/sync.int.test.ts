@@ -32,6 +32,7 @@ const PUBLISHED = [
 	'lease_notices',
 	'lease_versions',
 	'leases',
+	'maintenance_requests',
 	'management_transfers',
 	'mandate_scopes',
 	'mandate_versions',
