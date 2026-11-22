@@ -150,6 +150,12 @@
 		leases.filter((l) => unitIdsOfProperty.has(String(l.unit_id)) && (!unitId || l.unit_id === unitId) && l.status !== 'draft')
 	);
 
+	// Formulaire ouvert avant l'arrivée des biens de la base locale : le premier bien est choisi dès qu'il arrive
+	// (sinon la dépense partirait sans bien et serait refusée sur l'appareil).
+	$effect(() => {
+		if (formOpen && !propertyId && properties[0]) propertyId = String(properties[0].id);
+	});
+
 	function openForm() {
 		formMessage = null;
 		propertyId = String(properties[0]?.id ?? '');
