@@ -20,7 +20,7 @@ import { ExitSyncHandlers } from './exit.sync.js';
 import { ContractsService } from './contracts/contracts.service.js';
 import { createPdfConverter, PDF_CONVERTER } from './contracts/pdf-converter.js';
 import { HandwrittenScanProvider, SIGNATURE_PROVIDER } from './contracts/signature-provider.js';
-import { DepositAccountsController, LeasesController, TenantsController } from './leases.controller.js';
+import { DepositAccountsController, LeasesController, MaintenanceRequestsController, TenantsController } from './leases.controller.js';
 import { LeasesService } from './leases.service.js';
 import { LeasesSyncHandlers } from './leases.sync.js';
 import { occupancySignals } from './rent-dues.js';
@@ -38,6 +38,7 @@ import { occupancySignals } from './rent-dues.js';
 		TenantsController,
 		LeasesController,
 		DepositAccountsController,
+		MaintenanceRequestsController,
 		ContractTemplatesController,
 		ContractsController,
 		LeaseContractsController,

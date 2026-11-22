@@ -30,6 +30,7 @@
 	import type { UnitView } from '@ziga/shared/properties';
 	import FormAlert from '#lib/components/auth/FormAlert.svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
+	import MaintenanceRequestsSection from '#lib/components/portals/MaintenanceRequestsSection.svelte';
 	import LeaseContractSection from '#lib/components/contracts/LeaseContractSection.svelte';
 	import NoticeForm from '#lib/components/exit/NoticeForm.svelte';
 	import DocumentsSection from '#lib/components/properties/DocumentsSection.svelte';
@@ -597,5 +598,6 @@
 				</ul>
 			{/if}
 		</section>
+		<MaintenanceRequestsSection leaseId={id} />
 	{/if}
 </main>

@@ -27,6 +27,7 @@ import { Can, OrganizationScoped } from './organization-context.js';
 import { OrganizationsService } from './organizations.service.js';
 import { PersonLinksService } from './person-links.service.js';
 
+const resendSchema = z.object({ sendSms: z.boolean().default(false) });
 const recordQuerySchema = z.object({ recordType: z.enum(PERSON_LINK_RECORD_TYPES), recordId: idSchema });
 
 @Controller('person-links')
@@ -48,6 +49,14 @@ export class PersonLinksController {
 	@Can('person_link.manage')
 	invite(@Body() body: unknown) {
 		return this.links.invite(invitePersonLinkSchema.parse(body));
+	}
+
+	/** « Renvoyer l'invitation » : l'ancienne révoquée, une nouvelle envoyée, en une action. */
+	@Post(':id/resend')
+	@HttpCode(201)
+	@Can('person_link.manage')
+	resend(@Param('id') id: string, @Body() body: unknown) {
+		return this.links.resend(idSchema.parse(id), resendSchema.parse(body ?? {}).sendSms);
 	}
 
 	/** (b) Acceptation d'une demande de la personne. */
