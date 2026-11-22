@@ -129,7 +129,7 @@ const cases: Case[] = [
 		account: 'person',
 		path: '/espace/locataire',
 		tabs: ['Logement', 'Reçus', 'Caution', 'Plus'],
-		menu: ['Mon logement', 'Historique', 'Reçus', 'Caution et décompte', 'Signalements', 'Préavis'],
+		menu: ['Mon logement', 'Contrats et documents', 'Historique', 'Reçus', 'Caution et décompte', 'Signalements', 'Préavis'],
 		sections: ['Mon espace']
 	},
 	{

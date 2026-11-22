@@ -205,6 +205,7 @@ export const profiles: Record<ProfileId, Profile> = {
 				tab: true,
 				lot: '10 ter'
 			}),
+			item({ path: 'espace/locataire/contrats', label: n.tenantContracts, icon: FolderOpen, section: s.mySpace, lot: '10 ter' }),
 			item({ path: 'espace/locataire/historique', label: n.history, icon: History, section: s.mySpace, lot: '10 ter' }),
 			item({ path: 'espace/locataire/recus', label: n.receipts, icon: Receipt, section: s.mySpace, tab: true, lot: '10 ter' }),
 			item({
