@@ -102,10 +102,12 @@
 		return () => stops.forEach((s) => s());
 	});
 
+	// Un abonnement par unité, jamais renouvelé à chaque nouvelle version du bail.
+	const unitId = $derived(lease?.unitId ?? null);
 	$effect(() => {
 		const org = organizations.activeId;
-		if (!lease) return;
-		return sync.watch<Row>(LOCAL_QUERIES.unit, [org, lease.unitId], (r) => (unit = r[0] ? toUnit(r[0]) : null));
+		if (!unitId) return;
+		return sync.watch<Row>(LOCAL_QUERIES.unit, [org, unitId], (r) => (unit = r[0] ? toUnit(r[0]) : null));
 	});
 
 	const accounts = $derived<DepositAccountView[]>(lease ? accountRows.map((r) => toDepositAccount(r, movements, lease!.rent)) : []);

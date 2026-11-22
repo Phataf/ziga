@@ -151,6 +151,53 @@ async function uploadQuote(request: APIRequestContext, agency: Agency, subject: 
 	return id;
 }
 
+/**
+ * Changements du DOM de la page pendant `ms` : nombre, et quelques exemples (élément, attribut ou texte), pour vérifier
+ * qu'un écran est stable avant de cliquer (une page qui change de disposition en boucle n'est jamais cliquable).
+ */
+async function domChanges(page: Page, ms: number): Promise<{ count: number; samples: string[] }> {
+	return page.evaluate(
+		(ms) =>
+			new Promise<{ count: number; samples: string[] }>((resolve) => {
+				let count = 0;
+				const samples: string[] = [];
+				const describe = (n: Node | null) => {
+					const e = n instanceof Element ? n : n?.parentElement;
+					if (!e) return '?';
+					const id = e.closest('[data-testid]')?.getAttribute('data-testid') ?? '';
+					return `${e.tagName.toLowerCase()}${id ? `[${id}]` : ''}`;
+				};
+				const observer = new MutationObserver((records) => {
+					for (const r of records) {
+						count += 1;
+						if (samples.length < 15)
+							samples.push(`${r.type} ${describe(r.target)} ${r.attributeName ?? ''} ${(r.target.textContent ?? '').trim().slice(0, 30)}`);
+					}
+				});
+				observer.observe(document.body, { subtree: true, childList: true, attributes: true, characterData: true });
+				setTimeout(() => {
+					observer.disconnect();
+					resolve({ count, samples });
+				}, ms);
+			}),
+		ms
+	);
+}
+
+/**
+ * La page est stable avant un clic : une seconde entière sans aucun changement du DOM (20 secondes au plus). Une page
+ * qui change de disposition en boucle n'est jamais cliquable : l'échec nomme ce qui change.
+ */
+async function stable(page: Page, label: string): Promise<void> {
+	const deadline = Date.now() + 20_000;
+	let last = { count: 0, samples: [] as string[] };
+	while (Date.now() < deadline) {
+		last = await domChanges(page, 1000);
+		if (last.count === 0) return;
+	}
+	throw new Error(`${label} : la page change encore (${last.count} changements en 1 s) : ${last.samples.join(' | ')}`);
+}
+
 async function open(browser: Browser, options: BrowserContextOptions, who: Person, target: string) {
 	const ctx = await browser.newContext({ ...options, locale: 'fr-FR', timezoneId: 'Africa/Ouagadougou' });
 	await ctx.addInitScript(() => {
@@ -212,8 +259,10 @@ test.describe('Sortie complète, du préavis à la restitution, sur les trois ap
 			await expectNoHorizontalOverflow(page, `Congé (${label})`);
 			await page.getByTestId('enregistrer-conge').click();
 			await expect(page.getByTestId('ouvrir-sortie')).toBeVisible({ timeout: 20_000 });
+			await stable(page, `Fiche bail après le congé (${label})`);
 			await page.getByTestId('ouvrir-sortie').click();
 			await expect(page.getByTestId('sortie-conge')).toContainText('Le locataire');
+			await stable(page, `Page d’une sortie avant l’état des lieux (${label})`);
 
 			// 2. État des lieux de sortie, pièce par pièce.
 			await page.getByTestId('commencer-edl').click();
@@ -250,7 +299,9 @@ test.describe('Sortie complète, du préavis à la restitution, sur les trois ap
 			// état) ; puis le décompte : retenue impossible sans montant ni devis ; deux réparations justifiées ; 85 000 restitués.
 			await endAndSettleRent(request, agency, leaseId);
 			await page.getByTestId('terminer-edl').click();
+			await stable(page, `Page d’une sortie (${label})`);
 			await page.getByTestId('ouvrir-decompte').click();
+			await stable(page, `Décompte avant préparation (${label})`);
 			await page.getByTestId('preparer-decompte').click();
 			await expect(page.getByTestId('a-restituer')).toHaveText(formatFcfa(100000), { timeout: 20_000 });
 			for (const [element, amount] of [
