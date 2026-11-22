@@ -54,7 +54,11 @@ export const CONTRACT_DOCUMENT_TYPES = [
 ] as const satisfies readonly DocumentType[];
 
 /** Documents d'un état des lieux, jamais par la route générique : photos et scan par celle de l'état des lieux, PDF par le serveur. */
-export const INSPECTION_ROUTE_TYPES = ['inspection_photo', 'inspection_scan', 'inspection_report'] as const satisfies readonly DocumentType[];
+export const INSPECTION_ROUTE_TYPES = [
+	'inspection_photo',
+	'inspection_scan',
+	'inspection_report'
+] as const satisfies readonly DocumentType[];
 
 /** Pièces de la sortie du locataire (lot 10 bis) : déposées depuis la sortie (préavis, état des lieux, décompte). */
 export const EXIT_DOCUMENT_TYPES = [

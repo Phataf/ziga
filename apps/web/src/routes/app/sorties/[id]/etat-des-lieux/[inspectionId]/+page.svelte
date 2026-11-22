@@ -479,7 +479,9 @@
 						<li class="text-sm" data-testid="photo-recue">
 							<span class="text-muted-foreground">{inspectionPhotoDatesLabel({ takenAt: p.takenAt, receivedAt: p.createdAt })}</span>
 							{#if p.receivedAfterSignature}
-								<span class="block font-medium text-warning-foreground" data-testid="photo-apres-signature">{inspectionPhotoLateLabel(p.createdAt)}</span>
+								<span class="block font-medium text-warning-foreground" data-testid="photo-apres-signature"
+									>{inspectionPhotoLateLabel(p.createdAt)}</span
+								>
 							{/if}
 						</li>
 					{/each}
@@ -650,8 +652,11 @@
 				{#if report}
 					<p class="text-sm text-muted-foreground">{t.reportVersion(report.version)}</p>
 					{#if can(role, 'document.read')}
-						<Button variant="outline" onclick={() => openDocument(report!.id).catch((e) => (message = messageOf(e)))} disabled={!sync.online} data-testid="ouvrir-pdf-edl"
-							>{t.reportOpen}</Button
+						<Button
+							variant="outline"
+							onclick={() => openDocument(report!.id).catch((e) => (message = messageOf(e)))}
+							disabled={!sync.online}
+							data-testid="ouvrir-pdf-edl">{t.reportOpen}</Button
 						>
 					{/if}
 				{:else}

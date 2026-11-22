@@ -181,7 +181,12 @@ export class DocumentsService {
 	/** Dépôt : la fiche naît en attente ; l'URL d'envoi signe le type et la taille annoncés (10 minutes). */
 	async create(
 		input: CreateDocumentData,
-		inspection: { inspectionId: string; inspectionItemId: string | null; takenAt?: Date | null; receivedAfterSignature?: boolean } | null = null
+		inspection: {
+			inspectionId: string;
+			inspectionItemId: string | null;
+			takenAt?: Date | null;
+			receivedAfterSignature?: boolean;
+		} | null = null
 	): Promise<{ document: DocumentView; upload: PresignedUpload }> {
 		const { tx, organizationId, role, userId, actor } = this.context();
 		if (input.restriction) assertCan(role, 'document.restrict');
@@ -383,7 +388,14 @@ export class DocumentsService {
 			action: 'document.generate',
 			objectType: 'document',
 			objectId: id,
-			after: { type: 'inspection_report', inspectionId: input.inspectionId, version, replacesId: previous?.id ?? null, sha256, status: 'active' }
+			after: {
+				type: 'inspection_report',
+				inspectionId: input.inspectionId,
+				version,
+				replacesId: previous?.id ?? null,
+				sha256,
+				status: 'active'
+			}
 		});
 		return { id, sha256, version };
 	}

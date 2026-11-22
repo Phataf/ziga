@@ -37,7 +37,12 @@ import type {
 	SignInspectionData,
 	UpdateInspectionItemData
 } from '@ziga/shared/exit-schemas';
-import { inspectionCheckboxLabel, inspectionPhotoDatesLabel, inspectionPhotoLateLabel, inspectionScanLabel } from '@ziga/shared/exit-schemas';
+import {
+	inspectionCheckboxLabel,
+	inspectionPhotoDatesLabel,
+	inspectionPhotoLateLabel,
+	inspectionScanLabel
+} from '@ziga/shared/exit-schemas';
 import { newId } from '@ziga/shared/ids';
 import { can, type OrganizationRole } from '@ziga/shared/permissions';
 import {
@@ -151,7 +156,9 @@ export class ExitService {
 	/** PDF de l'état des lieux, par le worker : à la signature et à chaque photo reçue après elle (une tâche par motif). */
 	private async queueReport(c: Ctx, inspectionId: string, reason: string): Promise<void> {
 		const data: InspectionReportJobData = { organizationId: c.organizationId, userId: c.userId, inspectionId };
-		RequestContext.afterCommit(() => this.inspectionsQueue.add(INSPECTION_REPORT_JOB, data, { jobId: `${inspectionId}-${reason}` }).then(() => undefined));
+		RequestContext.afterCommit(() =>
+			this.inspectionsQueue.add(INSPECTION_REPORT_JOB, data, { jobId: `${inspectionId}-${reason}` }).then(() => undefined)
+		);
 	}
 
 	private context(origin?: AuditOrigin): Ctx {
@@ -433,7 +440,8 @@ export class ExitService {
 		if (step === 'upload-url') return this.documents.uploadUrl(documentId, { assignedUnit: true });
 		const doc = await this.documents.uploaded(documentId, { assignedUnit: true });
 		// Une photo reçue après la signature entre dans une nouvelle version du PDF.
-		if (doc.status === 'active' && doc.type === 'inspection_photo' && insp.status !== 'draft') await this.queueReport(c, inspectionId, documentId);
+		if (doc.status === 'active' && doc.type === 'inspection_photo' && insp.status !== 'draft')
+			await this.queueReport(c, inspectionId, documentId);
 		return doc;
 	}
 
@@ -849,7 +857,11 @@ export class ExitService {
 	async prepareSettlement(accountId: string, origin?: AuditOrigin): Promise<Row> {
 		const c = this.context(origin);
 		// Date de sortie atteinte, tâche du jour pas encore passée : le bail est terminé ici, par la même fonction (idempotente).
-		const [owning] = await c.tx.select({ leaseId: depositAccounts.leaseId }).from(depositAccounts).where(eq(depositAccounts.id, accountId)).limit(1);
+		const [owning] = await c.tx
+			.select({ leaseId: depositAccounts.leaseId })
+			.from(depositAccounts)
+			.where(eq(depositAccounts.id, accountId))
+			.limit(1);
 		if (owning) {
 			const lease = await this.lease(c, owning.leaseId, true);
 			await endLeaseAtExit(c.tx, this.audit, c.organizationId, lease, toIsoDate(), this.hooks, c.actor, c.origin ?? 'api');
@@ -1330,7 +1342,9 @@ export class ExitService {
 		const signatures: string[] = [];
 		if (insp.organizationSignedAt) {
 			const who = (await name(insp.organizationSignedBy)) ?? '—';
-			signatures.push(inspectionCheckboxLabel({ signerName: who, signedAt: insp.organizationSignedAt.toISOString(), deviceOwnerName: who }));
+			signatures.push(
+				inspectionCheckboxLabel({ signerName: who, signedAt: insp.organizationSignedAt.toISOString(), deviceOwnerName: who })
+			);
 		}
 		if (insp.tenantSignedAt) {
 			signatures.push(
@@ -1363,7 +1377,9 @@ export class ExitService {
 					photos: photos
 						.filter((p) => p.view.inspectionItemId === it.id)
 						.map((p) => ({
-							image: p.body ? { bytes: p.body, type: p.view.mimeType === 'image/png' ? ('image/png' as const) : ('image/jpeg' as const) } : null,
+							image: p.body
+								? { bytes: p.body, type: p.view.mimeType === 'image/png' ? ('image/png' as const) : ('image/jpeg' as const) }
+								: null,
 							dates: inspectionPhotoDatesLabel({ takenAt: p.view.takenAt, receivedAt: p.view.createdAt }),
 							late: p.view.receivedAfterSignature ? inspectionPhotoLateLabel(p.view.createdAt) : null
 						}))
