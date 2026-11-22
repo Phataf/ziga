@@ -242,6 +242,8 @@ export const SYNCED_TABLES = {
 		contract_template_id: 'text',
 		inspection_id: 'text',
 		inspection_item_id: 'text',
+		taken_at: 'text',
+		received_after_signature: 'integer',
 		version: 'integer',
 		replaces_id: 'text',
 		file_name: 'text',

@@ -5,6 +5,7 @@
  * (migrations 0019 et 0020) les applique en dernier rempart. Les autres modules sont joints par `ExitHooks`, jamais par
  * leurs tables (CLAUDE.md §4).
  */
+import { InjectQueue } from '@nestjs/bullmq';
 import { Injectable } from '@nestjs/common';
 import { toIsoDate } from '@ziga/shared/dates';
 import {
@@ -36,7 +37,7 @@ import type {
 	SignInspectionData,
 	UpdateInspectionItemData
 } from '@ziga/shared/exit-schemas';
-import { inspectionCheckboxLabel } from '@ziga/shared/exit-schemas';
+import { inspectionCheckboxLabel, inspectionPhotoDatesLabel, inspectionPhotoLateLabel, inspectionScanLabel } from '@ziga/shared/exit-schemas';
 import { newId } from '@ziga/shared/ids';
 import { can, type OrganizationRole } from '@ziga/shared/permissions';
 import {
@@ -63,7 +64,8 @@ import {
 	leaseNotices,
 	leases,
 	rentDues,
-	repairs
+	repairs,
+	tenants
 } from '../../db/schema/leases.js';
 import { AuditService, type AuditActor } from '../audit/audit.service.js';
 import { OrganizationsService } from '../organizations/organizations.service.js';
@@ -72,6 +74,10 @@ import { PropertiesService } from '../properties/properties.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { ExitHooks } from './exit-hooks.js';
 import { endLeaseAtExit, exitDuesPlan } from './leases-daily.js';
+import { inspectionReportPdf } from './inspection-report-pdf.js';
+import { INSPECTION_REPORT_JOB, INSPECTIONS_QUEUE, type InspectionReportJobData } from '../../jobs/queues.js';
+import type { Queue } from 'bullmq';
+import { DEFAULT_INSPECTION_ELEMENTS } from '@ziga/shared/tenant-exit';
 
 type LeaseRow = typeof leases.$inferSelect;
 type SettlementRow = typeof depositSettlements.$inferSelect;
@@ -138,8 +144,15 @@ export class ExitService {
 		private readonly owners: OwnersService,
 		private readonly organizations: OrganizationsService,
 		private readonly hooks: ExitHooks,
-		private readonly documents: DocumentsService
+		private readonly documents: DocumentsService,
+		@InjectQueue(INSPECTIONS_QUEUE) private readonly inspectionsQueue: Queue
 	) {}
+
+	/** PDF de l'état des lieux, par le worker : à la signature et à chaque photo reçue après elle (une tâche par motif). */
+	private async queueReport(c: Ctx, inspectionId: string, reason: string): Promise<void> {
+		const data: InspectionReportJobData = { organizationId: c.organizationId, userId: c.userId, inspectionId };
+		RequestContext.afterCommit(() => this.inspectionsQueue.add(INSPECTION_REPORT_JOB, data, { jobId: `${inspectionId}-${reason}` }).then(() => undefined));
+	}
 
 	private context(origin?: AuditOrigin): Ctx {
 		const scope = RequestContext.organization();
@@ -380,7 +393,8 @@ export class ExitService {
 	async inspectionDocument(inspectionId: string, input: InspectionDocumentData) {
 		const c = this.context();
 		const insp = await this.inspection(c, inspectionId);
-		if (insp.status !== 'draft' && !takenBeforeSignature(insp, input)) {
+		const late = insp.status !== 'draft';
+		if (late && !takenBeforeSignature(insp, input)) {
 			throw new AppError('INSPECTION_LOCKED', 'Un état des lieux signé ou contesté ne change plus.', 409);
 		}
 		if (input.inspectionItemId) {
@@ -389,24 +403,38 @@ export class ExitService {
 		}
 		const lease = await this.lease(c, insp.leaseId);
 		const unit = await this.properties.getUnit(lease.unitId);
-		const { takenAt: _takenAt, ...file } = input;
-		return this.documents.createForInspection({
+		const { takenAt, ...file } = input;
+		const created = await this.documents.createForInspection({
 			...file,
 			propertyId: unit.propertyId,
 			unitId: lease.unitId,
 			leaseId: lease.id,
-			inspectionId
+			inspectionId,
+			takenAt: input.type === 'inspection_photo' && takenAt ? new Date(takenAt) : null,
+			receivedAfterSignature: late
 		});
+		// Photo prise avant la signature, reçue après elle : journalisée, marquée à l'écran et dans le PDF.
+		if (late) {
+			await this.record(c, 'inspection.photo_after_signature', 'inspection', inspectionId, {
+				documentId: created.document.id,
+				inspectionItemId: input.inspectionItemId,
+				takenAt,
+				receivedAt: created.document.createdAt
+			});
+		}
+		return created;
 	}
 
 	/** Envoi du fichier (URL signée) puis réception contrôlée, pour un document de cet état des lieux seulement. */
 	async inspectionDocumentStep(inspectionId: string, documentId: string, step: 'upload-url' | 'uploaded') {
 		const c = this.context();
-		await this.inspection(c, inspectionId);
+		const insp = await this.inspection(c, inspectionId);
 		await this.documents.inspectionDocument(documentId, inspectionId);
-		return step === 'upload-url'
-			? this.documents.uploadUrl(documentId, { assignedUnit: true })
-			: this.documents.uploaded(documentId, { assignedUnit: true });
+		if (step === 'upload-url') return this.documents.uploadUrl(documentId, { assignedUnit: true });
+		const doc = await this.documents.uploaded(documentId, { assignedUnit: true });
+		// Une photo reçue après la signature entre dans une nouvelle version du PDF.
+		if (doc.status === 'active' && doc.type === 'inspection_photo' && insp.status !== 'draft') await this.queueReport(c, inspectionId, documentId);
+		return doc;
 	}
 
 	async addItem(inspectionId: string, input: InspectionItemData, origin?: AuditOrigin): Promise<Row> {
@@ -483,6 +511,7 @@ export class ExitService {
 			((set.organizationSignedAt ?? before.organizationSignedAt) && (set.tenantSignedAt ?? before.tenantSignedAt));
 		if (both && before.status === 'draft') set.status = 'signed_both';
 		const [row] = await c.tx.update(inspections).set(set).where(eq(inspections.id, inspectionId)).returning();
+		if (before.status === 'draft' && row!.status === 'signed_both') await this.queueReport(c, inspectionId, 'signed');
 		await this.record(c, 'inspection.sign', 'inspection', inspectionId, {
 			mode: 'scanDocumentId' in input ? 'scan' : 'checkbox',
 			party: 'scanDocumentId' in input ? null : input.party,
@@ -1265,6 +1294,91 @@ export class ExitService {
 	}
 
 	/** Lot 10 bis : provenance des imputations sur caution (relevé, D32) — détenteur de la caution de chaque encaissement. */
+	/**
+	 * PDF de l'état des lieux (worker, étape 4) : pièce par pièce, photos avec leurs dates et la mention d'une photo reçue
+	 * après la signature, signatures telles qu'elles sont. Nouvelle version à chaque génération, jamais écrasée.
+	 */
+	async renderInspectionReport(inspectionId: string): Promise<{ documentId: string; version: number } | null> {
+		const c = this.context('job');
+		const insp = await this.inspection(c, inspectionId);
+		if (insp.status === 'draft') return null;
+		const lease = await this.lease(c, insp.leaseId);
+		const unit = await this.properties.getUnit(lease.unitId);
+		const property = await this.properties.get(unit.propertyId);
+		const [tenant] = await c.tx.select({ fullName: tenants.fullName }).from(tenants).where(eq(tenants.id, lease.tenantId)).limit(1);
+		const organization = await this.organizations.view(c.tx);
+		const items = await c.tx
+			.select()
+			.from(inspectionItems)
+			.where(eq(inspectionItems.inspectionId, inspectionId))
+			.orderBy(asc(inspectionItems.position), asc(inspectionItems.createdAt));
+		const photos = await this.documents.inspectionPhotos(inspectionId);
+		const labels = new Map<string, string>(DEFAULT_INSPECTION_ELEMENTS.map((e) => [e.key, e.label]));
+		const findings: Record<string, string> = {
+			normal_wear: 'Usure normale',
+			tenant_damage: 'Dégradation imputable au locataire',
+			landlord_defect: 'Vétusté ou défaut du logement'
+		};
+		const rooms: { name: string; items: (typeof items)[number][] }[] = [];
+		for (const it of items) {
+			let room = rooms.find((r) => r.name === it.room);
+			if (!room) rooms.push((room = { name: it.room, items: [] }));
+			room.items.push(it);
+		}
+		const name = async (id: string | null) => (id ? ((await this.organizations.memberName(id, c.tx)) ?? 'un membre') : null);
+		const tenantName = tenant?.fullName ?? 'le locataire';
+		const signatures: string[] = [];
+		if (insp.organizationSignedAt) {
+			const who = (await name(insp.organizationSignedBy)) ?? '—';
+			signatures.push(inspectionCheckboxLabel({ signerName: who, signedAt: insp.organizationSignedAt.toISOString(), deviceOwnerName: who }));
+		}
+		if (insp.tenantSignedAt) {
+			signatures.push(
+				inspectionCheckboxLabel({
+					signerName: tenantName,
+					signedAt: insp.tenantSignedAt.toISOString(),
+					deviceOwnerName: (await name(insp.tenantSignedRecordedBy)) ?? '—'
+				})
+			);
+		}
+		if (insp.scanDocumentId) {
+			const scan = await this.documents.inspectionDocument(insp.scanDocumentId, inspectionId).catch(() => null);
+			if (scan) signatures.push(inspectionScanLabel({ uploaderName: (await name(scan.uploadedBy)) ?? '—', uploadedAt: scan.createdAt }));
+		}
+		const title = insp.type === 'exit' ? 'État des lieux de sortie' : 'État des lieux d’entrée';
+		const bytes = await inspectionReportPdf({
+			title,
+			organizationName: organization.tradeName ?? organization.legalName,
+			details: [
+				`${property.name} · ${unit.label}`,
+				`Locataire : ${tenantName}`,
+				`État des lieux du ${insp.inspectedOn.split('-').reverse().join('/')}`
+			],
+			rooms: rooms.map((r) => ({
+				name: r.name,
+				items: r.items.map((it) => ({
+					element: labels.get(it.element) ?? it.element,
+					finding: it.finding ? (findings[it.finding] ?? it.finding) : null,
+					description: it.description,
+					photos: photos
+						.filter((p) => p.view.inspectionItemId === it.id)
+						.map((p) => ({
+							image: p.body ? { bytes: p.body, type: p.view.mimeType === 'image/png' ? ('image/png' as const) : ('image/jpeg' as const) } : null,
+							dates: inspectionPhotoDatesLabel({ takenAt: p.view.takenAt, receivedAt: p.view.createdAt }),
+							late: p.view.receivedAfterSignature ? inspectionPhotoLateLabel(p.view.createdAt) : null
+						}))
+				}))
+			})),
+			signatures: signatures.length ? signatures : ['Aucune signature enregistrée.'],
+			footer: `${title} · ${property.name} · ${unit.label}`
+		});
+		const stored = await this.documents.storeInspectionReport(
+			{ leaseId: lease.id, propertyId: unit.propertyId, unitId: lease.unitId, inspectionId, fileName: `etat-des-lieux-${insp.type}.pdf` },
+			Buffer.from(bytes)
+		);
+		return { documentId: stored.id, version: stored.version };
+	}
+
 	async depositOffsetHolders(tx: Tx, paymentIds: readonly string[]): Promise<Map<string, 'organization' | 'owner'>> {
 		if (!paymentIds.length) return new Map();
 		const rows = await tx

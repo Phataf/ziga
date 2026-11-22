@@ -847,6 +847,7 @@ export const fr = {
 			expense_receipt: 'Justificatif de dépense',
 			notice_proof: 'Preuve du congé',
 			inspection_photo: 'Photo d’état des lieux',
+			inspection_report: 'État des lieux (PDF)',
 			inspection_scan: 'État des lieux signé (scan)',
 			repair_quote: 'Devis de réparation',
 			agreement_document: 'Accord écrit',
@@ -2211,7 +2212,11 @@ export const fr = {
 			outcomes: { amicable_agreement: 'Accord amiable', court_decision: 'Décision de justice' } as Record<string, string>,
 			outcomeDocument: 'Document de l’issue',
 			outcomeSubmit: 'Enregistrer l’issue',
-			done: 'Terminer'
+			done: 'Terminer',
+			report: 'PDF de l’état des lieux',
+			reportVersion: (n: number) => `Version ${n}, produite par le serveur ; une photo reçue après la signature en crée une nouvelle.`,
+			reportOpen: 'Ouvrir le PDF',
+			reportPending: 'Le PDF est en préparation.'
 		},
 		compare: {
 			title: 'Comparaison entrée et sortie',

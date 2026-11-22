@@ -113,6 +113,21 @@ export function inspectionCheckboxLabel(s: { signerName: string; signedAt: strin
 	return `Case cochée par ${s.signerName} le ${formatDate(at)} à ${time} sur l’appareil de ${s.deviceOwnerName}`;
 }
 
+const dateTime = (iso: string) => {
+	const at = new Date(iso);
+	return `${formatDate(at)} à ${at.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Ouagadougou' })}`;
+};
+
+/** Dates d'une photo d'état des lieux : prise sur l'appareil, reçue par le serveur (étape 4). */
+export function inspectionPhotoDatesLabel(p: { takenAt: string | null; receivedAt: string }): string {
+	return p.takenAt ? `Prise le ${dateTime(p.takenAt)}, reçue le ${dateTime(p.receivedAt)}` : `Reçue le ${dateTime(p.receivedAt)}`;
+}
+
+/** Photo prise avant la dernière case cochée, reçue après la signature : mention à l'écran et dans le PDF. */
+export function inspectionPhotoLateLabel(receivedAt: string): string {
+	return `Photo reçue après la signature, le ${dateTime(receivedAt)}`;
+}
+
 /** Libellé d'un scan d'état des lieux déposé (D21). */
 export function inspectionScanLabel(s: { uploaderName: string; uploadedAt: string }): string {
 	return `Signature manuscrite, scan déposé par ${s.uploaderName} le ${formatDate(new Date(s.uploadedAt))}`;

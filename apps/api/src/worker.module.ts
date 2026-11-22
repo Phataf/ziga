@@ -5,6 +5,7 @@ import { ConfigModule } from './config/config.module.js';
 import type { AppConfig } from './config/env.js';
 import { DatabaseModule } from './db/database.module.js';
 import { ContractsWorkerModule } from './jobs/contracts-worker.module.js';
+import { InspectionReportWorkerModule } from './jobs/inspection-report.processor.js';
 import { JobsModule } from './jobs/jobs.module.js';
 import { PaymentsWorkerModule } from './jobs/receipts.processor.js';
 import { StatementsWorkerModule } from './jobs/statements.processor.js';
@@ -34,6 +35,8 @@ export class WorkerModule {
 				ExitHooksModule,
 				JobsModule.register('worker'),
 				ContractsWorkerModule,
+				// Lot 10 bis, étape 4 : PDF de l'état des lieux.
+				InspectionReportWorkerModule,
 				// Lot 09 : PDF des reçus et crédit du bail imputé sur les échéances émises la nuit.
 				PaymentsWorkerModule,
 				StatementsWorkerModule

@@ -13,7 +13,7 @@
 	import { page } from '$app/state';
 	import { formatDate } from '@ziga/shared/dates';
 	import { INSPECTION_FINDINGS, type InspectionFinding } from '@ziga/shared/deposit-settlement';
-	import { disputeSchema, disputeOutcomeSchema } from '@ziga/shared/exit-schemas';
+	import { disputeSchema, disputeOutcomeSchema, inspectionPhotoDatesLabel, inspectionPhotoLateLabel } from '@ziga/shared/exit-schemas';
 	import { newId } from '@ziga/shared/ids';
 	import { can } from '@ziga/shared/permissions';
 	import {
@@ -31,7 +31,8 @@
 	import { Input } from '#lib/components/ui/input/index.ts';
 	import { auth } from '#lib/auth/auth.svelte.ts';
 	import { messageOf } from '#lib/auth/forms.ts';
-	import { assemblePdf, uploadExitDocument } from '#lib/exit/documents.ts';
+	import { assemblePdf, openDocument, uploadExitDocument } from '#lib/exit/documents.ts';
+	import { toDocument } from '#lib/properties/views.ts';
 	import { inspectionPhotoQueue } from '#lib/exit/photo-queue.svelte.ts';
 	import {
 		elementLabel,
@@ -245,7 +246,11 @@
 	}
 
 	// ---- photos (file de l'appareil)
-	const sentPhotos = (itemId: string) => documents.filter((d) => d.inspection_item_id === itemId && d.type === 'inspection_photo').length;
+	const photoDocs = $derived(documents.map(toDocument).filter((d) => d.type === 'inspection_photo' && d.status !== 'rejected'));
+	const serverPhotos = (itemId: string) => photoDocs.filter((d) => d.inspectionItemId === itemId);
+	const sentPhotos = (itemId: string) => serverPhotos(itemId).length;
+	/** PDF de l'état des lieux (worker) : la version en vigueur. */
+	const report = $derived(documents.map(toDocument).find((d) => d.type === 'inspection_report' && d.status === 'active') ?? null);
 
 	async function takePhoto(c: Draft & { saved: boolean }, event: Event) {
 		const input = event.currentTarget as HTMLInputElement;
@@ -468,6 +473,17 @@
 						</li>
 					{/each}
 				</ul>
+				<!-- Photos reçues par le serveur : prise sur l'appareil, reçue ; mention si reçue après la signature. -->
+				<ul class="space-y-1">
+					{#each serverPhotos(c.id) as p (p.id)}
+						<li class="text-sm" data-testid="photo-recue">
+							<span class="text-muted-foreground">{inspectionPhotoDatesLabel({ takenAt: p.takenAt, receivedAt: p.createdAt })}</span>
+							{#if p.receivedAfterSignature}
+								<span class="block font-medium text-warning-foreground" data-testid="photo-apres-signature">{inspectionPhotoLateLabel(p.createdAt)}</span>
+							{/if}
+						</li>
+					{/each}
+				</ul>
 			</div>
 		{/if}
 	</article>
@@ -625,6 +641,22 @@
 					<Button type="submit" variant="outline" disabled={busy || !sync.online}>{t.disputeSubmit}</Button>
 					{#if !sync.online}<p class="text-sm text-muted-foreground">{fr.exit.onlineOnly}</p>{/if}
 				</form>
+			</section>
+		{/if}
+
+		{#if inspection.status !== 'draft'}
+			<section class="space-y-2 rounded-xl border bg-card p-4" aria-labelledby="titre-pdf-edl" data-testid="pdf-edl">
+				<h2 id="titre-pdf-edl" class="text-lg font-semibold">{t.report}</h2>
+				{#if report}
+					<p class="text-sm text-muted-foreground">{t.reportVersion(report.version)}</p>
+					{#if can(role, 'document.read')}
+						<Button variant="outline" onclick={() => openDocument(report!.id).catch((e) => (message = messageOf(e)))} disabled={!sync.online} data-testid="ouvrir-pdf-edl"
+							>{t.reportOpen}</Button
+						>
+					{/if}
+				{:else}
+					<p class="text-sm text-muted-foreground">{t.reportPending}</p>
+				{/if}
 			</section>
 		{/if}
 

@@ -3,7 +3,7 @@
  * figées par trigger. Lu et écrit par le seul module documents (règle ESLint d'import, CLAUDE.md §4) ; pas exporté par
  * l'index du schéma. La clé de stockage ne quitte jamais le serveur.
  */
-import { integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { boolean, integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 const tstz = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
@@ -35,7 +35,9 @@ export const documents = pgTable('documents', {
 			'inspection_scan',
 			'repair_quote',
 			'agreement_document',
-			'settlement_outcome'
+			'settlement_outcome',
+			// Étape 4 : PDF de l'état des lieux, produit par le worker.
+			'inspection_report'
 		]
 	}).notNull(),
 	ownerId: uuid('owner_id'),
@@ -51,6 +53,9 @@ export const documents = pgTable('documents', {
 	// Lot 10 bis : état des lieux (scan) et sa ligne (photo).
 	inspectionId: uuid('inspection_id'),
 	inspectionItemId: uuid('inspection_item_id'),
+	/** Photo d'une ligne : heure de la prise de vue sur l'appareil ; reçue après la signature (étape 4). */
+	takenAt: tstz('taken_at'),
+	receivedAfterSignature: boolean('received_after_signature').notNull().default(false),
 	version: integer('version').notNull(),
 	replacesId: uuid('replaces_id'),
 	fileName: text('file_name').notNull(),

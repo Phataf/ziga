@@ -33,6 +33,7 @@ import { LEASES_DAILY_JOB, LEASES_QUEUE } from '../src/jobs/queues.js';
 import { bullConnection } from '../src/redis/redis.module.js';
 import { ExitHooks } from '../src/modules/leases/exit-hooks.js';
 import { WorkerModule } from '../src/worker.module.js';
+import { inspectPdf } from './pdf-inspect.js';
 import { newPhone, startApp, type TestApp } from './http.js';
 import { addMember, createOrg, type Member, type Org } from './orgs.js';
 
@@ -911,7 +912,48 @@ describe('étape 4 : photos et scan d’un état des lieux (agent de terrain, sa
 			byteSize: JPEG.length,
 			takenAt
 		});
-		expect((await agent.call('POST', `/inspections/${later.id}/documents`, photoBody(before))).status).toBe(201);
+		// Reçue après la signature : sa date de prise (appareil) et de réception (serveur) gardées, marquée, journalisée.
+		const { id: _unused, ...lateBody } = photoBody(before);
+		const latePhoto = await send(agent, later.id as string, lateBody, JPEG, 'image/jpeg');
+		const lateDoc = await call<DocumentView>(agent, 'POST', `/inspections/${later.id}/documents/${latePhoto}/uploaded`);
+		expect(lateDoc).toMatchObject({ status: 'active', receivedAfterSignature: true, takenAt: before, inspectionItemId: laterItem.id });
+		const lateRow = (await owner.query(`select taken_at, received_after_signature, created_at from documents where id = $1`, [latePhoto]))
+			.rows[0];
+		expect(lateRow.received_after_signature).toBe(true);
+		expect((lateRow.taken_at as Date).toISOString()).toBe(before);
+		expect((lateRow.created_at as Date).getTime()).toBeGreaterThan(Date.parse(before));
+		const lateAudit = (
+			await owner.query(`select actor_user_id, after from audit_log where object_id = $1 and action = 'inspection.photo_after_signature'`, [
+				later.id
+			])
+		).rows;
+		expect(lateAudit).toHaveLength(1);
+		expect(lateAudit[0]).toMatchObject({ actor_user_id: agent.userId, after: { documentId: latePhoto, takenAt: before } });
+		// Figées comme le reste d'une version.
+		await expect(owner.query(`update documents set received_after_signature = false where id = $1`, [latePhoto])).rejects.toThrow(
+			/DOCUMENT_IMMUTABLE/
+		);
+		// PDF de l'état des lieux par le worker : une version à la signature, une autre après la photo tardive, avec la mention.
+		const reports = async () =>
+			(
+				await owner.query(
+					`select id, version, status from documents where inspection_id = $1 and type = 'inspection_report' order by version`,
+					[later.id]
+				)
+			).rows as { id: string; version: number; status: string }[];
+		await expect
+			.poll(async () => (await reports()).map((r) => [r.version, r.status]), { timeout: 30_000 })
+			.toEqual([
+				[1, 'replaced'],
+				[2, 'active']
+			]);
+		const link = await call<{ url: string }>(manager, 'POST', `/documents/${(await reports())[1]!.id}/download`);
+		const u2 = new URL(link.url);
+		const pdfBytes = new Uint8Array(await (await fetch(new URL(u2.pathname + u2.search, t.url))).arrayBuffer());
+		const text = (await inspectPdf(pdfBytes)).pages.flatMap((p) => p.text).join('\n');
+		expect(text).toContain('État des lieux d’entrée');
+		expect(text).toMatch(/Photo reçue après la signature, le \d{2}\/\d{2}\/\d{4} à \d{2}:\d{2}/);
+		expect(text).toMatch(/Case cochée par .+ sur l’appareil de /);
 		expect(
 			await refusal(agent, 'POST', `/inspections/${later.id}/documents`, photoBody(new Date(Date.now() + 60_000).toISOString()))
 		).toMatchObject({

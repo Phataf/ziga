@@ -13,6 +13,7 @@
 		CONTRACT_DOCUMENT_TYPES,
 		DOCUMENT_TYPES,
 		EXIT_DOCUMENT_TYPES,
+		INSPECTION_ROUTE_TYPES,
 		LEASE_DOCUMENT_TYPES,
 		UPLOAD_MIME_TYPES,
 		type DocumentType,
@@ -54,7 +55,8 @@
 		(d) =>
 			!(LEASE_DOCUMENT_TYPES as readonly DocumentType[]).includes(d) &&
 			!(CONTRACT_DOCUMENT_TYPES as readonly DocumentType[]).includes(d) &&
-			!(EXIT_DOCUMENT_TYPES as readonly DocumentType[]).includes(d)
+			!(EXIT_DOCUMENT_TYPES as readonly DocumentType[]).includes(d) &&
+			!(INSPECTION_ROUTE_TYPES as readonly DocumentType[]).includes(d)
 	);
 	const TYPES = $derived<readonly DocumentType[]>(leaseId ? LEASE_DOCUMENT_TYPES : PROPERTY_DOCUMENT_TYPES);
 	const role = $derived(organizations.active?.role);

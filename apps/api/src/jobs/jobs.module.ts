@@ -11,6 +11,7 @@ import { MediaProcessor } from './media.processor.js';
 import {
 	CONTRACTS_QUEUE,
 	EXAMPLE_QUEUE,
+	INSPECTIONS_QUEUE,
 	LEASES_QUEUE,
 	LOGO_QUEUE,
 	MANDATES_QUEUE,
@@ -47,7 +48,8 @@ export class JobsModule {
 					{ name: LEASES_QUEUE },
 					{ name: CONTRACTS_QUEUE },
 					{ name: RECEIPTS_QUEUE },
-					{ name: STATEMENTS_QUEUE }
+					{ name: STATEMENTS_QUEUE },
+					{ name: INSPECTIONS_QUEUE }
 				)
 			],
 			providers: role === 'worker' ? [ExampleProcessor, LogoProcessor, MandatesExpiryProcessor, MediaProcessor, LeasesDailyProcessor] : [],

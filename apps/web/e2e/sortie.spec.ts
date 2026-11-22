@@ -517,6 +517,54 @@ test.describe('Décompte contesté', () => {
 	});
 });
 
+test.describe('Photo reçue après la signature', () => {
+	test('téléphone : « Photo reçue après la signature, le … » à l’écran ; PDF de l’état des lieux en nouvelle version', async ({
+		browser,
+		request
+	}) => {
+		test.setTimeout(3 * 60_000);
+		const agency = await freshAgency(request, `Agence photo tardive ${newId().slice(-6)}`);
+		const manager = await addMember(request, agency, 'manager', 'Gestionnaire photo tardive');
+		const { leaseId } = await exitingLease(request, agency, { notice: true });
+		const inspectionId = newId();
+		await post(request, agency.headers, '/inspections', { id: inspectionId, leaseId, type: 'exit', inspectedOn: today });
+		const itemId = newId();
+		await post(request, agency.headers, `/inspections/${inspectionId}/items`, {
+			id: itemId,
+			room: 'Salon',
+			element: 'door',
+			description: 'Porte rayée près de la poignée',
+			finding: 'normal_wear'
+		});
+		const takenAt = new Date(Date.now() - 120_000).toISOString();
+		await post(request, agency.headers, `/inspections/${inspectionId}/sign`, { party: 'organization' });
+		await post(request, agency.headers, `/inspections/${inspectionId}/sign`, { party: 'tenant' });
+		// La photo prise avant la signature arrive après elle (hors ligne, cases et photos repartent ensemble).
+		const photoId = newId();
+		const created = (await post(request, agency.headers, `/inspections/${inspectionId}/documents`, {
+			id: photoId,
+			type: 'inspection_photo',
+			inspectionItemId: itemId,
+			fileName: 'porte.jpg',
+			mimeType: 'image/jpeg',
+			byteSize: PHOTO.length,
+			takenAt
+		})) as { upload: { url: string } };
+		expect((await request.put(created.upload.url, { data: PHOTO, headers: { 'content-type': 'image/jpeg' } })).status()).toBe(200);
+		await post(request, agency.headers, `/inspections/${inspectionId}/documents/${photoId}/uploaded`, {});
+
+		const { ctx, page } = await open(browser, phone, manager, `/app/sorties/${leaseId}/etat-des-lieux/${inspectionId}`);
+		const late = page.getByTestId('photo-apres-signature');
+		await expect(late).toHaveCount(1, { timeout: 20_000 });
+		await expect(late).toHaveText(/^Photo reçue après la signature, le \d{2}\/\d{2}\/\d{4} à \d{2}:\d{2}$/);
+		await expect(page.getByTestId('photo-recue')).toContainText('Prise le ');
+		await expect(page.getByTestId('pdf-edl')).toContainText('Version 2', { timeout: 30_000 });
+		await expect(page.getByTestId('ouvrir-pdf-edl')).toBeVisible();
+		await expectNoHorizontalOverflow(page, 'Photo reçue après la signature (téléphone)');
+		await ctx.close();
+	});
+});
+
 test.describe('État des lieux hors ligne par l’agent de terrain', () => {
 	test('téléphone : 4 pièces avec photos en moins de 15 minutes, cases cochées, envoyé au retour du réseau ; jamais le décompte', async ({
 		browser,

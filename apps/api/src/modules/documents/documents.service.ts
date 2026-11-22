@@ -10,6 +10,7 @@
  * - Rien n'est supprimé automatiquement (durée de conservation : question ouverte) ; un document se retire, motivé.
  */
 import { createHash } from 'node:crypto';
+import { newId } from '@ziga/shared/ids';
 import { Inject, Injectable } from '@nestjs/common';
 import {
 	canReadDocument,
@@ -70,6 +71,10 @@ export function documentView(d: DocumentRow): DocumentView {
 		leaseId: d.leaseId,
 		leaseContractId: d.leaseContractId,
 		contractTemplateId: d.contractTemplateId,
+		inspectionId: d.inspectionId,
+		inspectionItemId: d.inspectionItemId,
+		takenAt: iso(d.takenAt),
+		receivedAfterSignature: d.receivedAfterSignature,
 		version: d.version,
 		replacesId: d.replacesId,
 		fileName: d.fileName,
@@ -176,7 +181,7 @@ export class DocumentsService {
 	/** Dépôt : la fiche naît en attente ; l'URL d'envoi signe le type et la taille annoncés (10 minutes). */
 	async create(
 		input: CreateDocumentData,
-		inspection: { inspectionId: string; inspectionItemId: string | null } | null = null
+		inspection: { inspectionId: string; inspectionItemId: string | null; takenAt?: Date | null; receivedAfterSignature?: boolean } | null = null
 	): Promise<{ document: DocumentView; upload: PresignedUpload }> {
 		const { tx, organizationId, role, userId, actor } = this.context();
 		if (input.restriction) assertCan(role, 'document.restrict');
@@ -213,6 +218,8 @@ export class DocumentsService {
 				// Lot 10 bis : photo ou scan d'un état des lieux, seulement par createForInspection (clés composites).
 				inspectionId: inspection?.inspectionId ?? null,
 				inspectionItemId: inspection?.inspectionItemId ?? null,
+				takenAt: inspection?.takenAt ?? null,
+				receivedAfterSignature: inspection?.receivedAfterSignature ?? false,
 				version,
 				replacesId: input.replacesId,
 				fileName: input.fileName,
@@ -238,7 +245,14 @@ export class DocumentsService {
 				unitId: input.unitId,
 				tenantId: input.tenantId,
 				leaseId: input.leaseId,
-				...(inspection ? { inspectionId: inspection.inspectionId, inspectionItemId: inspection.inspectionItemId } : {}),
+				...(inspection
+					? {
+							inspectionId: inspection.inspectionId,
+							inspectionItemId: inspection.inspectionItemId,
+							takenAt: inspection.takenAt?.toISOString() ?? null,
+							receivedAfterSignature: inspection.receivedAfterSignature ?? false
+						}
+					: {}),
 				version,
 				replacesId: input.replacesId,
 				fileName: input.fileName,
@@ -272,12 +286,106 @@ export class DocumentsService {
 		fileName: string;
 		mimeType: CreateDocumentData['mimeType'];
 		byteSize: number;
+		takenAt: Date | null;
+		receivedAfterSignature: boolean;
 	}): Promise<{ document: DocumentView; upload: PresignedUpload }> {
-		const { inspectionId, inspectionItemId, ...rest } = input;
+		const { inspectionId, inspectionItemId, takenAt, receivedAfterSignature, ...rest } = input;
 		return this.create(
 			{ ...rest, ownerId: null, mandateId: null, tenantId: null, replacesId: null, restriction: null },
-			{ inspectionId, inspectionItemId }
+			{ inspectionId, inspectionItemId, takenAt, receivedAfterSignature }
 		);
+	}
+
+	/**
+	 * Photos en vigueur d'un état des lieux, avec leur contenu, pour son PDF (le module leases a vérifié l'état des
+	 * lieux, comme pour `createForInspection`) ; les formats que le PDF ne sait pas dessiner restent cités sans image.
+	 */
+	async inspectionPhotos(inspectionId: string): Promise<{ view: DocumentView; body: Buffer | null }[]> {
+		const { tx, organizationId } = this.context();
+		const rows = await tx
+			.select()
+			.from(documents)
+			.where(
+				and(
+					eq(documents.organizationId, organizationId),
+					eq(documents.inspectionId, inspectionId),
+					eq(documents.type, 'inspection_photo'),
+					eq(documents.status, 'active')
+				)
+			)
+			.orderBy(asc(documents.createdAt), asc(documents.id));
+		const out: { view: DocumentView; body: Buffer | null }[] = [];
+		for (const r of rows) {
+			const drawable = r.mimeType === 'image/jpeg' || r.mimeType === 'image/png';
+			out.push({ view: documentView(r), body: drawable ? await this.storage.get(r.storageKey) : null });
+		}
+		return out;
+	}
+
+	/**
+	 * PDF de l'état des lieux, produit par le serveur : une nouvelle version remplace la précédente (jamais écrasée), avec
+	 * son empreinte SHA-256 ; rattaché au bail, à l'unité et à l'état des lieux.
+	 */
+	async storeInspectionReport(
+		input: { leaseId: string; propertyId: string; unitId: string; inspectionId: string; fileName: string },
+		body: Buffer
+	): Promise<{ id: string; sha256: string; version: number }> {
+		const { tx, organizationId, userId, actor } = this.context();
+		const [previous] = await tx
+			.select()
+			.from(documents)
+			.where(
+				and(
+					eq(documents.organizationId, organizationId),
+					eq(documents.inspectionId, input.inspectionId),
+					eq(documents.type, 'inspection_report'),
+					eq(documents.status, 'active')
+				)
+			)
+			.limit(1)
+			.for('update');
+		const id = newId();
+		const storageKey = documentKey(organizationId, id);
+		const version = previous ? previous.version + 1 : 1;
+		await tx.insert(documents).values({
+			id,
+			organizationId,
+			type: 'inspection_report',
+			propertyId: input.propertyId,
+			unitId: input.unitId,
+			leaseId: input.leaseId,
+			inspectionId: input.inspectionId,
+			version,
+			replacesId: previous?.id ?? null,
+			fileName: input.fileName,
+			mimeType: 'application/pdf',
+			byteSize: body.length,
+			storageKey,
+			status: 'pending',
+			uploadedBy: userId
+		});
+		await this.storage.put(storageKey, body, 'application/pdf');
+		const sha256 = createHash('sha256').update(body).digest('hex');
+		const now = new Date();
+		if (previous) {
+			await tx
+				.update(documents)
+				.set({ status: 'replaced', replacedAt: now, updatedAt: now })
+				.where(and(eq(documents.organizationId, organizationId), eq(documents.id, previous.id)));
+		}
+		await tx
+			.update(documents)
+			.set({ status: 'active', sha256, activatedAt: now, updatedAt: now })
+			.where(and(eq(documents.organizationId, organizationId), eq(documents.id, id)));
+		await this.audit.record(tx, {
+			actor,
+			organizationId,
+			action: 'document.generate',
+			objectType: 'document',
+			objectId: id,
+			after: { type: 'inspection_report', inspectionId: input.inspectionId, version, replacesId: previous?.id ?? null, sha256, status: 'active' }
+		});
+		return { id, sha256, version };
 	}
 
 	/** Document d'un état des lieux déjà vérifié par le module leases ; sinon introuvable. */

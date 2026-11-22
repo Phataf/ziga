@@ -38,7 +38,9 @@ export const DOCUMENT_TYPES = [
 	'inspection_scan',
 	'repair_quote',
 	'agreement_document',
-	'settlement_outcome'
+	'settlement_outcome',
+	// Étape 4 : PDF de l'état des lieux, produit par le worker (jamais déposé).
+	'inspection_report'
 ] as const;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 
@@ -50,6 +52,9 @@ export const CONTRACT_DOCUMENT_TYPES = [
 	'contract_legalization',
 	'contract_registration'
 ] as const satisfies readonly DocumentType[];
+
+/** Documents d'un état des lieux, jamais par la route générique : photos et scan par celle de l'état des lieux, PDF par le serveur. */
+export const INSPECTION_ROUTE_TYPES = ['inspection_photo', 'inspection_scan', 'inspection_report'] as const satisfies readonly DocumentType[];
 
 /** Pièces de la sortie du locataire (lot 10 bis) : déposées depuis la sortie (préavis, état des lieux, décompte). */
 export const EXIT_DOCUMENT_TYPES = [
@@ -142,6 +147,7 @@ export const DOCUMENT_ACCESS: Record<DocumentType, DocumentAccessRule> = {
 	// Lot 10 bis. « État des lieux, inventaire » de la matrice : l'agent de terrain les lit sur ses unités affectées.
 	inspection_photo: { staff: STAFF, fieldAgent: 'assigned_units', owner: 'own', tenant: 'own' },
 	inspection_scan: { staff: STAFF, fieldAgent: 'assigned_units', owner: 'own', tenant: 'own' },
+	inspection_report: { staff: STAFF, fieldAgent: 'assigned_units', owner: 'own', tenant: 'own' },
 	// « Justificatifs retenus sur la caution » : jamais l'agent de terrain (aucune donnée de caution).
 	repair_quote: { staff: STAFF, fieldAgent: 'never', owner: 'own', tenant: 'own' },
 	settlement_outcome: { staff: STAFF, fieldAgent: 'never', owner: 'own', tenant: 'own' },
@@ -208,9 +214,15 @@ export const createDocumentSchema = z
 	.object({
 		id: idSchema,
 		// Les documents du contrat passent par les routes du contrat (lot 08 bis), jamais par celle-ci.
-		type: z.enum(DOCUMENT_TYPES).refine((t) => !(CONTRACT_DOCUMENT_TYPES as readonly string[]).includes(t), {
-			error: 'Ce document se dépose depuis le contrat.'
-		}),
+		type: z
+			.enum(DOCUMENT_TYPES)
+			.refine((t) => !(CONTRACT_DOCUMENT_TYPES as readonly string[]).includes(t), {
+				error: 'Ce document se dépose depuis le contrat.'
+			})
+			// Lot 10 bis, étape 4 : photos et scan par la route de l'état des lieux ; le PDF, produit par le serveur.
+			.refine((t) => !(INSPECTION_ROUTE_TYPES as readonly string[]).includes(t), {
+				error: 'Ce document se dépose depuis l’état des lieux.'
+			}),
 		ownerId: idSchema.nullish().transform((v) => v ?? null),
 		mandateId: idSchema.nullish().transform((v) => v ?? null),
 		propertyId: idSchema.nullish().transform((v) => v ?? null),
@@ -266,6 +278,13 @@ export interface DocumentView {
 	leaseId: string | null;
 	leaseContractId: string | null;
 	contractTemplateId: string | null;
+	/** Lot 10 bis : état des lieux et sa ligne (photo, scan, PDF). */
+	inspectionId: string | null;
+	inspectionItemId: string | null;
+	/** Photo : heure de la prise de vue sur l'appareil ; `createdAt` est l'heure de réception par le serveur. */
+	takenAt: string | null;
+	/** Photo prise avant la dernière case cochée, reçue après la signature. */
+	receivedAfterSignature: boolean;
 	version: number;
 	replacesId: string | null;
 	fileName: string;

@@ -121,3 +121,17 @@ export interface StatementsMonthlyJobResult {
 	organizations: number;
 	drafts: number;
 }
+
+/**
+ * États des lieux (lot 10 bis, étape 4) : PDF de l'état des lieux, produit à la signature (cases cochées ou scan) et à
+ * chaque photo reçue après elle. Chaque génération écrit une nouvelle version : un PDF n'est jamais écrasé. La tâche
+ * s'exécute dans le contexte de la personne qui l'a déclenchée (membre actif revérifié) ; origine d'audit `job`.
+ */
+export const INSPECTIONS_QUEUE = 'inspections';
+export const INSPECTION_REPORT_JOB = 'report';
+
+export interface InspectionReportJobData {
+	organizationId: string;
+	userId: string;
+	inspectionId: string;
+}
