@@ -89,7 +89,7 @@
 			</p>
 			<p class="text-base break-words">{r.description}</p>
 			<p class="text-sm text-muted-foreground">
-				{t.reportedOn(formatDate(r.createdAt.slice(0, 10)))}{#if r.plannedOn}{' · '}{t.plannedOn(formatDate(r.plannedOn))}{/if}
+				{t.reportedOn(formatDate(r.createdAt.slice(0, 10)))}{#if r.plannedOn}&nbsp;· {t.plannedOn(formatDate(r.plannedOn))}{/if}
 			</p>
 			{#if r.statusNote}<p class="text-base break-words text-muted-foreground">{r.statusNote}</p>{/if}
 			{#if canManage && r.status !== 'done'}

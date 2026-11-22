@@ -2457,4 +2457,3 @@ export const fr = {
 		saved: 'Suivi enregistré.'
 	}
 } as const;
-

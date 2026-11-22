@@ -130,7 +130,11 @@
 				<p class="text-base text-muted-foreground" data-testid="compte-lie-sans-numero">{t.noPhone}</p>
 			{:else if current.canInvite || current.canResend}
 				<div class="flex flex-wrap gap-2">
-					<Button onclick={() => send('whatsapp')} disabled={busy} data-testid={current.canResend ? 'renvoyer-whatsapp' : 'inviter-whatsapp'}>
+					<Button
+						onclick={() => send('whatsapp')}
+						disabled={busy}
+						data-testid={current.canResend ? 'renvoyer-whatsapp' : 'inviter-whatsapp'}
+					>
 						<MessageCircle class="size-5" aria-hidden="true" />{current.canResend ? t.resendWhatsapp : t.inviteWhatsapp}
 					</Button>
 					<Button
