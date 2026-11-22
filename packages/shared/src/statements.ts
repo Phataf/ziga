@@ -144,6 +144,7 @@ export function splitDueLedger(due: DueComposition, entries: readonly LedgerEntr
 	assertInteger(due.rent, 'Loyer');
 	assertInteger(due.charges, 'Charges');
 	const out = new Map<string, Split>();
+	const total = due.rent + due.charges;
 	let paid = 0;
 	let covered = 0;
 	for (const e of entries) {
@@ -151,11 +152,16 @@ export function splitDueLedger(due: DueComposition, entries: readonly LedgerEntr
 		if (e.amount <= 0) throw new StatementError('STATEMENT_LEDGER_INVALID', `Imputation non positive : ${e.allocationId}.`);
 		const signed = e.direction === 'allocate' ? e.amount : -e.amount;
 		const next = paid + signed;
-		const nextCovered = chargesCovered(next, due);
+		// Lot 10 bis : une échéance ramenée au prorata à la sortie, après avoir été payée en entier, rend le surplus au
+		// crédit par une ligne inverse ; en cours de rejeu le cumul dépasse donc le montant (actuel) de l'échéance. Les
+		// charges y sont plafonnées à celles de l'échéance : le surplus rendu sort du loyer, et le net reste exact.
+		const nextCovered = chargesCovered(next < 0 ? next : Math.min(next, total), due);
 		out.set(e.allocationId, { rent: signed - (nextCovered - covered), charges: nextCovered - covered });
 		paid = next;
 		covered = nextCovered;
 	}
+	// Le registre ne finit jamais au-delà de l'échéance.
+	if (paid > total) throw new StatementError('STATEMENT_LEDGER_INVALID', `Montant payé ${paid} hors de l’échéance (0 à ${total}).`);
 	return out;
 }
 

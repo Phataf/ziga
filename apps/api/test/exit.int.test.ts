@@ -1006,6 +1006,12 @@ describe('étape 4 : le décompte ne dépend jamais de la tâche du jour (porteu
 		expect(JSON.stringify((await call<LeaseDetailView>(manager, 'GET', `/leases/${lease.id}`)).rentDues)).toBe(
 			JSON.stringify(after.rentDues)
 		);
+		// Le relevé du propriétaire se prépare pour ce mois : le surplus rendu au crédit sort du loyer, le net est exact.
+		const statement = await call<StatementDetailView>(manager, 'POST', '/owner-statements/generate', {
+			ownerId: u.ownerId,
+			month: today.slice(0, 7)
+		});
+		expect(statement.status).toBe('draft');
 	});
 
 	it('avant la date de sortie : le décompte compte jusqu’à la sortie, sans rien écrire ; jamais les mois suivants comme impayés', async () => {

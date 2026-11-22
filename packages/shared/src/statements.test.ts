@@ -99,6 +99,17 @@ describe('part du loyer et des charges (règle du cumul)', () => {
 		expect(total(split)).toEqual({ rent: 75_000, charges: 5_000 });
 	});
 
+	it('lot 10 bis : échéance ramenée au prorata à la sortie après avoir été payée en entier ; le surplus rendu sort du loyer', () => {
+		// 80 000 payés sur le mois de la sortie, ramené à 58 666 (55 000 + 3 666) ; 21 334 rendus au crédit.
+		const exitDue = { rent: 55_000, charges: 3_666 };
+		const split = splitDueLedger(exitDue, entries([80_000, -21_334]));
+		expect(split.get('a0')).toEqual({ rent: 76_334, charges: 3_666 });
+		expect(split.get('a1')).toEqual({ rent: -21_334, charges: 0 });
+		expect(total(split)).toEqual(exitDue);
+		// Jamais au-delà à la fin du registre.
+		expect(() => splitDueLedger(exitDue, entries([80_000]))).toThrow(/hors de l’échéance/);
+	});
+
 	it('refuse un registre impossible (payé négatif ou au-delà du dû)', () => {
 		expect(() => splitDueLedger(due, entries([-1]))).toThrow(/hors de l’échéance/);
 		expect(() => splitDueLedger(due, entries([80_001]))).toThrow(/hors de l’échéance/);
