@@ -13,7 +13,7 @@ import { newId } from '@ziga/shared/ids';
 import pg from 'pg';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { FeaturesService } from '../src/modules/features/features.service.js';
-import { startApp, type TestApp } from './http.js';
+import { Client, startApp, type TestApp } from './http.js';
 import { insertLink, migrationClient, portalWorld, seedIn, type PortalWorld } from './portals.js';
 import { resetSharedRedisState, testRedis } from './test-redis.js';
 
@@ -275,7 +275,7 @@ describe('isolement des espaces personnels par l’API (lot 10 ter, étape 2b)',
 		}
 	});
 
-	it('interrupteur portals.owner_space coupé pour la personne : espace propriétaire inaccessible ; l’espace locataire reste', async () => {
+	it('interrupteur portals.owner_space coupé pour la personne : espace propriétaire inaccessible ; liens de relevé toujours valables', async () => {
 		const override = newId();
 		await owner.query(
 			`insert into feature_overrides (id, feature_key, scope, user_id, value, reason, created_by) values ($1, 'portals.owner_space', 'user', $2, false, 'Test de l’espace coupé', $2)`,
@@ -286,6 +286,19 @@ describe('isolement des espaces personnels par l’API (lot 10 ter, étape 2b)',
 			const r = await w.p.client.call('GET', '/me/portal/owner/assets');
 			expect(r.status).toBe(403);
 			expect(r.body).toMatchObject({ code: 'FEATURE_DISABLED' });
+			// Les liens de relevé (/s/) restent valables : ils ne dépendent pas de l'espace du propriétaire.
+			const draft = await w.a.org.director.call<{ id: string; revision: string }>('POST', '/owner-statements/generate', {
+				ownerId: w.a.pOwner,
+				month: '2026-10'
+			});
+			expect(draft.status, JSON.stringify(draft.body)).toBeLessThan(300);
+			const issued = await w.a.org.director.call('POST', `/owner-statements/${draft.body.id}/issue`, { revision: draft.body.revision });
+			expect(issued.status, JSON.stringify(issued.body)).toBeLessThan(300);
+			const statement = draft.body.id;
+			const link = await w.a.org.director.call<{ token: string }>('POST', `/owner-statements/${statement}/share-token`);
+			expect(link.status).toBe(201);
+			const shared = await new Client(t.url, '172.31.0.9').call('GET', `/public/statements/shared/${link.body.token}`);
+			expect(shared.status).toBe(200);
 		} finally {
 			await owner.query(`update feature_overrides set revoked_at = now(), revoked_by = created_by where id = $1`, [override]);
 			await t.app.get(FeaturesService).invalidate();

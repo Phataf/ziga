@@ -1,14 +1,17 @@
 <script lang="ts">
 	/**
 	 * Vérification d'un reçu (QR code imprimé, lot 09) : organisation, numéro, date, montant et statut, et rien d'autre
-	 * (aucune donnée personnelle). Un reçu pas encore synchronisé : « en cours d'enregistrement ».
+	 * (aucune donnée personnelle). Un reçu pas encore synchronisé : « en cours d'enregistrement ». Lot 10 ter : propose de
+	 * créer un compte, puis de lier sa fiche (« Mes fiches liées »).
 	 */
 	import { onMount } from 'svelte';
-	import { CircleCheck, CircleX, Clock } from '@lucide/svelte';
+	import { CircleCheck, CircleX, Clock, UserPlus } from '@lucide/svelte';
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { formatDate } from '@ziga/shared/dates';
 	import { formatFcfa } from '@ziga/shared/money';
 	import type { ReceiptVerificationView } from '@ziga/shared/receipts';
+	import { Button } from '#lib/components/ui/button/index.ts';
 	import { ApiError, call } from '#lib/auth/http.ts';
 	import { fr } from '#lib/i18n/fr.ts';
 
@@ -54,6 +57,14 @@
 				<dd class="font-semibold tabular-nums">{formatFcfa(view.amount)}</dd>
 			</dl>
 		</div>
+		<aside class="space-y-2 rounded-2xl border bg-card p-5">
+			<p class="text-base">{t.invite}</p>
+			<Button
+				href={`${resolve('/(auth)/inscription')}?retour=${encodeURIComponent('/espace/liaisons')}`}
+				class="w-full"
+				data-testid="creer-compte"><UserPlus class="size-5" aria-hidden="true" />{t.inviteAction}</Button
+			>
+		</aside>
 	{:else if phase === 'missing'}
 		<div class="space-y-1 rounded-2xl border bg-card p-5">
 			<p class="text-lg font-semibold">{t.pending}</p>

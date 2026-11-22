@@ -328,11 +328,14 @@ test.describe('Vitrine, choix de l’espace et chemins inconnus', () => {
 
 			test('le choix de l’espace mène à chaque espace', async ({ page }) => {
 				// Gestionnaire de l'agence A, et bailleur de ses propres logements.
+				// Ses espaces personnels n'apparaissent qu'avec une fiche liée (lot 10 ter) : la démonstration n'en a pas, seule la
+				// liaison de ses fiches est proposée.
 				await signIn(page, 'managerAndLandlord', '/espace');
-				await expect(page.getByTestId('choix-espace').getByRole('link')).toHaveCount(2);
 				await expect(page.getByTestId('espace-organisation')).toHaveText([/Mon agence : Faso Immobilier/, /Mes logements/]);
-				await page.getByTestId('espace-owner').click();
-				await expect(page).toHaveURL('/espace/proprietaire');
+				await expect(page.getByTestId('choix-espace').getByRole('link')).toHaveCount(1);
+				await page.getByTestId('lien-liaisons').click();
+				await expect(page).toHaveURL('/espace/liaisons');
+				await page.goto('/espace/proprietaire');
 				await expect(page.getByRole('heading', { level: 1 })).toHaveText('Mon patrimoine');
 				await openOrganization(page, 'Mes logements');
 				await expect(page.getByRole('heading', { level: 1 })).toHaveText('Accueil');

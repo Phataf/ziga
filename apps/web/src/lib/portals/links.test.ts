@@ -1,6 +1,6 @@
 import type { PersonLinkView } from '@ziga/shared/person-links';
 import { describe, expect, it } from 'vitest';
-import { linkState, toMaintenanceRequest } from './links.ts';
+import { linkState, myLinkStep, personalSpaces, toMaintenanceRequest } from './links.ts';
 
 function link(over: Partial<PersonLinkView>): PersonLinkView {
 	return {
@@ -81,5 +81,20 @@ describe('signalements lus sur l’appareil (fiche du bail)', () => {
 			createdAt: '2026-11-22T10:00:00Z'
 		});
 		expect(toMaintenanceRequest({ id: 'm2', lease_id: 'l1', status: 'autre' }).status).toBe('received');
+	});
+});
+
+describe('liaison vue par la personne (lot 10 ter, étape 3d)', () => {
+	it('ce qu’il reste à faire : saisir le code, attendre l’organisation, ou rien', () => {
+		expect(myLinkStep({ status: 'requested', phoneVerified: false })).toBe('enter_code');
+		expect(myLinkStep({ status: 'requested', phoneVerified: true })).toBe('awaiting_organization');
+		expect(myLinkStep({ status: 'active', phoneVerified: true })).toBe('active');
+	});
+
+	it('choix de l’espace : seulement les espaces ouverts par le serveur ; hors ligne, les deux', () => {
+		expect(personalSpaces({ owner: true, tenant: false }, false)).toEqual(['owner']);
+		expect(personalSpaces({ owner: false, tenant: false }, false)).toEqual([]);
+		expect(personalSpaces(null, false)).toEqual([]);
+		expect(personalSpaces(null, true)).toEqual(['owner', 'tenant']);
 	});
 });

@@ -12,6 +12,7 @@
 	import { NOTICE_DELIVERY_MODES, noticeBlocker, noticeTerms, type NoticeOrigin } from '@ziga/shared/tenant-exit';
 	import FormAlert from '#lib/components/auth/FormAlert.svelte';
 	import ReceiptPicker from '#lib/components/collections/ReceiptPicker.svelte';
+	import DocumentVisibilityNotice from '#lib/components/portals/DocumentVisibilityNotice.svelte';
 	import { Button } from '#lib/components/ui/button/index.ts';
 	import { Input } from '#lib/components/ui/input/index.ts';
 	import Sheet from '#lib/components/ui/sheet/Sheet.svelte';
@@ -118,6 +119,7 @@
 		{/if}
 		{#if blocker}<FormAlert message={t.blockers[blocker] ?? null} />{/if}
 		<ReceiptPicker bind:files title={t.proof} hint={t.proofHint} testid="preuve-conge" />
+		<DocumentVisibilityNotice type="notice_proof" />
 		<Button type="submit" class="w-full" disabled={busy || !sync.online || !!blocker} data-testid="enregistrer-conge">{t.submit}</Button>
 		{#if !sync.online}<p class="text-sm text-muted-foreground">{fr.exit.onlineOnly}</p>{/if}
 	</form>
