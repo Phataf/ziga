@@ -2403,5 +2403,57 @@ export const fr = {
 		invite: 'Retrouvez tous vos biens, quelle que soit l’agence qui les gère, dans votre espace propriétaire.',
 		inviteAction: 'Créer mon compte',
 		issuedOn: (date: string) => `Émis le ${date}`
+	},
+	/** Lot 10 ter, étape 3 : section « Compte lié » d'une fiche (direction et gestion). */
+	personLinks: {
+		title: 'Compte lié',
+		intro: {
+			owner: 'Le propriétaire retrouve dans son espace ses biens, ses relevés et ses documents, toutes agences confondues.',
+			tenant: 'Le locataire retrouve dans son espace son logement, ses reçus, sa caution et ses documents, toutes agences confondues.'
+		},
+		online: 'La liaison se fait en ligne.',
+		noPhone: 'Renseignez d’abord le numéro de la fiche : l’invitation part à ce numéro.',
+		states: {
+			none: 'Aucun compte lié.',
+			invited: (date: string) => `Invitation envoyée, valable jusqu’au ${date}.`,
+			invite_expired: 'Invitation expirée, jamais ouverte.',
+			claimed: 'Invitation ouverte : la personne doit encore saisir le code reçu par SMS.',
+			requested_unverified: 'La personne a demandé la liaison ; son code n’est pas encore validé.',
+			requested_verified: 'La personne a demandé la liaison et validé son code : à accepter.',
+			active: 'Lié au compte de la personne : elle voit ces données dans son espace.'
+		},
+		inviteWhatsapp: 'Inviter par WhatsApp',
+		inviteSms: 'Inviter par SMS',
+		resendWhatsapp: 'Renvoyer l’invitation par WhatsApp',
+		resendSms: 'Renvoyer l’invitation par SMS',
+		openWhatsapp: 'Ouvrir WhatsApp',
+		sent: 'Invitation envoyée par SMS.',
+		ready: 'Invitation prête : envoyez-la par WhatsApp.',
+		accept: 'Accepter la liaison',
+		accepted: 'Liaison acceptée.',
+		revoke: 'Révoquer',
+		revokeTitle: 'Révoquer la liaison',
+		revokeHelp: 'La personne ne verra plus ces données dans son espace. Rien n’est supprimé.',
+		reason: 'Motif',
+		revokeConfirm: 'Révoquer la liaison',
+		revoked: 'Liaison révoquée.',
+		whatsappText: (organization: string, url: string) =>
+			`${organization} vous invite à retrouver vos logements et vos documents sur Ziga : ${url}`
+	},
+	/** Lot 10 ter, étape 3 : signalements des locataires, sur la fiche du bail. */
+	maintenance: {
+		title: 'Signalements du locataire',
+		none: 'Aucun signalement.',
+		statuses: { received: 'Reçu', planned: 'Planifié', done: 'Fait' },
+		reportedOn: (date: string) => `Signalé le ${date}`,
+		plannedOn: (date: string) => `Passage prévu le ${date}`,
+		plan: 'Planifier',
+		done: 'Marquer fait',
+		planTitle: 'Planifier le passage',
+		doneTitle: 'Signalement fait',
+		date: 'Date de passage',
+		note: 'Mot pour le locataire (facultatif)',
+		save: 'Enregistrer',
+		saved: 'Suivi enregistré.'
 	}
 } as const;

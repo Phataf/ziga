@@ -19,6 +19,7 @@
 	import MandateFields from '#lib/components/owners/MandateFields.svelte';
 	import OwnerFields from '#lib/components/owners/OwnerFields.svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
+	import LinkedAccountSection from '#lib/components/portals/LinkedAccountSection.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.ts';
 	import { Button } from '#lib/components/ui/button/index.ts';
 	import Sheet from '#lib/components/ui/sheet/Sheet.svelte';
@@ -301,6 +302,7 @@
 			<h2 id="titre-biens" class="text-lg font-semibold">{t.properties}</h2>
 			<p class="text-base text-muted-foreground">{t.propertiesSoon}</p>
 		</section>
+		<LinkedAccountSection recordType="owner" recordId={owner.id} phone={owner.phone} />
 	{/if}
 </main>
 

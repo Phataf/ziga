@@ -78,7 +78,7 @@ import { AuditService, diff, type AuditActor } from '../audit/audit.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { OrganizationsService } from '../organizations/organizations.service.js';
 import type { LinkableRecordResolver } from '../organizations/person-link-records.js';
-import { ownerVisibleTenant, type OwnerVisibleTenant } from '@ziga/shared/person-links';
+import { ownerVisibleTenant, type MaintenanceRequestStatus, type OwnerVisibleTenant } from '@ziga/shared/person-links';
 import { OwnersService } from '../owners/owners.service.js';
 import { PropertiesService } from '../properties/properties.service.js';
 import { RentDueEvents } from './rent-due-events.js';
@@ -524,6 +524,54 @@ export class LeasesService {
 			origin: 'portal'
 		});
 		return { id: input.id, status: 'received' };
+	}
+
+	/**
+	 * Suivi d'un signalement par l'organisation (route @OrganizationScoped, direction et gestion) : planifié avec sa date
+	 * de passage, puis fait ; un mot visible du locataire. La base vérifie les transitions ; journalisé.
+	 */
+	async updateMaintenanceRequest(
+		id: string,
+		input: { status: MaintenanceRequestStatus; plannedOn: string | null; statusNote: string | null }
+	) {
+		const tx = RequestContext.tx();
+		const scope = RequestContext.organization();
+		const userId = RequestContext.get()!.userId!;
+		const [before] = await tx.select().from(maintenanceRequests).where(eq(maintenanceRequests.id, id)).limit(1).for('update');
+		if (!before) throw new AppError('MAINTENANCE_REQUEST_NOT_FOUND', 'Signalement introuvable.', 404);
+		let row: typeof before | undefined;
+		try {
+			[row] = await tx
+				.update(maintenanceRequests)
+				.set({
+					status: input.status,
+					plannedOn: input.status === 'planned' ? input.plannedOn : before.plannedOn,
+					doneAt: input.status === 'done' ? (before.doneAt ?? new Date()) : null,
+					statusNote: input.statusNote ?? before.statusNote,
+					handledBy: userId
+				})
+				.where(eq(maintenanceRequests.id, id))
+				.returning();
+		} catch (error) {
+			throw fromDatabaseError(error) ?? error;
+		}
+		await this.audit.record(tx, {
+			actor: { type: 'user', userId, role: scope.role },
+			organizationId: scope.organizationId,
+			action: 'maintenance_request.update',
+			objectType: 'maintenance_request',
+			objectId: id,
+			before: { status: before.status, plannedOn: before.plannedOn, statusNote: before.statusNote },
+			after: { status: row!.status, plannedOn: row!.plannedOn, statusNote: row!.statusNote }
+		});
+		return {
+			id: row!.id,
+			leaseId: row!.leaseId,
+			status: row!.status,
+			plannedOn: row!.plannedOn,
+			doneAt: row!.doneAt?.toISOString() ?? null,
+			statusNote: row!.statusNote
+		};
 	}
 
 	/** Tous les baux validés des unités d'un propriétaire (pour ses documents : contrat signé, avenants, états des lieux). */

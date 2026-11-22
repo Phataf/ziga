@@ -19,6 +19,7 @@ import {
 	updateTenantIdentitySchema,
 	updateTenantSchema
 } from '@ziga/shared/leases';
+import { updateMaintenanceRequestSchema } from '@ziga/shared/person-links';
 import { z } from 'zod';
 import { Creation } from '../features/feature.guards.js';
 import { Can, OrganizationScoped } from '../organizations/organization-context.js';
@@ -188,5 +189,18 @@ export class DepositAccountsController {
 	@HttpCode(201)
 	changeHolder(@Param('id') id: string, @Body() body: unknown) {
 		return this.leases.changeDepositHolder(depositHolderChangeSchema.parse({ ...(body as object), accountId: idSchema.parse(id) }));
+	}
+}
+
+/** Lot 10 ter : suivi des signalements des locataires (fiche du bail), direction et gestion. */
+@Controller('maintenance-requests')
+@OrganizationScoped()
+export class MaintenanceRequestsController {
+	constructor(private readonly leases: LeasesService) {}
+
+	@Patch(':id')
+	@Can('maintenance_request.manage')
+	update(@Param('id') id: string, @Body() body: unknown) {
+		return this.leases.updateMaintenanceRequest(idSchema.parse(id), updateMaintenanceRequestSchema.parse(body));
 	}
 }

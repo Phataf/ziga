@@ -23,6 +23,7 @@
 	import { formatPhone } from '@ziga/shared/phone';
 	import FormAlert from '#lib/components/auth/FormAlert.svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
+	import LinkedAccountSection from '#lib/components/portals/LinkedAccountSection.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.ts';
 	import { Button } from '#lib/components/ui/button/index.ts';
 	import { Input } from '#lib/components/ui/input/index.ts';
@@ -327,5 +328,6 @@
 				</ul>
 			{/if}
 		</section>
+		<LinkedAccountSection recordType="tenant" recordId={tenant.id} phone={tenant.phone} />
 	{/if}
 </main>

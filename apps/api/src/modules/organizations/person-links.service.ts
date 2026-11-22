@@ -59,6 +59,9 @@ const DAY = 24 * 60 * 60_000;
 /** Motif d'une invitation révoquée parce qu'elle a expiré sans être réclamée. */
 const EXPIRED_INVITATION = 'Invitation expirée';
 
+/** Motif de l'ancienne invitation quand l'organisation la renvoie. */
+const RESENT_INVITATION = 'Invitation renvoyée';
+
 /** Interrupteur de l'espace qui correspond au type de fiche (CLAUDE.md §8). */
 export function spaceFeature(recordType: PersonLinkRecordType): FeatureKey {
 	return recordType === 'owner' ? 'portals.owner_space' : 'portals.tenant_space';
@@ -297,6 +300,51 @@ export class PersonLinksService {
 			);
 		}
 		return { link: toView(row!), token, url };
+	}
+
+	/**
+	 * « Renvoyer l'invitation » (jeton perdu, invitation expirée) : en une action, l'ancienne invitation est révoquée (motif
+	 * « Invitation renvoyée ») et une nouvelle part, avec un nouveau jeton. Jamais pour une invitation déjà ouverte par une
+	 * personne (elle demande un nouveau code depuis son espace), ni pour un lien actif.
+	 */
+	async resend(id: string, sendSms: boolean) {
+		const tx = RequestContext.tx();
+		const scope = RequestContext.organization();
+		const actor = this.memberActor();
+		const l = await this.link(tx, id);
+		if (l.origin !== 'organization_invite' || l.status !== 'requested') {
+			throw new AppError('PERSON_LINK_STATUS', 'Seule une invitation en attente se renvoie.', 409);
+		}
+		if (l.userId) {
+			throw new AppError(
+				'PERSON_LINK_CLAIMED',
+				'La personne a déjà ouvert l’invitation : elle peut demander un nouveau code depuis son espace.',
+				409
+			);
+		}
+		const [row] = await this.guard(() =>
+			tx
+				.update(personLinks)
+				.set({
+					status: 'revoked',
+					revokedAt: new Date(),
+					revokedBy: actor.userId,
+					revokedByParty: 'organization',
+					revocationReason: RESENT_INVITATION
+				})
+				.where(eq(personLinks.id, id))
+				.returning()
+		);
+		await this.audit.record(tx, {
+			actor,
+			organizationId: scope.organizationId,
+			action: 'person_link.revoke',
+			objectType: 'person_link',
+			objectId: id,
+			before: auditView(l),
+			after: { ...auditView(row!), revokedByParty: 'organization', reason: RESENT_INVITATION }
+		});
+		return this.invite({ id: newId(), recordType: l.recordType, recordId: (l.ownerId ?? l.tenantId)!, sendSms });
 	}
 
 	/** (b) Demande d'une personne : le membre l'accepte ; active si le numéro est déjà vérifié par le code. */

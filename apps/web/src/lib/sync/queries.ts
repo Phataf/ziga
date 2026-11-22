@@ -182,6 +182,8 @@ export const LOCAL_QUERIES = {
 		LEFT JOIN properties p ON p.organization_id = u.organization_id AND p.id = u.property_id
 		WHERE u.organization_id = ? AND u.technical_status IN ('to_refurbish', 'under_works') ORDER BY p.name COLLATE NOCASE, u.label COLLATE NOCASE, u.id`,
 	leaseNotices: `SELECT * FROM lease_notices WHERE organization_id = ? AND lease_id = ? ORDER BY created_at DESC, id DESC`,
+	/** Lot 10 ter : signalements du locataire, sur la fiche du bail (les plus récents d'abord). */
+	leaseMaintenanceRequests: `SELECT * FROM maintenance_requests WHERE organization_id = ? AND lease_id = ? ORDER BY created_at DESC, id DESC`,
 	leaseInspections: `SELECT * FROM inspections WHERE organization_id = ? AND lease_id = ? ORDER BY type, created_at, id`,
 	inspection: `SELECT * FROM inspections WHERE organization_id = ? AND id = ?`,
 	leaseInspectionItems: `SELECT it.* FROM inspection_items it JOIN inspections i ON i.organization_id = it.organization_id AND i.id = it.inspection_id
