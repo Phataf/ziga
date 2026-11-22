@@ -141,6 +141,22 @@ const SETTLEMENT_LINE_MESSAGES: Record<string, string> = {
 	DEBT_NOT_UTILITY_BILL: 'La garantie des factures ne couvre que l’eau et l’électricité.'
 };
 
+/** Décompte de sortie vu par le locataire lié, dans son espace (lot 10 ter). */
+export interface PartySettlement {
+	id: string;
+	status: string;
+	exitOn: string;
+	refundDeadline: string | null;
+	received: number;
+	deductions: number;
+	refund: number;
+	claim: number;
+	outcome: string | null;
+	tenantObservations: string | null;
+	organizationObservations: string | null;
+	lines: { id: string; kind: string; amount: number; covered: number; uncovered: number; documentId: string | null }[];
+}
+
 @Injectable()
 export class ExitService {
 	constructor(
@@ -202,6 +218,132 @@ export class ExitService {
 	}
 
 	// ---------------------------------------------------------------- préavis
+
+	// ---------------------------------------------------------------- lot 10 ter : espace du locataire (module portals)
+
+	/**
+	 * Décompte de sortie de chaque bail d'un locataire lié (dernière révision des lignes), dans l'organisation de la
+	 * transaction : totaux, statut, échéance de restitution, observations, lignes et leurs justificatifs.
+	 */
+	async partySettlements(tx: Tx, organizationId: string, leaseIds: readonly string[]): Promise<Map<string, PartySettlement>> {
+		if (!leaseIds.length) return new Map();
+		const rows = await tx
+			.select()
+			.from(depositSettlements)
+			.where(and(eq(depositSettlements.organizationId, organizationId), inArray(depositSettlements.leaseId, [...leaseIds])))
+			.orderBy(desc(depositSettlements.createdAt), desc(depositSettlements.id));
+		const latest = new Map<string, (typeof rows)[number]>();
+		for (const r of rows) if (!latest.has(r.leaseId)) latest.set(r.leaseId, r);
+		const ids = [...latest.values()].map((r) => r.id);
+		const lines = ids.length
+			? await tx
+					.select()
+					.from(depositSettlementLines)
+					.where(and(eq(depositSettlementLines.organizationId, organizationId), inArray(depositSettlementLines.settlementId, ids)))
+					.orderBy(asc(depositSettlementLines.position), asc(depositSettlementLines.id))
+			: [];
+		const out = new Map<string, PartySettlement>();
+		for (const [leaseId, st] of latest) {
+			out.set(leaseId, {
+				id: st.id,
+				status: st.status,
+				exitOn: st.exitOn,
+				refundDeadline: st.refundDeadline,
+				received: st.received,
+				deductions: st.deductions,
+				refund: st.refund,
+				claim: st.claim,
+				outcome: st.outcome,
+				tenantObservations: st.tenantObservations,
+				organizationObservations: st.organizationObservations,
+				lines: lines
+					.filter((l) => l.settlementId === st.id && l.revision === st.revision)
+					.map((l) => ({ id: l.id, kind: l.kind, amount: l.amount, covered: l.covered, uncovered: l.uncovered, documentId: l.documentId }))
+			});
+		}
+		return out;
+	}
+
+	/**
+	 * Observation du locataire lié sur un décompte proposé de l'un de ses baux : le décompte passe « contesté », c'est une
+	 * demande à traiter par l'organisation. Journalisé dans l'organisation (origine portal).
+	 */
+	async partySettlementObservation(
+		tx: Tx,
+		organizationId: string,
+		leaseIds: readonly string[],
+		settlementId: string,
+		userId: string,
+		observations: string
+	) {
+		const [st] = await tx
+			.select()
+			.from(depositSettlements)
+			.where(and(eq(depositSettlements.organizationId, organizationId), eq(depositSettlements.id, settlementId)))
+			.limit(1)
+			.for('update');
+		if (!st || !leaseIds.includes(st.leaseId)) throw new AppError('SETTLEMENT_NOT_FOUND', 'Décompte introuvable.', 404);
+		if (st.status !== 'proposed') {
+			throw new AppError('SETTLEMENT_NOT_PROPOSED', 'Ce décompte ne se conteste plus depuis votre espace : contactez l’organisation.', 409);
+		}
+		await tx
+			.update(depositSettlements)
+			.set({ tenantObservations: observations, status: 'disputed', disputedAt: new Date(), updatedAt: new Date() })
+			.where(eq(depositSettlements.id, settlementId));
+		await this.audit.record(tx, {
+			actor: { type: 'user', userId },
+			organizationId,
+			subjectUserId: userId,
+			action: 'deposit.settlement_dispute',
+			objectType: 'deposit_settlement',
+			objectId: settlementId,
+			before: { status: st.status },
+			after: { status: 'disputed', party: 'tenant', observations },
+			origin: 'portal'
+		});
+		return { id: settlementId, status: 'disputed' as const };
+	}
+
+	/**
+	 * Demande de préavis du locataire lié (bail en vigueur) : « demandée », à traiter par l'organisation ; jamais un congé
+	 * enregistré, le bail ne change pas. Journalisée dans l'organisation (origine portal).
+	 */
+	async partyNoticeRequest(
+		tx: Tx,
+		organizationId: string,
+		leaseIds: readonly string[],
+		userId: string,
+		input: { leaseId: string; plannedExitOn: string; reason: string }
+	) {
+		const [lease] = await tx
+			.select({ id: leases.id, status: leases.status })
+			.from(leases)
+			.where(and(eq(leases.organizationId, organizationId), eq(leases.id, input.leaseId)))
+			.limit(1);
+		if (!lease || !leaseIds.includes(lease.id)) throw new AppError('LEASE_NOT_FOUND', 'Bail introuvable.', 404);
+		if (lease.status !== 'active') throw new AppError('NOTICE_LEASE_NOT_IN_FORCE', 'Une demande de préavis vise un bail en vigueur.', 409);
+		const id = newId();
+		await tx.insert(leaseNotices).values({
+			id,
+			organizationId,
+			leaseId: lease.id,
+			origin: 'tenant',
+			status: 'requested',
+			plannedExitOn: input.plannedExitOn,
+			reason: input.reason
+		});
+		await this.audit.record(tx, {
+			actor: { type: 'user', userId },
+			organizationId,
+			subjectUserId: userId,
+			action: 'lease.notice_request',
+			objectType: 'lease_notice',
+			objectId: id,
+			after: { leaseId: lease.id, plannedExitOn: input.plannedExitOn, reason: input.reason },
+			origin: 'portal'
+		});
+		return { id, status: 'requested' as const };
+	}
 
 	/** Congé enregistré (lease.notice) : délais et indemnité du bail (D24, D32) ; le bail passe en préavis. */
 	async recordNotice(leaseId: string, input: RecordNoticeData, origin?: AuditOrigin): Promise<Row> {

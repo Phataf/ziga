@@ -677,14 +677,14 @@ export class PropertiesService {
 		tx: Tx,
 		organizationId: string,
 		unitIds: readonly string[]
-	): Promise<Map<string, { unitLabel: string; propertyName: string }>> {
+	): Promise<Map<string, { unitLabel: string; propertyName: string; ownerId: string }>> {
 		if (!unitIds.length) return new Map();
 		const rows = await tx
-			.select({ id: units.id, label: units.label, propertyName: properties.name })
+			.select({ id: units.id, label: units.label, propertyName: properties.name, ownerId: properties.ownerId })
 			.from(units)
 			.innerJoin(properties, and(eq(properties.organizationId, units.organizationId), eq(properties.id, units.propertyId)))
 			.where(and(eq(units.organizationId, organizationId), inArray(units.id, [...unitIds])));
-		return new Map(rows.map((r) => [r.id, { unitLabel: r.label, propertyName: r.propertyName }]));
+		return new Map(rows.map((r) => [r.id, { unitLabel: r.label, propertyName: r.propertyName, ownerId: r.ownerId }]));
 	}
 
 	/**
