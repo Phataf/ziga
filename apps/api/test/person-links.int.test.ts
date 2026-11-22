@@ -519,4 +519,19 @@ describe('invitation expirée : la fiche n’est jamais bloquée (correctif avan
 		const still = await seedIn(owner, a.id, (c) => c.query(`select status, user_id from person_links where id = $1`, [mineId]));
 		expect(still.rows[0]).toEqual({ status: 'requested', user_id: p.userId });
 	});
+
+	it('deux fiches au même numéro (doublon d’import) : la plus récemment modifiée est retenue, l’autre nommée au journal', async () => {
+		await verifyOrg(b);
+		const p = await person();
+		const older = await tenantIn(b, p.phone, 'Salif Traoré (import)');
+		const newer = await tenantIn(b, p.phone, 'Salif Traoré');
+		await seedIn(owner, b.id, (c) => c.query(`update tenants set updated_at = now() + interval '1 second' where id = $1`, [newer]));
+		await p.client.call('POST', '/me/person-links/requests', { id: newId(), organizationId: b.id, recordType: 'tenant' });
+		const rows = await seedIn(owner, b.id, async (c) => ({
+			links: (await c.query(`select tenant_id from person_links where user_id = $1`, [p.userId])).rows,
+			audit: (await c.query(`select after from audit_log where action = 'person_link.request' and subject_user_id = $1`, [p.userId])).rows
+		}));
+		expect(rows.links).toEqual([{ tenant_id: newer }]);
+		expect(rows.audit[0].after.otherRecordsWithSamePhone).toEqual([older]);
+	});
 });
