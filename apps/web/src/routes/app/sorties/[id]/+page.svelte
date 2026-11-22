@@ -108,8 +108,9 @@
 	}
 
 	const inspectionTone = (s: string) => (s === 'signed_both' ? 'success' : s === 'disputed' ? 'danger' : 'info');
+	// Libellés courts : la page tient dans 360 px (une pastille ne revient pas à la ligne).
 	const inspectionLabel = (i: LocalInspection) =>
-		i.status === 'signed_both' ? t.inspection.signed : i.status === 'disputed' ? t.inspection.disputed : t.stages.inspection;
+		i.status === 'signed_both' ? t.inspection.signedShort : i.status === 'disputed' ? t.inspection.disputedShort : t.stages.inspection;
 </script>
 
 <PageHeader
@@ -129,7 +130,7 @@
 				>{t.stages[stage]}</Badge
 			>
 		</p>
-		<div class="grid gap-4 lg:grid-cols-2">
+		<div class="grid gap-4 lg:grid-cols-2 [&>section]:min-w-0">
 			<section class="space-y-2 rounded-xl border bg-card p-4" aria-labelledby="titre-conge" data-testid="sortie-conge">
 				<h2 id="titre-conge" class="flex items-center gap-2 text-lg font-semibold">
 					<LogOut class="size-5" aria-hidden="true" />{t.hub.steps.notice}

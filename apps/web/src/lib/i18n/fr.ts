@@ -2202,6 +2202,8 @@ export const fr = {
 			scan: 'Déposer le scan signé',
 			scanQueued: 'Scan en attente d’envoi',
 			signed: 'Signé des deux parties : l’état des lieux est figé.',
+			signedShort: 'Signé des deux parties',
+			disputedShort: 'Contesté',
 			waitingServer: 'Cases cochées : l’état des lieux sera figé à la synchronisation.',
 			dispute: 'Contester l’état des lieux',
 			disputeParty: 'Qui conteste ?',
