@@ -121,7 +121,10 @@ describe('espace du propriétaire : revenus, relevés, reversements, documents (
 		expect(r.body[0]).toMatchObject({ organizationId: w.a.org.id, month: '2026-10', net: 67_000, paidOut: 62_000, remaining: 5_000 });
 		expect(r.body.map((s) => s.id)).not.toContain(draftA);
 		await seedIn(owner, w.a.org.id, (c) =>
-			c.query(`update owner_statements set pdf_key = $2 where id = $1`, [statementA, `statements/${w.a.org.id}/x.pdf`])
+			c.query(`update owner_statements set pdf_key = $2, pdf_generated_at = now() where id = $1`, [
+				statementA,
+				`statements/${w.a.org.id}/x.pdf`
+			])
 		);
 		const pdf = await w.p.client.call<{ url: string }>('POST', `/me/portal/owner/statements/${w.a.org.id}/${statementA}/pdf`);
 		expect(pdf.status).toBe(200);
@@ -133,7 +136,8 @@ describe('espace du propriétaire : revenus, relevés, reversements, documents (
 		// Le brouillon, ou un relevé de A demandé au nom de B : introuvable.
 		expect((await w.p.client.call('POST', `/me/portal/owner/statements/${w.a.org.id}/${draftA}/pdf`)).status).toBe(404);
 		expect((await w.p.client.call('POST', `/me/portal/owner/statements/${w.b.org.id}/${statementA}/pdf`)).status).toBe(404);
-		expect((await w.t.client.call('POST', `/me/portal/owner/statements/${w.a.org.id}/${statementA}/pdf`)).status).toBe(403);
+		// T, sans lien de propriétaire : introuvable, comme un relevé qui n'existe pas (rien n'est révélé).
+		expect((await w.t.client.call('POST', `/me/portal/owner/statements/${w.a.org.id}/${statementA}/pdf`)).status).toBe(404);
 	});
 
 	it('documents : ceux de la matrice seulement ; contrat signé de son bail (D22) ; jamais la pièce du locataire ni un document restreint', async () => {

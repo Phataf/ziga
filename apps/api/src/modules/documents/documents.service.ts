@@ -13,18 +13,21 @@ import { createHash } from 'node:crypto';
 import { newId } from '@ziga/shared/ids';
 import { Inject, Injectable } from '@nestjs/common';
 import {
+	canPartyReadDocument,
 	canReadDocument,
 	DOCUMENT_URL_TTL_SECONDS,
+	type DocumentParty,
 	type CreateDocumentData,
 	type DocumentDownload,
 	type DocumentRestriction,
 	type DocumentView
 } from '@ziga/shared/documents';
 import { MAX_UPLOAD_BYTES, UPLOAD_URL_TTL_SECONDS } from '@ziga/shared/properties';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, or, type SQL } from 'drizzle-orm';
 import { AppError } from '../../common/app-error.js';
 import { detectFileType, matchesDeclared } from '../../common/file-types.js';
 import { RequestContext } from '../../common/request-context.js';
+import type { Tx } from '../../db/database.js';
 import { documents } from '../../db/schema/documents.js';
 import { STORAGE, type PresignedUpload, type StorageAdapter } from '../../storage/storage.js';
 import { AuditService } from '../audit/audit.service.js';
@@ -98,6 +101,30 @@ export function documentKey(organizationId: string, documentId: string): string 
 }
 
 const NOT_FOUND = () => new AppError('DOCUMENT_NOT_FOUND', 'Document introuvable.', 404);
+
+/** Ce à quoi une partie liée est rattachée (sa fiche, ses biens, ses unités, ses baux), dans une organisation. */
+export interface PartyDocumentScope {
+	ownerIds?: readonly string[];
+	propertyIds?: readonly string[];
+	unitIds?: readonly string[];
+	leaseIds?: readonly string[];
+	tenantIds?: readonly string[];
+	/** Statut du contrat d'un document de contrat (projet lisible par le locataire à partir de « prêt à signer »). */
+	contractStatus?: (doc: { leaseContractId: string | null }) => import('@ziga/shared/contracts').ContractStatus | null;
+}
+
+/** Document vu dans un espace personnel : jamais la clé de stockage. */
+export interface PartyDocument {
+	id: string;
+	type: string;
+	fileName: string;
+	mimeType: string;
+	byteSize: number;
+	propertyId: string | null;
+	unitId: string | null;
+	leaseId: string | null;
+	activatedAt: string | null;
+}
 
 @Injectable()
 export class DocumentsService {
@@ -608,6 +635,69 @@ export class DocumentsService {
 			objectType: 'document',
 			objectId: id,
 			after: { version: row.version, sha256: row.sha256, expiresInSeconds: DOCUMENT_URL_TTL_SECONDS }
+		});
+		return { url, expiresAt: new Date(Date.now() + DOCUMENT_URL_TTL_SECONDS * 1000).toISOString() };
+	}
+
+	// ---------------------------------------------------------------- lot 10 ter : espaces personnels (module portals)
+
+	/** Documents en vigueur rattachés à la fiche liée et que la matrice ouvre à cette partie (D22) ; jamais un document restreint. */
+	private async partyRows(tx: Tx, organizationId: string, party: DocumentParty, scope: PartyDocumentScope) {
+		const anyOf: SQL[] = [];
+		if (scope.ownerIds?.length) anyOf.push(inArray(documents.ownerId, [...scope.ownerIds]));
+		if (scope.propertyIds?.length) anyOf.push(inArray(documents.propertyId, [...scope.propertyIds]));
+		if (scope.unitIds?.length) anyOf.push(inArray(documents.unitId, [...scope.unitIds]));
+		if (scope.leaseIds?.length) anyOf.push(inArray(documents.leaseId, [...scope.leaseIds]));
+		if (scope.tenantIds?.length) anyOf.push(inArray(documents.tenantId, [...scope.tenantIds]));
+		if (!anyOf.length) return [];
+		const rows = await tx
+			.select()
+			.from(documents)
+			.where(and(eq(documents.organizationId, organizationId), eq(documents.status, 'active'), isNull(documents.restriction), or(...anyOf)))
+			.orderBy(desc(documents.activatedAt), desc(documents.id));
+		return rows.filter((d) => canPartyReadDocument(party, d, { isParty: true, contractStatus: scope.contractStatus?.(d) ?? null }));
+	}
+
+	/** Liste des documents d'une partie liée, sans clé de stockage ni empreinte. */
+	async partyDocuments(tx: Tx, organizationId: string, party: DocumentParty, scope: PartyDocumentScope): Promise<PartyDocument[]> {
+		return (await this.partyRows(tx, organizationId, party, scope)).map((d) => ({
+			id: d.id,
+			type: d.type,
+			fileName: d.fileName,
+			mimeType: d.mimeType,
+			byteSize: d.byteSize,
+			propertyId: d.propertyId,
+			unitId: d.unitId,
+			leaseId: d.leaseId,
+			activatedAt: d.activatedAt?.toISOString() ?? null
+		}));
+	}
+
+	/** URL signée de courte durée d'un document permis à cette partie ; chaque téléchargement est journalisé (origine portal). */
+	async partyDownload(
+		tx: Tx,
+		organizationId: string,
+		id: string,
+		party: DocumentParty,
+		scope: PartyDocumentScope,
+		userId: string
+	): Promise<DocumentDownload> {
+		const row = (await this.partyRows(tx, organizationId, party, scope)).find((d) => d.id === id);
+		if (!row) throw new AppError('DOCUMENT_NOT_FOUND', 'Document introuvable.', 404);
+		const url = await this.storage.presignGet(row.storageKey, {
+			expiresInSeconds: DOCUMENT_URL_TTL_SECONDS,
+			fileName: row.fileName,
+			contentType: row.mimeType
+		});
+		await this.audit.record(tx, {
+			actor: { type: 'user', userId },
+			organizationId,
+			subjectUserId: userId,
+			action: 'document.download',
+			objectType: 'document',
+			objectId: id,
+			after: { party, version: row.version, sha256: row.sha256, expiresInSeconds: DOCUMENT_URL_TTL_SECONDS },
+			origin: 'portal'
 		});
 		return { url, expiresAt: new Date(Date.now() + DOCUMENT_URL_TTL_SECONDS * 1000).toISOString() };
 	}
