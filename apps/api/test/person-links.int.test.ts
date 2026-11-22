@@ -535,3 +535,39 @@ describe('invitation expirée : la fiche n’est jamais bloquée (correctif avan
 		expect(rows.audit[0].after.otherRecordsWithSamePhone).toEqual([older]);
 	});
 });
+
+describe('« Renvoyer l’invitation » (lot 10 ter, étape 3)', () => {
+	it('en une action : l’ancienne invitation est révoquée (« Invitation renvoyée »), une nouvelle part avec un nouveau jeton', async () => {
+		const p = await person();
+		const tenant = await tenantIn(a, p.phone);
+		const first = await invite(a, managerA, tenant);
+		const r = await managerA.call<{ link: Link; token: string; url: string }>('POST', `/person-links/${first.body.link.id}/resend`, {
+			sendSms: true
+		});
+		expect(r.status).toBe(201);
+		expect(r.body.link.id).not.toBe(first.body.link.id);
+		expect(r.body.token).not.toBe(first.body.token);
+		expect(r.body.link).toMatchObject({ status: 'requested', origin: 'organization_invite', recordId: tenant });
+		const old = await seedIn(owner, a.id, (c) =>
+			c.query(`select status, revocation_reason, revoked_by_party from person_links where id = $1`, [first.body.link.id])
+		);
+		expect(old.rows[0]).toEqual({ status: 'revoked', revocation_reason: 'Invitation renvoyée', revoked_by_party: 'organization' });
+		// L'ancien lien ne sert plus ; le nouveau, oui ; le SMS porte le nouveau lien.
+		expect((await new Client(t.url).call<{ usable: boolean }>('GET', `/person-link-invitations/${first.body.token}`)).body.usable).toBe(
+			false
+		);
+		expect((await new Client(t.url).call<{ usable: boolean }>('GET', `/person-link-invitations/${r.body.token}`)).body.usable).toBe(true);
+		expect(t.sms.messages.filter((m) => m.to === p.phone).at(-1)?.text).toContain(r.body.token);
+	});
+
+	it('jamais pour une invitation déjà ouverte par la personne, ni pour un lien actif ; jamais par un agent de terrain', async () => {
+		const p = await person();
+		const tenant = await tenantIn(a, p.phone);
+		const r = await invite(a, managerA, tenant);
+		expect((await agentA.call('POST', `/person-links/${r.body.link.id}/resend`, {})).status).toBe(403);
+		await p.client.call('POST', `/person-link-invitations/${r.body.token}/claim`);
+		expect((await managerA.call('POST', `/person-links/${r.body.link.id}/resend`, {})).body).toMatchObject({ code: 'PERSON_LINK_CLAIMED' });
+		await p.client.call('POST', `/me/person-links/${r.body.link.id}/verify`, { organizationId: a.id, code: t.sms.lastCode(p.phone)! });
+		expect((await managerA.call('POST', `/person-links/${r.body.link.id}/resend`, {})).body).toMatchObject({ code: 'PERSON_LINK_STATUS' });
+	});
+});
