@@ -472,7 +472,10 @@ describe('garde global', () => {
 			// Lot 10 : lien d'un relevé propriétaire (jeton de 256 bits, empreinte seule, 90 jours, révocable, limite de débit).
 			'GET /public/statements/shared/:token',
 			'GET /public/statements/shared/:token/pdf',
-			'GET /storage/local/:token'
+			'GET /storage/local/:token',
+			// Lot 10 ter : aperçu d'une invitation à lier sa fiche (secret de 256 bits, empreinte seule, 7 jours, numéro masqué,
+			// limite de débit) ; la réclamer exige un compte au numéro de la fiche.
+			'GET /person-link-invitations/:token'
 		]);
 		const listed = new Set(routes.map((r) => `${r.method} ${r.path}`));
 		for (const p of publicRoutes) expect(listed.has(p), p).toBe(true);

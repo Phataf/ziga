@@ -114,8 +114,9 @@ describe('liaison d’une fiche à une personne (lot 10 ter)', () => {
 	});
 
 	it('schémas : code de 6 chiffres ; motif de révocation obligatoire', () => {
-		expect(verifyPersonLinkSchema.safeParse({ code: '123456' }).success).toBe(true);
-		expect(verifyPersonLinkSchema.safeParse({ code: '12345' }).success).toBe(false);
+		expect(verifyPersonLinkSchema.safeParse({ organizationId: newId(), code: '123456' }).success).toBe(true);
+		expect(verifyPersonLinkSchema.safeParse({ organizationId: newId(), code: '12345' }).success).toBe(false);
+		expect(verifyPersonLinkSchema.safeParse({ code: '123456' }).success).toBe(false);
 		expect(revokePersonLinkSchema.safeParse({ reason: 'Fin du mandat' }).success).toBe(true);
 		expect(revokePersonLinkSchema.safeParse({ reason: ' ok ' }).success).toBe(false);
 	});

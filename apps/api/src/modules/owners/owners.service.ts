@@ -34,10 +34,11 @@ import {
 	type UpdateOwnerInput
 } from '@ziga/shared/owners';
 import { newId } from '@ziga/shared/ids';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { AppError } from '../../common/app-error.js';
 import { RequestContext } from '../../common/request-context.js';
 import type { Tx } from '../../db/database.js';
+import type { LinkableRecordResolver } from '../organizations/person-link-records.js';
 import { managementTransfers, mandates, mandateScopes, mandateVersions, owners } from '../../db/schema/owners.js';
 import { AuditService, diff, type AuditActor } from '../audit/audit.service.js';
 import type { OrganizationCreated } from '../organizations/organization-hooks.js';
@@ -721,6 +722,35 @@ export class OwnersService {
 	}
 
 	// ---------------------------------------------------------------- bailleur particulier
+
+	// ---------------------------------------------------------------- lot 10 ter : fiches liables à un compte
+
+	/** Fiches propriétaire que le module organizations peut lier à un compte (PersonLinkRecords), dans la transaction donnée. */
+	readonly linkableRecords: LinkableRecordResolver = {
+		byId: async (tx, id) => {
+			const [o] = await tx
+				.select({ id: owners.id, name: owners.name, phone: owners.phone })
+				.from(owners)
+				.where(and(eq(owners.id, id), eq(owners.status, 'active')))
+				.limit(1);
+			return o ?? null;
+		},
+		byPhone: async (tx, phone) =>
+			tx
+				.select({ id: owners.id, name: owners.name, phone: owners.phone })
+				.from(owners)
+				.where(and(eq(owners.phone, phone), eq(owners.status, 'active')))
+				.orderBy(desc(owners.updatedAt), desc(owners.id)),
+		selfManaged: async (tx) => {
+			const [o] = await tx
+				.select({ id: owners.id, name: owners.name, phone: owners.phone })
+				.from(owners)
+				.innerJoin(mandates, and(eq(mandates.organizationId, owners.organizationId), eq(mandates.ownerId, owners.id)))
+				.where(and(eq(mandates.type, 'self_managed'), eq(owners.status, 'active')))
+				.limit(1);
+			return o ?? null;
+		}
+	};
 
 	/**
 	 * Crochet de création d'une organisation : un bailleur reçoit sa fiche propriétaire (raison sociale et téléphone de

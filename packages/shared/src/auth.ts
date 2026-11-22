@@ -33,7 +33,8 @@ export type LoginInput = z.input<typeof loginSchema>;
 export const PLATFORM_ROLES = ['super_admin', 'support', 'sales', 'finance'] as const;
 export type PlatformRole = (typeof PLATFORM_ROLES)[number];
 
-export const OTP_PURPOSES = ['verify_phone', 'reset_password', 'change_phone'] as const;
+/** `link_record` (lot 10 ter) : code de liaison d'une fiche, envoyé au numéro de la fiche (celui du compte). */
+export const OTP_PURPOSES = ['verify_phone', 'reset_password', 'change_phone', 'link_record'] as const;
 export type OtpPurpose = (typeof OTP_PURPOSES)[number];
 
 /** Messages identiques quel que soit le cas, pour ne jamais révéler si un numéro existe. */

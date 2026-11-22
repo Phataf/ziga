@@ -7,19 +7,38 @@ import { OrganizationGuard, OrganizationTransactionInterceptor } from './organiz
 import { MembershipsController, OrganizationController, PublicLogosController } from './organizations.controller.js';
 import { OrganizationsService } from './organizations.service.js';
 import { OrganizationsSyncHandlers } from './organizations.sync.js';
+import { PersonLinkRecords } from './person-link-records.js';
+import { MyPersonLinksController, PersonLinkInvitationsController, PersonLinksController } from './person-links.controller.js';
+import { PersonLinksService } from './person-links.service.js';
 
 /** Module organizations (lot 03) : organisations, membres, invitations, logos ; contexte d'organisation des routes. */
 @Module({
 	imports: [IdentityModule, SyncModule],
-	controllers: [MembershipsController, OrganizationController, PublicLogosController],
+	controllers: [
+		MembershipsController,
+		OrganizationController,
+		PublicLogosController,
+		PersonLinksController,
+		PersonLinkInvitationsController,
+		MyPersonLinksController
+	],
 	providers: [
 		OrganizationsService,
 		LogosService,
 		OrganizationGuard,
 		OrganizationTransactionInterceptor,
 		OrganizationsSyncHandlers,
-		OrganizationCreationHooks
+		OrganizationCreationHooks,
+		PersonLinkRecords,
+		PersonLinksService
 	],
-	exports: [OrganizationsService, OrganizationGuard, OrganizationTransactionInterceptor, OrganizationCreationHooks]
+	exports: [
+		OrganizationsService,
+		OrganizationGuard,
+		OrganizationTransactionInterceptor,
+		OrganizationCreationHooks,
+		PersonLinkRecords,
+		PersonLinksService
+	]
 })
 export class OrganizationsModule {}

@@ -162,6 +162,13 @@
 			"when": 1797000000000,
 			"tag": "0022_person_links_portals",
 			"breakpoints": true
+		},
+		{
+			"idx": 23,
+			"version": "7",
+			"when": 1798000000000,
+			"tag": "0023_person_link_invitations",
+			"breakpoints": true
 		}
 	]
 }
