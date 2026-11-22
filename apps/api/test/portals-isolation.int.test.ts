@@ -96,7 +96,8 @@ describe('isolement des espaces personnels dans la base (lot 10 ter, étape 1)',
 				 values ($1, $2, $3, 'tenant', $4, 'requested', 'organization_invite', $5, $6)`,
 				[newId(), w.b.org.id, w.t.userId, w.b.tTenant, w.t.phone, w.a.org.director.userId]
 			);
-			expect(inB.code).toBe('42501');
+			// Refusée avant même la RLS : depuis A, la direction et la gestion de B sont invisibles (déclencheur).
+			expect(['42501', 'P0001']).toContain(inB.code);
 			// Modifier ou révoquer un lien de B depuis A : aucune ligne touchée.
 			const up = await api.query(
 				`update person_links set status = 'revoked', revoked_at = now(), revoked_by = $2, revoked_by_party = 'organization',
@@ -105,8 +106,24 @@ describe('isolement des espaces personnels dans la base (lot 10 ter, étape 1)',
 			);
 			expect(up.rowCount).toBe(0);
 		});
-		const still = await seedIn(owner, w.b.org.id, (c) => c.query(`select status from person_links where id = $1`, [w.b.tLink]));
-		expect(still.rows[0].status).toBe('active');
+		const still = await seedIn(owner, w.b.org.id, (c) =>
+			c.query(`select id, status from person_links where organization_id = $1`, [w.b.org.id])
+		);
+		expect(still.rows.map((r) => r.id).sort()).toEqual([w.b.pLink, w.b.tLink].sort());
+		expect(still.rows.every((r) => r.status === 'active')).toBe(true);
+		// RLS forcée (le propriétaire des tables aussi), politique de l'organisation du contexte, en lecture comme en écriture.
+		const rls = await owner.query(
+			`select c.relrowsecurity, c.relforcerowsecurity, p.qual, p.with_check from pg_class c
+			 join pg_policies p on p.tablename = c.relname and p.policyname = 'organization_isolation' where c.relname = 'person_links'`
+		);
+		expect(rls.rows).toEqual([
+			{
+				relrowsecurity: true,
+				relforcerowsecurity: true,
+				qual: '(organization_id = current_organization_id())',
+				with_check: '(organization_id = current_organization_id())'
+			}
+		]);
 	});
 
 	it('app_api sans organisation : aucun lien lisible, même pour la personne liée', async () => {

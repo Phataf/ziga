@@ -67,6 +67,9 @@ const expected: Record<OrganizationRole, Action[]> = {
 		'deposit.settle',
 		'agreement.decide',
 		'management.transfer',
+		'person_link.manage',
+		'maintenance_request.read',
+		'maintenance_request.manage',
 		'listing.publish',
 		'lead.manage',
 		'visit.manage',
@@ -92,7 +95,8 @@ const expected: Record<OrganizationRole, Action[]> = {
 		'photo.upload',
 		'inspection.read',
 		'inspection.create',
-		'inspection.sign'
+		'inspection.sign',
+		'maintenance_request.read'
 	],
 	// Lot 07 : biens et unités en lecture, aucun document privé.
 	// Lot 08 : locataires (sans état civil), baux et cautions en lecture. Lot 09 : encaissements et reçus en lecture.
@@ -109,11 +113,20 @@ const expected: Record<OrganizationRole, Action[]> = {
 		'expense.read',
 		'statement.read',
 		'inspection.read',
+		'maintenance_request.read',
 		'export.csv'
 	]
 };
 
 describe('matrice de permissions', () => {
+	it('lot 10 ter : liaison des fiches aux comptes et traitement des signalements, direction et gestion seulement', () => {
+		for (const role of ORGANIZATION_ROLES) {
+			expect(can(role, 'person_link.manage')).toBe(role === 'director' || role === 'manager');
+			expect(can(role, 'maintenance_request.manage')).toBe(role === 'director' || role === 'manager');
+			expect(can(role, 'maintenance_request.read')).toBe(true);
+		}
+	});
+
 	for (const role of ORGANIZATION_ROLES) {
 		it(`${role} : exactement les actions prévues`, () => {
 			for (const action of ACTIONS) expect(can(role, action), `${role} ${action}`).toBe(expected[role].includes(action));

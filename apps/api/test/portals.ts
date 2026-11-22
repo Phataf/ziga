@@ -203,11 +203,14 @@ export async function portalWorld(t: TestApp, owner: pg.Client, options: { links
 				w.tSignedLease = await insertDocument(c, org.id, org.director.userId, { type: 'signed_lease_scan', leaseId: tLease });
 				const identity = newId();
 				await c.query(
-					`insert into documents (id, organization_id, type, tenant_id, file_name, mime_type, byte_size, storage_key, status, uploaded_by,
-						sha256, activated_at)
-					 values ($1, $2, 'tenant_identity', $3, 'cnib.pdf', 'application/pdf', 1000, $4, 'active', $5, $6, now())`,
-					[identity, org.id, tTenant, `documents/${org.id}/${identity}`, org.director.userId, 'b'.repeat(64)]
+					`insert into documents (id, organization_id, type, tenant_id, file_name, mime_type, byte_size, storage_key, status, uploaded_by)
+					 values ($1, $2, 'tenant_identity', $3, 'cnib.pdf', 'application/pdf', 1000, $4, 'pending', $5)`,
+					[identity, org.id, tTenant, `documents/${org.id}/${identity}`, org.director.userId]
 				);
+				await c.query(`update documents set status = 'active', sha256 = $2, activated_at = now() where id = $1`, [
+					identity,
+					'b'.repeat(64)
+				]);
 				w.tIdentity = identity;
 			}
 			if (links) {

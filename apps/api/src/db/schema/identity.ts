@@ -45,8 +45,10 @@ export const refreshTokens = pgTable('refresh_tokens', {
 export const otpCodes = pgTable('otp_codes', {
 	id: uuid('id').primaryKey(),
 	phone: text('phone').notNull(),
-	purpose: text('purpose', { enum: ['verify_phone', 'reset_password', 'change_phone'] }).notNull(),
+	purpose: text('purpose', { enum: ['verify_phone', 'reset_password', 'change_phone', 'link_record'] }).notNull(),
 	userId: uuid('user_id'),
+	/** Lot 10 ter : le lien visé par un code de liaison (au numéro de la fiche). */
+	personLinkId: uuid('person_link_id'),
 	codeHash: bytea('code_hash').notNull(),
 	expiresAt: tstz('expires_at').notNull(),
 	attempts: integer('attempts').notNull().default(0),

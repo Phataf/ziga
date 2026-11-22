@@ -42,6 +42,10 @@ const RESTRICTED_IMPORTS = {
 	collections: {
 		group: ['**/db/schema/collections', '**/db/schema/collections.js'],
 		message: 'Relances, dépenses, relevés et reversements : passer par les services du module collections (lot 10).'
+	},
+	personLinks: {
+		group: ['**/db/schema/person-links', '**/db/schema/person-links.js'],
+		message: 'Liens entre fiches et comptes : passer par le service du module organizations (lot 10 ter).'
 	}
 };
 
@@ -90,47 +94,63 @@ export default ts.config(
 		// sont lues et écrites que par lui. Vérifié aussi par src/architecture.test.ts.
 		files: ['apps/api/src/**/*.ts'],
 		ignores: ['apps/api/src/modules/features/**'],
-		rules: restrictImports('features', 'admin', 'sync', 'owners', 'properties', 'documents', 'leases', 'payments', 'collections')
+		rules: restrictImports(
+			'features',
+			'admin',
+			'sync',
+			'owners',
+			'properties',
+			'documents',
+			'leases',
+			'payments',
+			'collections',
+			'personLinks'
+		)
 	},
 	{
 		// Le module admin, lui, détient sa connexion ; il passe toujours par le module features pour les interrupteurs.
 		files: ['apps/api/src/modules/admin/**/*.ts'],
-		rules: restrictImports('features', 'sync', 'owners', 'properties', 'documents', 'leases', 'payments', 'collections')
+		rules: restrictImports('features', 'sync', 'owners', 'properties', 'documents', 'leases', 'payments', 'collections', 'personLinks')
 	},
 	{
 		// Le module sync détient la table sync_operations ; les autres règles d'import restent.
 		files: ['apps/api/src/modules/sync/**/*.ts'],
-		rules: restrictImports('features', 'admin', 'owners', 'properties', 'documents', 'leases', 'payments', 'collections')
+		rules: restrictImports('features', 'admin', 'owners', 'properties', 'documents', 'leases', 'payments', 'collections', 'personLinks')
 	},
 	{
 		// Le module owners détient les propriétaires et les mandats (lot 06) ; les autres règles d'import restent.
 		files: ['apps/api/src/modules/owners/**/*.ts'],
-		rules: restrictImports('features', 'admin', 'sync', 'properties', 'documents', 'leases', 'payments', 'collections')
+		rules: restrictImports('features', 'admin', 'sync', 'properties', 'documents', 'leases', 'payments', 'collections', 'personLinks')
 	},
 	{
 		// Le module properties détient les biens et les unités (lot 07) ; les autres règles d'import restent.
 		files: ['apps/api/src/modules/properties/**/*.ts'],
-		rules: restrictImports('features', 'admin', 'sync', 'owners', 'documents', 'leases', 'payments', 'collections')
+		rules: restrictImports('features', 'admin', 'sync', 'owners', 'documents', 'leases', 'payments', 'collections', 'personLinks')
 	},
 	{
 		// Le module documents détient le registre des documents privés (lot 07, D22).
 		files: ['apps/api/src/modules/documents/**/*.ts'],
-		rules: restrictImports('features', 'admin', 'sync', 'owners', 'properties', 'leases', 'payments', 'collections')
+		rules: restrictImports('features', 'admin', 'sync', 'owners', 'properties', 'leases', 'payments', 'collections', 'personLinks')
 	},
 	{
 		// Le module leases détient les locataires, les baux, les échéances et les cautions (lot 08).
 		files: ['apps/api/src/modules/leases/**/*.ts'],
-		rules: restrictImports('features', 'admin', 'sync', 'owners', 'properties', 'documents', 'payments', 'collections')
+		rules: restrictImports('features', 'admin', 'sync', 'owners', 'properties', 'documents', 'payments', 'collections', 'personLinks')
 	},
 	{
 		// Le module payments détient les encaissements, les imputations et les reçus (lot 09).
 		files: ['apps/api/src/modules/payments/**/*.ts'],
-		rules: restrictImports('features', 'admin', 'sync', 'owners', 'properties', 'documents', 'leases', 'collections')
+		rules: restrictImports('features', 'admin', 'sync', 'owners', 'properties', 'documents', 'leases', 'collections', 'personLinks')
 	},
 	{
 		// Le module collections détient les relances, les dépenses, les relevés et les reversements (lot 10).
 		files: ['apps/api/src/modules/collections/**/*.ts'],
-		rules: restrictImports('features', 'admin', 'sync', 'owners', 'properties', 'documents', 'leases', 'payments')
+		rules: restrictImports('features', 'admin', 'sync', 'owners', 'properties', 'documents', 'leases', 'payments', 'personLinks')
+	},
+	{
+		// Le module organizations détient les liens entre fiches et comptes des personnes (lot 10 ter).
+		files: ['apps/api/src/modules/organizations/**/*.ts'],
+		rules: restrictImports('features', 'admin', 'sync', 'owners', 'properties', 'documents', 'leases', 'payments', 'collections')
 	},
 	{
 		files: ['scripts/**', '**/scripts/**', '**/*.config.{js,ts}', '**/test/**', '**/e2e/**'],

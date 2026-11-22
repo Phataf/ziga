@@ -690,6 +690,20 @@ export const SYNCED_TABLES = {
 		recorded_by: 'text',
 		created_at: 'text'
 	},
+	/** Lot 10 ter : signalements des locataires, sans la personne qui signale (jamais synchronisée). */
+	maintenance_requests: {
+		organization_id: 'text',
+		lease_id: 'text',
+		title: 'text',
+		description: 'text',
+		status: 'text',
+		planned_on: 'text',
+		done_at: 'text',
+		status_note: 'text',
+		handled_by: 'text',
+		created_at: 'text',
+		updated_at: 'text'
+	},
 	/** Lot 10 bis : congés (agent de terrain : ceux de ses baux, enregistrés, sans indemnité ni preuve). */
 	lease_notices: {
 		organization_id: 'text',

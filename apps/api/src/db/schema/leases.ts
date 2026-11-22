@@ -23,6 +23,7 @@ import type {
 	LeaseStatus,
 	RentDueStatus
 } from '@ziga/shared/leases';
+import type { MaintenanceRequestStatus } from '@ziga/shared/person-links';
 import type { RentBillingMode, RentPeriodicity } from '@ziga/shared/rent-schedule';
 
 const tstz = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
@@ -479,4 +480,22 @@ export const depositSettlementLines = pgTable('deposit_settlement_lines', {
 	documentId: uuid('document_id'),
 	createdBy: uuid('created_by'),
 	createdAt: tstz('created_at').notNull().defaultNow()
+});
+
+// ---------------------------------------------------------------- lot 10 ter : signalements (migration 0022)
+
+export const maintenanceRequests = pgTable('maintenance_requests', {
+	id: uuid('id').primaryKey(),
+	organizationId: uuid('organization_id').notNull(),
+	leaseId: uuid('lease_id').notNull(),
+	reportedBy: uuid('reported_by').notNull(),
+	title: text('title').notNull(),
+	description: text('description').notNull(),
+	status: text('status').$type<MaintenanceRequestStatus>().notNull().default('received'),
+	plannedOn: day('planned_on'),
+	doneAt: tstz('done_at'),
+	statusNote: text('status_note'),
+	handledBy: uuid('handled_by'),
+	createdAt: tstz('created_at').notNull().defaultNow(),
+	updatedAt: tstz('updated_at').notNull().defaultNow()
 });

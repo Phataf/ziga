@@ -184,4 +184,16 @@ describe('Sync Streams (lot 05, D30)', () => {
 		expect(others).not.toMatch(/FROM (deposit_settlements|deposit_settlement_lines|agreements|repairs|management_transfers)\b/);
 		expect(stream('managed_properties')).toContain("organization_members.role != 'field_agent'");
 	});
+
+	it('lot 10 ter : signalements des baux, sans la personne qui signale ; les liens entre fiches et comptes jamais', () => {
+		expect(stream('managed_properties')).toMatch(/FROM maintenance_requests WHERE organization_id IN managed_organizations/);
+		expect(stream('assigned_units')).toMatch(/FROM maintenance_requests WHERE lease_id IN my_unit_leases/);
+		const yaml = readFileSync(CONFIG, 'utf8');
+		const requests = yaml.split('\n').filter((line) => /FROM maintenance_requests\b/.test(line));
+		expect(requests).toHaveLength(2);
+		for (const line of requests) expect(line).not.toMatch(/\breported_by\b/);
+		expect(yaml).not.toMatch(/\b(my_)?person_links\b/);
+		const owners = yaml.split('\n').filter((line) => /FROM owners\b/.test(line));
+		for (const line of owners) expect(line).not.toMatch(/\buser_id\b/);
+	});
 });

@@ -101,7 +101,8 @@ describe('architecture', () => {
 	});
 
 	it('seul le module leases lit et écrit les locataires, les baux, les échéances et les cautions (lot 08)', () => {
-		const tables = /\b(from|join|update|into)\s+(tenants|leases|lease_versions|rent_dues|deposit_accounts|deposit_movements)\b/i;
+		const tables =
+			/\b(from|join|update|into)\s+(tenants|leases|lease_versions|rent_dues|deposit_accounts|deposit_movements|maintenance_requests)\b/i;
 		const offenders = all.filter(
 			(f) =>
 				!f.path.startsWith('modules/leases/') &&
@@ -122,6 +123,21 @@ describe('architecture', () => {
 		);
 		expect(offenders.map((f) => f.path)).toEqual([]);
 		expect(readFileSync(join(src, 'db/schema/index.ts'), 'utf8')).not.toContain('payments');
+	});
+
+	it('seul le module organizations lit et écrit les liens entre fiches et comptes ; seul portals lit my_person_links() (lot 10 ter)', () => {
+		const tables = /\b(from|join|update|into)\s+person_links\b/i;
+		const offenders = all.filter(
+			(f) =>
+				!f.path.startsWith('modules/organizations/') &&
+				f.path !== 'db/schema/person-links.ts' &&
+				(imports(f.code).some((i) => /schema\/person-links(\.js)?$/.test(i)) || tables.test(f.code))
+		);
+		expect(offenders.map((f) => f.path)).toEqual([]);
+		expect(readFileSync(join(src, 'db/schema/index.ts'), 'utf8')).not.toContain('person-links');
+		// La seule lecture hors organisation (identifiants de ses propres liens) : le module portals.
+		const callers = all.filter((f) => !f.path.startsWith('modules/portals/') && /my_person_links\s*\(/.test(f.code));
+		expect(callers.map((f) => f.path)).toEqual([]);
 	});
 
 	it('seul le module admin utilise la connexion app_admin', () => {
