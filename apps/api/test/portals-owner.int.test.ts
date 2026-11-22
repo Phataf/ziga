@@ -14,7 +14,8 @@
 import { newId } from '@ziga/shared/ids';
 import pg from 'pg';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { insertPayout, insertStatement, issueStatement } from './collections.js';
+import { insertExpense, insertPayout, insertStatement, issueStatement } from './collections.js';
+import { insertProperty } from './properties.js';
 import { insertDocument } from './exit.js';
 import { startApp, type TestApp } from './http.js';
 import { migrationClient, portalWorld, seedIn, type PortalWorld } from './portals.js';
@@ -175,5 +176,76 @@ describe('espace du propriétaire : revenus, relevés, reversements, documents (
 			const json = JSON.stringify((await w.p.client.call('GET', path)).body);
 			for (const secret of [w.t.phone, 'B1234567', '1990-04-12']) expect(json, path).not.toContain(secret);
 		}
+	});
+
+	it('dépense d’un bien sans unité : elle reste sur ce bien (bien de la dépense), seule la commission est au prorata', async () => {
+		const fresh = await portalWorld(t, owner);
+		const { other, expense, statement } = await seedIn(owner, fresh.a.org.id, async (c) => {
+			// Second bien de P chez A, sans unité louée dans ce relevé ; une dépense de 6 000 sur ce bien, sans unité.
+			const other = await insertProperty(c, fresh.a.org.id, fresh.a.pOwner, { name: 'Terrain Kossodo' });
+			const expense = await insertExpense(c, fresh.a.org.id, {
+				propertyId: other,
+				borneBy: 'owner',
+				recovery: 'owner_statement',
+				amount: 6_000
+			});
+			const statement = await insertStatement(c, fresh.a.org.id, fresh.a.pOwner, '2026-10', {
+				rent: 75_000,
+				charges: 5_000,
+				commission: 8_000,
+				expenses: -6_000
+			});
+			await c.query(`update owner_statements set snapshot = $2 where id = $1`, [
+				statement,
+				JSON.stringify({
+					units: [{ id: fresh.a.pUnit, label: 'Appartement A1' }],
+					result: {
+						unitTotals: [{ unitId: fresh.a.pUnit, label: 'Appartement A1', rent: 75_000, charges: 5_000, total: 80_000, lines: 1 }],
+						expenseLines: [
+							{
+								key: 'x',
+								expenseId: expense,
+								kind: 'expense',
+								date: '2026-10-12',
+								category: 'other',
+								description: 'Clôture',
+								unitId: null,
+								amount: -6_000,
+								late: false
+							}
+						]
+					}
+				})
+			]);
+			await issueStatement(c, fresh.a.org.id, statement, fresh.a.org.director.userId);
+			return { other, expense, statement };
+		});
+		expect(expense && statement).toBeTruthy();
+		const r = await fresh.p.client.call<Income>('GET', '/me/portal/owner/income');
+		const byProperty = Object.fromEntries(r.body.properties.map((p) => [p.propertyId, p]));
+		// Bien loué : 80 000 − 8 000 de commission (tout l'encaissé est le sien) = 72 000 ; le terrain : −6 000.
+		expect(byProperty[fresh.a.pProperty]).toMatchObject({ collected: 80_000, net: 72_000 });
+		expect(byProperty[other]).toMatchObject({ collected: 0, net: -6_000, yieldPercent: null });
+	});
+
+	it('chaque téléchargement écrit sa ligne d’audit, même deux fois en moins de 30 secondes (relevé, document)', async () => {
+		await seedIn(owner, w.a.org.id, (c) =>
+			c.query(
+				`update owner_statements set pdf_key = coalesce(pdf_key, $2), pdf_generated_at = coalesce(pdf_generated_at, now()) where id = $1`,
+				[statementA, `statements/${w.a.org.id}/x.pdf`]
+			)
+		);
+		const count = (action: string, id: string, org: string) =>
+			seedIn(owner, org, (c) => c.query(`select count(*)::int as n from audit_log where action = $1 and object_id = $2`, [action, id]));
+		const beforeStatement = (await count('statement.download', statementA, w.a.org.id)).rows[0].n as number;
+		const beforeDocument = (await count('document.download', docs.title!, w.a.org.id)).rows[0].n as number;
+		for (let i = 0; i < 2; i += 1) {
+			expect((await w.p.client.call('POST', `/me/portal/owner/statements/${w.a.org.id}/${statementA}/pdf`)).status).toBe(200);
+			expect((await w.p.client.call('POST', `/me/portal/documents/${w.a.org.id}/${docs.title}/download`, { space: 'owner' })).status).toBe(
+				200
+			);
+		}
+		expect((await count('statement.download', statementA, w.a.org.id)).rows[0].n).toBe(beforeStatement + 2);
+		expect((await count('document.download', docs.title!, w.a.org.id)).rows[0].n).toBe(beforeDocument + 2);
 	});
 });

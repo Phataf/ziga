@@ -189,6 +189,22 @@ describe('isolement des espaces personnels par l’API (lot 10 ter, étape 2b)',
 		expect((await w.p.client.call('POST', `/me/portal/tenant/receipts/${w.a.org.id}/${w.a.tReceipt}/pdf`)).status).toBe(404);
 	});
 
+	it('chaque téléchargement écrit sa ligne d’audit, même deux fois en moins de 30 secondes (reçu)', async () => {
+		await seedIn(owner, w.a.org.id, (c) =>
+			c.query(`update receipts set pdf_a6_key = coalesce(pdf_a6_key, $2) where id = $1`, [w.a.tReceipt, `receipts/${w.a.org.id}/recu.pdf`])
+		);
+		const count = async () =>
+			(
+				await seedIn(owner, w.a.org.id, (c) =>
+					c.query(`select count(*)::int as n from audit_log where action = 'receipt.download' and object_id = $1`, [w.a.tReceipt])
+				)
+			).rows[0].n as number;
+		const before = await count();
+		for (let i = 0; i < 2; i += 1)
+			expect((await w.t.client.call('POST', `/me/portal/tenant/receipts/${w.a.org.id}/${w.a.tReceipt}/pdf`)).status).toBe(200);
+		expect(await count()).toBe(before + 2);
+	});
+
 	it('point a : un membre de A ne voit rien de B par l’API (bail, fiche, reçu de T chez B → 404)', async () => {
 		const director = w.a.org.director;
 		for (const path of [`/leases/${w.b.tLease}`, `/tenants/${w.b.tTenant}`, `/receipts/${w.b.tReceipt}`]) {

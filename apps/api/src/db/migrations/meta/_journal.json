@@ -169,6 +169,13 @@
 			"when": 1798000000000,
 			"tag": "0023_person_link_invitations",
 			"breakpoints": true
+		},
+		{
+			"idx": 24,
+			"version": "7",
+			"when": 1799000000000,
+			"tag": "0024_settlement_first_proposed",
+			"breakpoints": true
 		}
 	]
 }

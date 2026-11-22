@@ -24,6 +24,8 @@ import { RequestContext } from '../../common/request-context.js';
 import { DatabaseService } from '../../db/database.module.js';
 import type { Tx } from '../../db/database.js';
 import { RedisService } from '../../redis/redis.module.js';
+import { counterKey } from '../identity/secrets.js';
+import { ThrottleService } from '../identity/throttle.service.js';
 import { AuditService } from '../audit/audit.service.js';
 import { FeaturesService } from '../features/features.service.js';
 import { ExitService } from '../leases/exit.service.js';
@@ -34,7 +36,13 @@ import { PersonLinksService } from '../organizations/person-links.service.js';
 import { PaymentsService } from '../payments/payments.service.js';
 import { StatementsService } from '../collections/statements.service.js';
 import { DocumentsService, type PartyDocument } from '../documents/documents.service.js';
-import { DIRECT_PAYMENT_DISABLED_REASON, ownerIncome, type IncomeMonth, type IncomeProperty } from '@ziga/shared/portals';
+import {
+	DIRECT_PAYMENT_DISABLED_REASON,
+	MAINTENANCE_REQUEST_LIMITS,
+	ownerIncome,
+	type IncomeMonth,
+	type IncomeProperty
+} from '@ziga/shared/portals';
 import type { ContractStatus } from '@ziga/shared/contracts';
 import { toIsoDate } from '@ziga/shared/dates';
 import { PropertiesService, type PartyProperty } from '../properties/properties.service.js';
@@ -86,7 +94,8 @@ export class PortalsService implements OnModuleInit {
 		private readonly statements: StatementsService,
 		private readonly documents: DocumentsService,
 		private readonly exit: ExitService,
-		private readonly owners: OwnersService
+		private readonly owners: OwnersService,
+		private readonly throttle: ThrottleService
 	) {}
 
 	onModuleInit(): void {
@@ -641,10 +650,24 @@ export class PortalsService implements OnModuleInit {
 		return result;
 	}
 
-	createMaintenanceRequest(
+	async createMaintenanceRequest(
 		userId: string,
 		input: { organizationId: string; id: string; leaseId: string; title: string; description: string }
 	) {
+		const r = await this.throttle.hit(
+			counterKey('maintenance-request-user', userId),
+			MAINTENANCE_REQUEST_LIMITS.perUser,
+			MAINTENANCE_REQUEST_LIMITS.windowSeconds * 1000
+		);
+		if (!r.allowed) {
+			throw new AppError(
+				'TOO_MANY_REQUESTS',
+				'Trop de signalements aujourd’hui. Réessayez demain, ou appelez votre organisation.',
+				429,
+				{ retryAfter: r.retryAfterSeconds },
+				{ 'Retry-After': String(r.retryAfterSeconds) }
+			);
+		}
 		return this.tenantWrite(userId, input.organizationId, async (tx, tenantIds) => {
 			const leases = await this.tenantLeasesIn(tx, input.organizationId, tenantIds);
 			return this.leases.partyCreateMaintenanceRequest(
