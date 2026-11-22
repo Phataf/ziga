@@ -448,6 +448,8 @@ export const depositSettlements = pgTable('deposit_settlements', {
 	tenantObservations: text('tenant_observations'),
 	ownerObservations: text('owner_observations'),
 	proposedAt: tstz('proposed_at'),
+	/** Lot 10 ter : première proposition, jamais effacée (migration 0024). */
+	firstProposedAt: tstz('first_proposed_at'),
 	acceptedAt: tstz('accepted_at'),
 	disputedAt: tstz('disputed_at'),
 	disputeOutcome: text('dispute_outcome').$type<'amicable_agreement' | 'court_decision'>(),

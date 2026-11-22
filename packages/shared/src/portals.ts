@@ -6,8 +6,9 @@
  * - par bien, sur les 12 derniers mois : encaissé, net, rendement simple = net ÷ encaissé (réponse du porteur, le
  *   registre ne connaît ni le prix ni la valeur d'un bien).
  * Un relevé calcule la commission par mandat, pas par unité : elle est répartie entre les biens du relevé au prorata
- * de leur encaissé, en francs entiers (le dernier bien reçoit le reste, pour que la somme soit exacte). Une dépense
- * rattachée à une unité reste sur son bien ; une dépense sans unité est répartie comme la commission. Le report d'un
+ * de leur encaissé, en francs entiers (le dernier bien reçoit le reste, pour que la somme soit exacte) : décision du
+ * porteur. Une dépense reste sur son bien (celui de la dépense, ou à défaut celui de son unité) ; seule une dépense dont
+ * le bien est inconnu est répartie comme la commission. Le report d'un
  * solde négatif reste au niveau du relevé.
  */
 import { z } from 'zod';
@@ -26,7 +27,8 @@ export interface IncomeStatement {
 	net: number;
 	paidOut: number;
 	unitTotals: readonly { unitId: string; total: number }[];
-	expenseLines: readonly { unitId: string | null; amount: number }[];
+	/** Bien de la dépense (lu par l'identifiant de la dépense) ; à défaut, celui de son unité. */
+	expenseLines: readonly { unitId: string | null; propertyId?: string | null; amount: number }[];
 }
 
 export interface IncomeMonth {
@@ -99,7 +101,7 @@ export function ownerIncome(
 		const expensesBy = new Map<string, number>();
 		let unattributed = 0;
 		for (const e of s.expenseLines) {
-			const p = e.unitId ? unitProperty.get(e.unitId) : undefined;
+			const p = e.propertyId ?? (e.unitId ? unitProperty.get(e.unitId) : undefined);
 			if (p) expensesBy.set(p, (expensesBy.get(p) ?? 0) + e.amount);
 			else unattributed += e.amount;
 		}
@@ -129,6 +131,9 @@ export function ownerIncome(
 }
 
 // ---------------------------------------------------------------- espace du locataire : demandes à l'organisation (étape 2b-3)
+
+/** Signalements depuis l'espace : 10 par compte sur 24 heures (proposition, sur le modèle des demandes de liaison). */
+export const MAINTENANCE_REQUEST_LIMITS = { perUser: 10, windowSeconds: 24 * 60 * 60 } as const;
 
 /** Signalement depuis l'espace : l'organisation du bail en plus (une seule organisation par écriture). */
 export const portalMaintenanceRequestSchema = createMaintenanceRequestSchema.extend({ organizationId: idSchema });

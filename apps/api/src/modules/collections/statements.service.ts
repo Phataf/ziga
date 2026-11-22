@@ -17,7 +17,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Inject, Injectable } from '@nestjs/common';
 import { toIsoDate } from '@ziga/shared/dates';
 import type { Page } from '@ziga/shared/leases';
-import { newId } from '@ziga/shared/ids';
+import { isUuid, newId } from '@ziga/shared/ids';
 import {
 	addMonthsToMonth,
 	computeStatement,
@@ -57,7 +57,7 @@ import { APP_CONFIG } from '../../config/config.module.js';
 import type { AppConfig } from '../../config/env.js';
 import { DatabaseService } from '../../db/database.module.js';
 import type { Tx } from '../../db/database.js';
-import { ownerPayouts, ownerStatementLines, ownerStatements, ownerStatementTokens } from '../../db/schema/collections.js';
+import { expenses, ownerPayouts, ownerStatementLines, ownerStatements, ownerStatementTokens } from '../../db/schema/collections.js';
 import { STATEMENT_PDF_JOB, STATEMENTS_QUEUE, type StatementPdfJobData } from '../../jobs/queues.js';
 import { STORAGE, type StorageAdapter } from '../../storage/storage.js';
 import { AuditService, type AuditActor } from '../audit/audit.service.js';
@@ -185,7 +185,7 @@ export interface PartyStatement {
 	remaining: number;
 	pdfAvailable: boolean;
 	unitTotals: { unitId: string; total: number }[];
-	expenseLines: { unitId: string | null; amount: number }[];
+	expenseLines: { unitId: string | null; propertyId: string | null; amount: number }[];
 	payouts: { id: string; kind: string; amount: number; paidOn: string; method: string }[];
 }
 
@@ -699,12 +699,35 @@ export class StatementsService {
 				)
 			)
 			.orderBy(desc(ownerPayouts.paidOn), desc(ownerPayouts.id));
+		// Bien de chaque dépense : la copie figée ne garde que l'unité ; une dépense d'un bien sans unité reste sur son bien.
+		const expenseIds = [
+			...new Set(
+				rows.flatMap((st) =>
+					((st.snapshot as { result?: { expenseLines?: { expenseId?: string }[] } } | null)?.result?.expenseLines ?? []).map(
+						(e) => e.expenseId
+					)
+				)
+			)
+		].filter((id): id is string => typeof id === 'string' && isUuid(id));
+		const expenseProperty = new Map(
+			expenseIds.length
+				? (
+						await tx
+							.select({ id: expenses.id, propertyId: expenses.propertyId })
+							.from(expenses)
+							.where(and(eq(expenses.organizationId, organizationId), inArray(expenses.id, expenseIds)))
+					).map((e) => [e.id, e.propertyId] as const)
+				: []
+		);
 		return rows.map((st) => {
 			const mine = payouts.filter((p) => p.statementId === st.id);
 			const paidOut = mine.reduce((sum, p) => sum + (p.kind === 'reversal' ? -p.amount : p.amount), 0);
 			const result = (
 				(st.snapshot ?? {}) as {
-					result?: { unitTotals?: { unitId: string; total: number }[]; expenseLines?: { unitId: string | null; amount: number }[] };
+					result?: {
+						unitTotals?: { unitId: string; total: number }[];
+						expenseLines?: { expenseId?: string; unitId: string | null; propertyId?: string | null; amount: number }[];
+					};
 				}
 			).result;
 			return {
@@ -722,7 +745,11 @@ export class StatementsService {
 				remaining: Math.max(0, st.net - paidOut),
 				pdfAvailable: !!st.pdfKey,
 				unitTotals: (result?.unitTotals ?? []).map((u) => ({ unitId: u.unitId, total: u.total })),
-				expenseLines: (result?.expenseLines ?? []).map((e) => ({ unitId: e.unitId ?? null, amount: e.amount })),
+				expenseLines: (result?.expenseLines ?? []).map((e) => ({
+					unitId: e.unitId ?? null,
+					propertyId: e.propertyId ?? (e.expenseId ? (expenseProperty.get(e.expenseId) ?? null) : null),
+					amount: e.amount
+				})),
 				payouts: mine.map((p) => ({ id: p.id, kind: p.kind, amount: p.amount, paidOn: p.paidOn, method: p.method }))
 			};
 		});

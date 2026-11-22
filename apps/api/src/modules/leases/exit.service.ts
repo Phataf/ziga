@@ -141,8 +141,10 @@ const SETTLEMENT_LINE_MESSAGES: Record<string, string> = {
 	DEBT_NOT_UTILITY_BILL: 'La garantie des factures ne couvre que l’eau et l’électricité.'
 };
 
-/** Décompte de sortie vu par le locataire lié, dans son espace (lot 10 ter). */
-export interface PartySettlement {
+/** Décompte de sortie vu par le locataire lié : proposé ou au-delà, ou seulement « en cours de correction » (lot 10 ter). */
+export type PartySettlement = PartySettlementShown | { id: string; status: 'in_correction' };
+
+export interface PartySettlementShown {
 	id: string;
 	status: string;
 	exitOn: string;
@@ -234,6 +236,14 @@ export class ExitService {
 			.orderBy(desc(depositSettlements.createdAt), desc(depositSettlements.id));
 		const latest = new Map<string, (typeof rows)[number]>();
 		for (const r of rows) if (!latest.has(r.leaseId)) latest.set(r.leaseId, r);
+		const out = new Map<string, PartySettlement>();
+		// Un brouillon n'est jamais montré (comme un relevé en brouillon) ; proposé puis remis en brouillon : « en cours de
+		// correction par l'organisation », sans aucun montant ni ligne.
+		for (const [leaseId, st] of [...latest]) {
+			if (st.status !== 'draft') continue;
+			latest.delete(leaseId);
+			if (st.firstProposedAt) out.set(leaseId, { id: st.id, status: 'in_correction' });
+		}
 		const ids = [...latest.values()].map((r) => r.id);
 		const lines = ids.length
 			? await tx
@@ -242,7 +252,6 @@ export class ExitService {
 					.where(and(eq(depositSettlementLines.organizationId, organizationId), inArray(depositSettlementLines.settlementId, ids)))
 					.orderBy(asc(depositSettlementLines.position), asc(depositSettlementLines.id))
 			: [];
-		const out = new Map<string, PartySettlement>();
 		for (const [leaseId, st] of latest) {
 			out.set(leaseId, {
 				id: st.id,
@@ -322,6 +331,21 @@ export class ExitService {
 			.limit(1);
 		if (!lease || !leaseIds.includes(lease.id)) throw new AppError('LEASE_NOT_FOUND', 'Bail introuvable.', 404);
 		if (lease.status !== 'active') throw new AppError('NOTICE_LEASE_NOT_IN_FORCE', 'Une demande de préavis vise un bail en vigueur.', 409);
+		if (input.plannedExitOn < toIsoDate()) {
+			throw new AppError('NOTICE_DATE_PAST', 'La date de sortie prévue ne peut pas être dans le passé.', 409);
+		}
+		const [pending] = await tx
+			.select({ id: leaseNotices.id })
+			.from(leaseNotices)
+			.where(and(eq(leaseNotices.organizationId, organizationId), eq(leaseNotices.leaseId, lease.id), eq(leaseNotices.status, 'requested')))
+			.limit(1);
+		if (pending) {
+			throw new AppError(
+				'NOTICE_REQUEST_PENDING',
+				'Une demande de préavis est déjà en attente pour ce bail : l’organisation la traite.',
+				409
+			);
+		}
 		const id = newId();
 		await tx.insert(leaseNotices).values({
 			id,
