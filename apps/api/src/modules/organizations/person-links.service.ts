@@ -32,7 +32,7 @@ import {
 	type PersonLinkView
 } from '@ziga/shared/person-links';
 import type { OrganizationType, VerificationStatus } from '@ziga/shared/permissions';
-import { and, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, lte, ne, sql } from 'drizzle-orm';
 import { AppError } from '../../common/app-error.js';
 import { fromDatabaseError } from '../../common/db-errors.js';
 import { RequestContext } from '../../common/request-context.js';
@@ -55,6 +55,9 @@ import { PersonLinkRecords } from './person-link-records.js';
 type LinkRow = typeof personLinks.$inferSelect;
 
 const DAY = 24 * 60 * 60_000;
+
+/** Motif d'une invitation révoquée parce qu'elle a expiré sans être réclamée. */
+const EXPIRED_INVITATION = 'Invitation expirée';
 
 /** Interrupteur de l'espace qui correspond au type de fiche (CLAUDE.md §8). */
 export function spaceFeature(recordType: PersonLinkRecordType): FeatureKey {
@@ -163,6 +166,46 @@ export class PersonLinksService {
 		return l;
 	}
 
+	/**
+	 * Invitations de l'organisation expirées et jamais réclamées d'une fiche : révoquées par le serveur, motif « Invitation
+	 * expirée », une ligne d'audit chacune, dans la transaction de l'écriture qui suit (réinviter, demande de la personne,
+	 * liaison automatique du bailleur). Sinon l'index « un lien non révoqué par fiche » bloquerait la fiche pour toujours.
+	 * Une invitation déjà réclamée (sa personne posée), même expirée, reste en l'état : elle appartient à cette personne.
+	 * Auteur : `revoked_by_party = system`, sans personne (comme les révocations à un changement de numéro, migration 0022).
+	 */
+	private async revokeExpiredInvitations(
+		tx: Tx,
+		organizationId: string,
+		recordType: PersonLinkRecordType,
+		recordId: string
+	): Promise<void> {
+		const column = recordType === 'owner' ? personLinks.ownerId : personLinks.tenantId;
+		const expired = await tx
+			.update(personLinks)
+			.set({ status: 'revoked', revokedAt: new Date(), revokedBy: null, revokedByParty: 'system', revocationReason: EXPIRED_INVITATION })
+			.where(
+				and(
+					eq(column, recordId),
+					eq(personLinks.origin, 'organization_invite'),
+					eq(personLinks.status, 'requested'),
+					isNull(personLinks.userId),
+					lte(personLinks.inviteExpiresAt, sql`now()`)
+				)
+			)
+			.returning();
+		for (const l of expired) {
+			await this.audit.record(tx, {
+				actor: { type: 'system' },
+				organizationId,
+				action: 'person_link.revoke',
+				objectType: 'person_link',
+				objectId: l.id,
+				before: { status: 'requested', inviteExpiresAt: l.inviteExpiresAt?.toISOString() ?? null },
+				after: { ...auditView(l), revokedByParty: 'system', cause: 'invitation_expired', reason: EXPIRED_INVITATION }
+			});
+		}
+	}
+
 	// ---------------------------------------------------------------- organisation (route @OrganizationScoped)
 
 	private memberActor(): Extract<AuditActor, { type: 'user' }> {
@@ -192,6 +235,7 @@ export class PersonLinksService {
 		if (!record.phone) {
 			throw new AppError('LINK_RECORD_NO_PHONE', 'Renseignez d’abord le numéro de la fiche : l’invitation part à ce numéro.', 409);
 		}
+		await this.revokeExpiredInvitations(tx, scope.organizationId, input.recordType, record.id);
 		const token = `${scope.organizationId}.${randomBytes(32).toString('base64url')}`;
 		const now = new Date();
 		const [row] = await this.guard(() =>
@@ -419,6 +463,7 @@ export class PersonLinksService {
 					accountPhoneVerified: person.phoneVerifiedAt !== null
 				});
 				if (!eligible) return;
+				await this.revokeExpiredInvitations(tx, organizationId, 'owner', self.id);
 				const [existing] = await tx
 					.select({ id: personLinks.id })
 					.from(personLinks)
@@ -516,8 +561,11 @@ export class PersonLinksService {
 				) {
 					return null;
 				}
-				const [record] = await this.records.resolver(input.recordType).byPhone(tx, person.phone);
+				// Plusieurs fiches au même numéro (doublon d'import) : la plus récemment modifiée, puis le plus grand identifiant
+				// (ordre déterministe) ; les autres sont nommées au journal pour que l'agence corrige le doublon.
+				const [record, ...duplicates] = await this.records.resolver(input.recordType).byPhone(tx, person.phone);
 				if (!record) return null;
+				await this.revokeExpiredInvitations(tx, input.organizationId, input.recordType, record.id);
 				const column = input.recordType === 'owner' ? personLinks.ownerId : personLinks.tenantId;
 				const [existing] = await tx
 					.select()
@@ -550,7 +598,7 @@ export class PersonLinksService {
 					action: 'person_link.request',
 					objectType: 'person_link',
 					objectId: row!.id,
-					after: auditView(row!),
+					after: { ...auditView(row!), ...(duplicates.length ? { otherRecordsWithSamePhone: duplicates.map((d) => d.id) } : {}) },
 					origin: 'portal'
 				});
 				return row!.id;
