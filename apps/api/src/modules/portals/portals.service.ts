@@ -30,6 +30,10 @@ import { LeasesService, type PartyCurrentLease } from '../leases/leases.service.
 import { OrganizationsService } from '../organizations/organizations.service.js';
 import { PersonLinksService } from '../organizations/person-links.service.js';
 import { PaymentsService } from '../payments/payments.service.js';
+import { StatementsService } from '../collections/statements.service.js';
+import { DocumentsService, type PartyDocument } from '../documents/documents.service.js';
+import { ownerIncome, type IncomeMonth, type IncomeProperty } from '@ziga/shared/portals';
+import { toIsoDate } from '@ziga/shared/dates';
 import { PropertiesService, type PartyProperty } from '../properties/properties.service.js';
 
 const CACHE_SECONDS = 30;
@@ -40,7 +44,7 @@ export type PortalSpace = 'owner' | 'tenant';
 const SPACE_FEATURE: Record<PortalSpace, FeatureKey> = { owner: 'portals.owner_space', tenant: 'portals.tenant_space' };
 const SPACE_RECORD: Record<PortalSpace, PersonLinkRecordType> = { owner: 'owner', tenant: 'tenant' };
 
-interface PortalOrganization {
+export interface PortalOrganization {
 	organizationId: string;
 	organizationName: string;
 	organizationType: 'agency' | 'landlord';
@@ -75,7 +79,9 @@ export class PortalsService implements OnModuleInit {
 		private readonly links: PersonLinksService,
 		private readonly properties: PropertiesService,
 		private readonly leases: LeasesService,
-		private readonly payments: PaymentsService
+		private readonly payments: PaymentsService,
+		private readonly statements: StatementsService,
+		private readonly documents: DocumentsService
 	) {}
 
 	onModuleInit(): void {
@@ -230,6 +236,112 @@ export class PortalsService implements OnModuleInit {
 				};
 			})
 		}));
+	}
+
+	/** Biens, unités et baux du propriétaire dans l'organisation de la transaction (périmètre de ses documents). */
+	private async ownerScope(tx: Tx, organizationId: string, ownerIds: string[]) {
+		const properties = (await Promise.all(ownerIds.map((id) => this.properties.partyOwnerAssets(tx, organizationId, id)))).flat();
+		const unitIds = properties.flatMap((p) => p.units.map((u) => u.id));
+		return {
+			properties,
+			unitProperty: new Map(properties.flatMap((p) => p.units.map((u) => [u.id, p.id] as const))),
+			scope: {
+				ownerIds,
+				propertyIds: properties.map((p) => p.id),
+				unitIds,
+				leaseIds: await this.leases.partyLeaseIdsOfUnits(tx, organizationId, unitIds)
+			}
+		};
+	}
+
+	/** Relevés émis de chaque organisation, avec reversé et reste. */
+	async ownerStatements(userId: string) {
+		await this.assertSpace('owner', userId);
+		const links = await this.activeLinks(userId);
+		return this.cached(this.cacheKey(userId, 'owner-statements', links), async () =>
+			(
+				await this.eachOrganization(userId, 'owner', 'owner/statements', links, async (tx, org, ownerIds) =>
+					(await Promise.all(ownerIds.map((id) => this.statements.partyStatements(tx, org.organizationId, id))))
+						.flat()
+						.map(({ unitTotals: _u, expenseLines: _e, ...st }) => ({ ...org, ...st }))
+				)
+			)
+				.flat()
+				.sort((a, b) => (a.month === b.month ? (a.id < b.id ? 1 : -1) : a.month < b.month ? 1 : -1))
+		);
+	}
+
+	/** Revenus par mois et par bien (12 derniers mois), rendement net ÷ encaissé (packages/shared/portals). */
+	async ownerIncome(userId: string): Promise<{ months: IncomeMonth[]; properties: IncomeProperty[] }> {
+		await this.assertSpace('owner', userId);
+		const links = await this.activeLinks(userId);
+		return this.cached(this.cacheKey(userId, 'owner-income', links), async () => {
+			const perOrg = await this.eachOrganization(userId, 'owner', 'owner/income', links, async (tx, org, ownerIds) => {
+				const { unitProperty } = await this.ownerScope(tx, org.organizationId, ownerIds);
+				const statements = (await Promise.all(ownerIds.map((id) => this.statements.partyStatements(tx, org.organizationId, id)))).flat();
+				return { org, unitProperty, statements };
+			});
+			const unitProperty = new Map(perOrg.flatMap((o) => [...o.unitProperty]));
+			return ownerIncome(
+				perOrg.flatMap((o) => o.statements.map((s) => ({ ...s, organizationId: o.org.organizationId }))),
+				unitProperty,
+				toIsoDate().slice(0, 7)
+			);
+		});
+	}
+
+	/** Documents de ses biens et de leurs baux que la matrice ouvre au propriétaire (D22). */
+	async ownerDocuments(userId: string): Promise<(PortalOrganization & PartyDocument)[]> {
+		await this.assertSpace('owner', userId);
+		const links = await this.activeLinks(userId);
+		return this.cached(this.cacheKey(userId, 'owner-documents', links), async () =>
+			(
+				await this.eachOrganization(userId, 'owner', 'owner/documents', links, async (tx, org, ownerIds) => {
+					const { scope } = await this.ownerScope(tx, org.organizationId, ownerIds);
+					return (await this.documents.partyDocuments(tx, org.organizationId, 'owner', scope)).map((d) => ({ ...org, ...d }));
+				})
+			).flat()
+		);
+	}
+
+	/** PDF d'un relevé émis (URL signée), journalisé dans l'organisation. */
+	async ownerStatementPdf(userId: string, organizationId: string, statementId: string) {
+		await this.assertSpace('owner', userId);
+		const ownerIds = (await this.activeLinks(userId))
+			.filter((l) => l.recordType === 'owner' && l.organizationId === organizationId)
+			.map((l) => l.recordId);
+		if (!ownerIds.length) throw new AppError('STATEMENT_NOT_FOUND', 'Relevé introuvable.', 404);
+		return this.database.withOrganization(organizationId, (tx) =>
+			RequestContext.run({ ...RequestContext.get(), origin: 'portal', userId }, () =>
+				this.statements.partyStatementPdfUrl(tx, organizationId, ownerIds, statementId, userId)
+			)
+		);
+	}
+
+	/** Téléchargement d'un document permis par la matrice, pour l'espace donné (URL signée, journalisée). */
+	async downloadDocument(userId: string, space: PortalSpace, organizationId: string, documentId: string) {
+		await this.assertSpace(space, userId);
+		const recordIds = (await this.activeLinks(userId))
+			.filter((l) => l.recordType === SPACE_RECORD[space] && l.organizationId === organizationId)
+			.map((l) => l.recordId);
+		if (!recordIds.length) throw new AppError('DOCUMENT_NOT_FOUND', 'Document introuvable.', 404);
+		return this.database.withOrganization(organizationId, (tx) =>
+			RequestContext.run({ ...RequestContext.get(), origin: 'portal', userId }, async () => {
+				if (space === 'owner') {
+					const { scope } = await this.ownerScope(tx, organizationId, recordIds);
+					return this.documents.partyDownload(tx, organizationId, documentId, 'owner', scope, userId);
+				}
+				const leases = (await Promise.all(recordIds.map((id) => this.leases.partyTenantLeases(tx, organizationId, id)))).flat();
+				return this.documents.partyDownload(
+					tx,
+					organizationId,
+					documentId,
+					'tenant',
+					{ tenantIds: recordIds, leaseIds: leases.map((l) => l.id) },
+					userId
+				);
+			})
+		);
 	}
 
 	// ---------------------------------------------------------------- espace du locataire

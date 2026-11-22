@@ -150,3 +150,15 @@ describe('documents du contrat (lot 08 bis, docs/UX.md §10)', () => {
 		expect(createDocumentSchema.safeParse({ ...base, type: 'signed_lease_scan' }).success).toBe(true);
 	});
 });
+
+describe('parties qui voient un type de document (lot 10 ter, avertissement au dépôt)', () => {
+	it('suit la matrice : pièce du locataire au locataire seul, titre au propriétaire seul, contrat signé aux deux, modèle à personne', async () => {
+		const { partiesWhoSee } = await import('./documents.js');
+		expect(partiesWhoSee('tenant_identity')).toEqual(['tenant']);
+		expect(partiesWhoSee('title_deed')).toEqual(['owner']);
+		expect(partiesWhoSee('signed_lease_scan')).toEqual(['owner', 'tenant']);
+		expect(partiesWhoSee('notice_proof')).toEqual(['owner', 'tenant']);
+		expect(partiesWhoSee('contract_template')).toEqual([]);
+		expect(partiesWhoSee('contract_draft')).toEqual(['tenant']);
+	});
+});

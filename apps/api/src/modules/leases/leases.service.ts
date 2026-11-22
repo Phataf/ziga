@@ -413,6 +413,22 @@ export class LeasesService {
 		return out;
 	}
 
+	/** Tous les baux validés des unités d'un propriétaire (pour ses documents : contrat signé, avenants, états des lieux). */
+	async partyLeaseIdsOfUnits(tx: Tx, organizationId: string, unitIds: readonly string[]): Promise<string[]> {
+		if (!unitIds.length) return [];
+		const rows = await tx
+			.select({ id: leases.id })
+			.from(leases)
+			.where(
+				and(
+					eq(leases.organizationId, organizationId),
+					inArray(leases.unitId, [...unitIds]),
+					inArray(leases.status, ['signed', 'active', 'notice', 'ended'])
+				)
+			);
+		return rows.map((r) => r.id);
+	}
+
 	private async partyDeposits(tx: Tx, organizationId: string, leaseIds: readonly string[]): Promise<Map<string, PartyDeposit>> {
 		if (!leaseIds.length) return new Map();
 		const rows = await tx

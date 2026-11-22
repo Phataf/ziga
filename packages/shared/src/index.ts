@@ -31,3 +31,4 @@ export * from './deposit-settlement.js';
 export * from './tenant-exit.js';
 export * from './exit-schemas.js';
 export * from './person-links.js';
+export * from './portals.js';

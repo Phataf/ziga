@@ -208,6 +208,16 @@ export function canPartyReadDocument(
 	return true;
 }
 
+/**
+ * Lot 10 ter (réponse du porteur au point c) : les parties à qui la matrice ouvre ce type de document une fois lié.
+ * L'écran de dépôt avertit l'organisation qu'un scan visible du propriétaire ou du locataire lui sera montré tel quel
+ * (un scan peut porter des coordonnées que la plateforme ne vérifie pas).
+ */
+export function partiesWhoSee(type: DocumentType): DocumentParty[] {
+	const rule = DOCUMENT_ACCESS[type];
+	return (['owner', 'tenant'] as const).filter((p) => rule[p] !== 'never');
+}
+
 // ---------------------------------------------------------------- schémas et vues (lot 07, étape 3)
 
 /**

@@ -169,6 +169,26 @@ function versionOf(m: StatementMandateRow, date: string): StatementMandate {
 	return { mandateId: m.id, version: v.version, commission: v.commission, canCollectFunds: v.canCollectFunds };
 }
 
+/** Relevé émis vu par le propriétaire lié, dans son espace (lot 10 ter). */
+export interface PartyStatement {
+	id: string;
+	month: string;
+	version: number;
+	correctsStatementId: string | null;
+	issuedOn: string | null;
+	collected: number;
+	commission: number;
+	expenses: number;
+	carriedBalance: number;
+	net: number;
+	paidOut: number;
+	remaining: number;
+	pdfAvailable: boolean;
+	unitTotals: { unitId: string; total: number }[];
+	expenseLines: { unitId: string | null; amount: number }[];
+	payouts: { id: string; kind: string; amount: number; paidOn: string; method: string }[];
+}
+
 @Injectable()
 export class StatementsService {
 	constructor(
@@ -644,6 +664,88 @@ export class StatementsService {
 			action: 'statement.download',
 			objectType: 'owner_statement',
 			objectId: id
+		});
+		return {
+			url: await this.storage.presignGet(st.pdfKey, { expiresInSeconds: 300, contentType: 'application/pdf' }),
+			expiresInSeconds: 300
+		};
+	}
+
+	// ---------------------------------------------------------------- lot 10 ter : espace du propriétaire (module portals)
+
+	/**
+	 * Relevés émis d'un propriétaire lié (jamais un brouillon), dans l'organisation de la transaction : totaux, encaissé par
+	 * unité et dépenses par unité (copie figée du relevé), reversé (contre-écritures déduites) et reste à reverser.
+	 */
+	async partyStatements(tx: Tx, organizationId: string, ownerId: string): Promise<PartyStatement[]> {
+		const rows = await tx
+			.select()
+			.from(ownerStatements)
+			.where(
+				and(eq(ownerStatements.organizationId, organizationId), eq(ownerStatements.ownerId, ownerId), eq(ownerStatements.status, 'issued'))
+			)
+			.orderBy(desc(ownerStatements.month), desc(ownerStatements.version), desc(ownerStatements.id));
+		if (!rows.length) return [];
+		const payouts = await tx
+			.select()
+			.from(ownerPayouts)
+			.where(
+				and(
+					eq(ownerPayouts.organizationId, organizationId),
+					inArray(
+						ownerPayouts.statementId,
+						rows.map((r) => r.id)
+					)
+				)
+			)
+			.orderBy(desc(ownerPayouts.paidOn), desc(ownerPayouts.id));
+		return rows.map((st) => {
+			const mine = payouts.filter((p) => p.statementId === st.id);
+			const paidOut = mine.reduce((sum, p) => sum + (p.kind === 'reversal' ? -p.amount : p.amount), 0);
+			const result = (
+				(st.snapshot ?? {}) as {
+					result?: { unitTotals?: { unitId: string; total: number }[]; expenseLines?: { unitId: string | null; amount: number }[] };
+				}
+			).result;
+			return {
+				id: st.id,
+				month: st.month,
+				version: st.version,
+				correctsStatementId: st.correctsStatementId,
+				issuedOn: st.issuedOn,
+				collected: st.collected,
+				commission: st.commission,
+				expenses: st.expenses,
+				carriedBalance: st.carriedBalance,
+				net: st.net,
+				paidOut,
+				remaining: Math.max(0, st.net - paidOut),
+				pdfAvailable: !!st.pdfKey,
+				unitTotals: (result?.unitTotals ?? []).map((u) => ({ unitId: u.unitId, total: u.total })),
+				expenseLines: (result?.expenseLines ?? []).map((e) => ({ unitId: e.unitId ?? null, amount: e.amount })),
+				payouts: mine.map((p) => ({ id: p.id, kind: p.kind, amount: p.amount, paidOn: p.paidOn, method: p.method }))
+			};
+		});
+	}
+
+	/** URL signée (5 minutes) du PDF d'un relevé émis de ce propriétaire ; journalisé dans l'organisation (origine portal). */
+	async partyStatementPdfUrl(tx: Tx, organizationId: string, ownerIds: readonly string[], statementId: string, userId: string) {
+		const [st] = await tx
+			.select()
+			.from(ownerStatements)
+			.where(and(eq(ownerStatements.organizationId, organizationId), eq(ownerStatements.id, statementId)))
+			.limit(1);
+		if (!st || st.status !== 'issued' || !ownerIds.includes(st.ownerId))
+			throw new AppError('STATEMENT_NOT_FOUND', 'Relevé introuvable.', 404);
+		if (!st.pdfKey) throw new AppError('STATEMENT_PDF_PENDING', 'Le PDF de ce relevé n’est pas encore prêt.', 409);
+		await this.audit.record(tx, {
+			actor: { type: 'user', userId },
+			organizationId,
+			subjectUserId: userId,
+			action: 'statement.download',
+			objectType: 'owner_statement',
+			objectId: st.id,
+			origin: 'portal'
 		});
 		return {
 			url: await this.storage.presignGet(st.pdfKey, { expiresInSeconds: 300, contentType: 'application/pdf' }),

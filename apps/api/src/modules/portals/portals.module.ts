@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { CollectionsModule } from '../collections/collections.module.js';
+import { DocumentsModule } from '../documents/documents.module.js';
 import { LeasesModule } from '../leases/leases.module.js';
 import { OrganizationsModule } from '../organizations/organizations.module.js';
 import { PaymentsModule } from '../payments/payments.module.js';
@@ -12,7 +14,7 @@ import { PortalsService } from './portals.service.js';
  * par leurs services publics.
  */
 @Module({
-	imports: [OrganizationsModule, PropertiesModule, LeasesModule, PaymentsModule],
+	imports: [OrganizationsModule, PropertiesModule, LeasesModule, PaymentsModule, CollectionsModule, DocumentsModule],
 	controllers: [PortalsController],
 	providers: [PortalsService]
 })
