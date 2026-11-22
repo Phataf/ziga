@@ -1384,5 +1384,10 @@ Prompt : `prompts/lot-10ter-espaces-personnels.md`.
 - d. Révocation : les données disparaissent de l'espace immédiatement, y compris du cache court du module `portals`.
 - e. Une pull request par étape, de la branche de travail vers main, suivie jusqu'au vert ; suite Playwright complète, puis `pnpm lint`, `pnpm typecheck` et `pnpm test` avant chaque envoi ; sauvegarde sur `claude/lot10ter-sauvegarde` ; rien sur main.
 
+### Précision du porteur sur le point c (22/11/2026)
+- Conflit entre le point c et D22 : **D22 l'emporte**. Le propriétaire est partie au bail (bailleur, représenté par l'organisation) : il a accès au contrat signé et à ses avenants, qui contiennent l'identité complète du locataire (téléphone, pièce d'identité), comme le prévoit la matrice (`docs/UX.md` §10).
+- Le point c s'applique à tout le reste : écrans de l'espace propriétaire, relevés, reçus, décomptes, et tout autre document ou export : jamais le téléphone ni la pièce d'identité du locataire.
+- Tests des deux côtés : le contrat signé (et ses avenants) est accessible au propriétaire lié ; aucun autre écran ni document de son espace ne contient le téléphone ou la pièce du locataire.
+
 ### Étape 0
 - Titre du lot 10 bis : « (étape 4 en relecture) » retiré, le lot est terminé (validé par le porteur le 22/11/2026).
