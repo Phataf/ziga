@@ -105,6 +105,11 @@ export const PERMISSIONS = {
 	'deposit.settle': [D, M],
 	'agreement.decide': [D, M],
 	'management.transfer': [D, M],
+	// Lot 10 ter : liaison des fiches aux comptes des personnes (inviter, accepter, révoquer) et signalements des
+	// locataires : direction et gestion ; tout membre qui lit le bail lit ses signalements.
+	'person_link.manage': [D, M],
+	'maintenance_request.read': [D, M, F, V],
+	'maintenance_request.manage': [D, M],
 	// Déclarées dès le lot 03 pour fixer le partage des rôles ; leurs endpoints viennent avec leur lot.
 	'listing.publish': [D, M],
 	'lead.manage': [D, M, F],

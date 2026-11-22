@@ -124,6 +124,10 @@
 			"types": "./dist/exit-schemas.d.ts",
 			"default": "./dist/exit-schemas.js"
 		},
+		"./person-links": {
+			"types": "./dist/person-links.d.ts",
+			"default": "./dist/person-links.js"
+		},
 		"./reminders": {
 			"types": "./dist/reminders.d.ts",
 			"default": "./dist/reminders.js"

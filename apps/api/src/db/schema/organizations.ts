@@ -112,7 +112,7 @@ export const auditLog = pgTable('audit_log', {
 	objectId: uuid('object_id'),
 	before: jsonb('before'),
 	after: jsonb('after'),
-	origin: text('origin', { enum: ['app', 'api', 'admin', 'sync', 'job'] }).notNull(),
+	origin: text('origin', { enum: ['app', 'api', 'admin', 'sync', 'job', 'migration', 'portal'] }).notNull(),
 	ip: inet('ip'),
 	requestId: text('request_id')
 });
