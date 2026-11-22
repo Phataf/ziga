@@ -15,7 +15,7 @@ describe('matrice de confidentialité des documents (D22, docs/UX.md §10)', () 
 	it('direction et gestion ; ni le profil lecture ; l’agent de terrain, seulement l’état des lieux de ses unités (lot 10 bis)', () => {
 		for (const type of DOCUMENT_TYPES) {
 			const doc = { type, restriction: null };
-			const inspection = type === 'inspection_photo' || type === 'inspection_scan';
+			const inspection = type === 'inspection_photo' || type === 'inspection_scan' || type === 'inspection_report';
 			expect(canReadDocument('director', doc), type).toBe(true);
 			expect(canReadDocument('manager', doc), type).toBe(true);
 			expect(canReadDocument('field_agent', doc, { assignedUnit: true }), type).toBe(inspection);

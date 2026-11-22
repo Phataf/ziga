@@ -103,12 +103,12 @@ describe('Sync Streams (lot 05, D30)', () => {
 		expect(agent).toMatch(/FROM properties WHERE id IN my_unit_properties/);
 		expect(agent).toMatch(/FROM media WHERE unit_id IN my_units/);
 		expect(agent).not.toMatch(/organization_id IN/);
-		// Lot 10 bis (matrice docs/UX.md §10, « État des lieux ») : seulement les photos et scans des états des lieux de
-		// ses baux, jamais un document restreint ; aucun autre type.
+		// Lot 10 bis (matrice docs/UX.md §10, « État des lieux ») : seulement les photos, scans et PDF des états des lieux
+		// de ses baux (le PDF depuis l'étape 4), jamais un document restreint ; aucun autre type.
 		const documents = agent.split('\n').filter((line) => /FROM documents\b/.test(line));
-		expect(documents).toHaveLength(2);
+		expect(documents).toHaveLength(3);
 		for (const line of documents) {
-			expect(line).toMatch(/WHERE lease_id IN my_unit_leases AND type = 'inspection_(photo|scan)' AND restriction IS NULL$/);
+			expect(line).toMatch(/WHERE lease_id IN my_unit_leases AND type = 'inspection_(photo|scan|report)' AND restriction IS NULL$/);
 		}
 		// Le stream de la gestion exclut l'agent de terrain ; aucun autre stream ne lit biens, unités ou photos.
 		const managed = stream('managed_properties');
