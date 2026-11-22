@@ -14,9 +14,9 @@ import { newId } from '@ziga/shared/ids';
 import pg from 'pg';
 import { giveNotice, endLease, insertDocument } from './exit.js';
 import { Client, signedUp, type TestApp } from './http.js';
-import { insertLease } from './leases.js';
+import { insertDepositAccount, insertLease } from './leases.js';
 import { createOrg, type Org } from './orgs.js';
-import { confirmedCreditPayment, insertReceipt, validateReceipt } from './payments.js';
+import { confirmedCreditPayment, insertReceipt, receiveDeposit, validateReceipt } from './payments.js';
 import { propertyWithUnit } from './properties.js';
 
 export interface Person {
@@ -40,6 +40,8 @@ export interface OrgWorld {
 	tLease?: string;
 	tPayment?: string;
 	tReceipt?: string;
+	/** Compte de caution de T (A seulement : 100 000 reçus pendant le bail). */
+	tDepositAccount?: string;
 	/** Contrat signé (scan) et pièce d'identité de T (B seulement). */
 	tSignedLease?: string;
 	tIdentity?: string;
@@ -183,7 +185,11 @@ export async function portalWorld(t: TestApp, owner: pg.Client, options: { links
 			const tPayment = await confirmedCreditPayment(c, org.id, tLease, org.director.userId);
 			const tReceipt = await insertReceipt(c, org.id, tPayment);
 			await validateReceipt(c, org.id, tReceipt);
+			let tDepositAccount: string | undefined;
 			if (tenantLeaseEnded) {
+				// Caution de 100 000 reçue pendant le bail (avant sa fin : la base n'ouvre plus de compte sur un bail terminé).
+				tDepositAccount = await insertDepositAccount(c, org.id, tLease, { agreed: 100_000 });
+				await receiveDeposit(c, org.id, tDepositAccount, 100_000);
 				await giveNotice(c, org.id, tLease, org.director.userId, { notifiedOn: '2026-01-15', exitOn: '2026-04-30' });
 				await endLease(c, tLease);
 			}
@@ -197,7 +203,8 @@ export async function portalWorld(t: TestApp, owner: pg.Client, options: { links
 				tTenant,
 				tLease,
 				tPayment,
-				tReceipt
+				tReceipt,
+				tDepositAccount
 			};
 			if (!tenantLeaseEnded) {
 				w.tSignedLease = await insertDocument(c, org.id, org.director.userId, { type: 'signed_lease_scan', leaseId: tLease });
