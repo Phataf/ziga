@@ -5,12 +5,12 @@
  * - Fiche du bail : le signalement du locataire (fait depuis son espace) se planifie puis se marque fait.
  * Données préparées par l'API ; les SMS sont lus dans le fichier des SMS de test.
  */
-import { readFileSync } from 'node:fs';
 import { expect, test, type APIRequestContext, type BrowserContextOptions } from '@playwright/test';
 import { monthDay, toIsoDate } from '@ziga/shared/dates';
 import { newId } from '@ziga/shared/ids';
 import { availableUnit, freshAgency, get, login, post, type Agency } from './agency';
-import { API_URL, expectNoHorizontalOverflow, lastCode, registerViaApi, signInWith, SMS_FILE, synced } from './support';
+import { lastInvitationToken } from './portals';
+import { API_URL, expectNoHorizontalOverflow, lastCode, registerViaApi, signInWith, synced } from './support';
 
 const phone = { viewport: { width: 360, height: 800 }, isMobile: true, hasTouch: true };
 const tablet = { viewport: { width: 820, height: 1180 }, isMobile: true, hasTouch: true };
@@ -21,17 +21,6 @@ const devices: [string, BrowserContextOptions][] = [
 	['Ordinateur (1440 × 900)', desktop]
 ];
 const [ty, tm] = toIsoDate().split('-').map(Number) as [number, number];
-
-/** Dernier lien d'invitation (`/lier/<jeton>`) envoyé par SMS à ce numéro. */
-function lastInvitationToken(to: string): string {
-	const lines = readFileSync(SMS_FILE, 'utf8').trim().split('\n').reverse();
-	for (const line of lines) {
-		const sms = JSON.parse(line) as { to: string; text: string };
-		const token = sms.to === to ? /\/lier\/([A-Za-z0-9_.-]+)/.exec(sms.text)?.[1] : undefined;
-		if (token) return token;
-	}
-	throw new Error(`Aucune invitation envoyée à ${to}`);
-}
 
 /** Locataire au numéro d'une personne inscrite, avec un bail en vigueur. */
 async function tenantWithLease(request: APIRequestContext, agency: Agency) {

@@ -41,7 +41,7 @@ test.describe('Téléphone : parcours complet', () => {
 		await expect(page.getByTestId('espaces-gestion')).toContainText('Vous n’êtes membre d’aucune organisation.');
 		await page.getByTestId('espace-owner').click();
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Mon patrimoine');
-		await expect(page.getByTestId('ecran-vide')).toBeVisible();
+		await expect(page.getByTestId('patrimoine-vide')).toBeVisible();
 
 		await page.goto('/espace');
 		await page.getByTestId('deconnexion').click();

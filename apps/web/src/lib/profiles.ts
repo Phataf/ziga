@@ -23,7 +23,7 @@ import {
 	ScrollText,
 	Settings,
 	ShieldCheck,
-	Stamp,
+	FolderOpen,
 	ToggleRight,
 	TrendingUp,
 	TriangleAlert,
@@ -186,7 +186,7 @@ export const profiles: Record<ProfileId, Profile> = {
 			item({ path: 'espace/proprietaire/revenus', label: n.income, icon: TrendingUp, section: s.myAssets, tab: true, lot: '10 ter' }),
 			item({ path: 'espace/proprietaire/releves', label: n.statements, icon: FileText, section: s.myAssets, tab: true, lot: '10 ter' }),
 			item({ path: 'espace/proprietaire/reversements', label: n.payouts, icon: HandCoins, section: s.myAssets, lot: '10 ter' }),
-			item({ path: 'espace/proprietaire/approbations', label: n.approvals, icon: Stamp, section: s.myAssets, lot: '10 ter' }),
+			item({ path: 'espace/proprietaire/documents', label: n.ownerDocuments, icon: FolderOpen, section: s.myAssets, lot: '10 ter' }),
 			plus('espace/proprietaire')
 		]
 	},
