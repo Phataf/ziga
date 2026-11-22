@@ -220,4 +220,92 @@ describe('espace du locataire (lot 10 ter, étape 2b-3)', () => {
 			404
 		);
 	});
+
+	it('décompte : un brouillon n’apparaît jamais ; proposé, il apparaît ; remis en brouillon, « en cours de correction » sans montants', async () => {
+		const fresh = await portalWorld(t, owner);
+		const id = await seedIn(owner, fresh.a.org.id, (c) =>
+			insertSettlement(c, fresh.a.org.id, fresh.a.tDepositAccount!, {
+				received: 100_000,
+				deductions: 0,
+				coveredByDeposit: 0,
+				refund: 100_000,
+				refundFromDeposit: 100_000,
+				outcome: 'refund'
+			})
+		);
+		const deposits = async () =>
+			(
+				await fresh.t.client.call<{ leaseId: string; settlement: Record<string, unknown> | null }[]>('GET', '/me/portal/tenant/deposits')
+			).body.find((d) => d.leaseId === fresh.a.tLease)!.settlement;
+		expect(await deposits()).toBeNull();
+		await seedIn(owner, fresh.a.org.id, (c) => setSettlementStatus(c, id, 'proposed'));
+		await flushCache();
+		expect(await deposits()).toMatchObject({ id, status: 'proposed', refund: 100_000 });
+		await seedIn(owner, fresh.a.org.id, (c) =>
+			c.query(`update deposit_settlements set status = 'draft', updated_at = now() where id = $1`, [id])
+		);
+		await flushCache();
+		const back = (await deposits())!;
+		expect(back).toEqual({ id, status: 'in_correction' });
+		expect(JSON.stringify(back)).not.toMatch(/100000|refund|lines/);
+	});
+
+	it('demande de préavis : une seule « demandée » à la fois par bail ; date de sortie prévue jamais dans le passé', async () => {
+		const fresh = await portalWorld(t, owner);
+		const ask = (plannedExitOn: string) =>
+			fresh.t.client.call('POST', '/me/portal/tenant/notice-requests', {
+				organizationId: fresh.b.org.id,
+				leaseId: fresh.b.tLease,
+				plannedExitOn,
+				reason: 'Mutation professionnelle à Bobo-Dioulasso.'
+			});
+		expect((await ask('2020-01-31')).body).toMatchObject({ code: 'NOTICE_DATE_PAST' });
+		expect((await ask('2099-03-31')).status).toBe(201);
+		expect((await ask('2099-04-30')).body).toMatchObject({ code: 'NOTICE_REQUEST_PENDING' });
+		const n = await seedIn(owner, fresh.b.org.id, (c) =>
+			c.query(`select count(*)::int as n from lease_notices where lease_id = $1`, [fresh.b.tLease])
+		);
+		expect(n.rows[0].n).toBe(1);
+	});
+
+	it('signalements : 10 par compte et par jour au plus (limite comme les demandes de liaison)', async () => {
+		const fresh = await portalWorld(t, owner);
+		const statuses: number[] = [];
+		for (let i = 0; i < 11; i += 1) {
+			statuses.push(
+				(
+					await fresh.t.client.call('POST', '/me/portal/tenant/requests', {
+						organizationId: fresh.b.org.id,
+						id: newId(),
+						leaseId: fresh.b.tLease,
+						title: `Panne ${i}`,
+						description: 'La lampe du couloir ne s’allume plus.'
+					})
+				).status
+			);
+		}
+		expect(statuses).toEqual([...Array(10).fill(201), 429]);
+	});
+
+	it('chaque téléchargement écrit sa ligne d’audit, même deux fois en moins de 30 secondes (document)', async () => {
+		for (let i = 0; i < 2; i += 1) {
+			expect(
+				(await w.t.client.call('POST', `/me/portal/documents/${w.b.org.id}/${w.b.tIdentity}/download`, { space: 'tenant' })).status
+			).toBe(200);
+		}
+		const r = await seedIn(owner, w.b.org.id, (c) =>
+			c.query(`select count(*)::int as n from audit_log where action = 'document.download' and object_id = $1 and subject_user_id = $2`, [
+				w.b.tIdentity,
+				w.t.userId
+			])
+		);
+		expect(r.rows[0].n).toBeGreaterThanOrEqual(2);
+	});
 });
+
+async function flushCache() {
+	const redis = testRedis();
+	await redis.connect();
+	await resetSharedRedisState(redis);
+	await redis.quit();
+}

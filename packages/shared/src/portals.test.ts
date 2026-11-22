@@ -96,4 +96,26 @@ describe('revenus de l’espace du propriétaire (lot 10 ter)', () => {
 		]);
 		expect(r.months.map((m) => m.month)).toEqual(['2026-11', '2025-10']);
 	});
+
+	it('dépense d’un bien sans unité : elle reste sur son bien ; seule la commission est répartie au prorata', () => {
+		const r = ownerIncome(
+			[
+				statement({
+					id: 's4',
+					collected: 80_000,
+					commission: 8_000,
+					expenses: -6_000,
+					net: 66_000,
+					unitTotals: [{ unitId: 'u1', total: 80_000 }],
+					expenseLines: [{ unitId: null, propertyId: 'pX', amount: -6_000 }]
+				})
+			],
+			new Map([['u1', 'p1']]),
+			'2026-11'
+		);
+		expect(r.properties).toEqual([
+			{ organizationId: A, propertyId: 'p1', collected: 80_000, net: 72_000, yieldPercent: 90 },
+			{ organizationId: A, propertyId: 'pX', collected: 0, net: -6_000, yieldPercent: null }
+		]);
+	});
 });
