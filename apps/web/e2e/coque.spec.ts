@@ -121,7 +121,7 @@ const cases: Case[] = [
 		account: 'person',
 		path: '/espace/proprietaire',
 		tabs: ['Patrimoine', 'Revenus', 'Relevés', 'Plus'],
-		menu: ['Mon patrimoine', 'Revenus', 'Relevés', 'Reversements', 'Approbations'],
+		menu: ['Mon patrimoine', 'Revenus', 'Relevés', 'Reversements', 'Contrats et documents'],
 		sections: ['Mon patrimoine']
 	},
 	{
