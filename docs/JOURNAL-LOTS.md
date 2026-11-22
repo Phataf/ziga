@@ -1369,7 +1369,7 @@ Prompt : `prompts/lot-10bis-sortie-locataire.md`.
 - La part non contestée affichée est la restitution proposée moins ce qui a déjà été restitué ; la plateforme n'arbitre pas le montant contesté.
 - Une photo arrivée après la signature n'est acceptée que si elle a été prise avant la dernière case cochée (heure de l'appareil, même confiance que l'heure d'une case cochée) ; jamais après un scan signé.
 
-## Lot 10 ter — Espaces propriétaire et locataire avec compte, regroupant toutes les organisations — en cours
+## Lot 10 ter — Espaces propriétaire et locataire avec compte, regroupant toutes les organisations — terminé
 
 Prompt : `prompts/lot-10ter-espaces-personnels.md`.
 
@@ -1556,3 +1556,46 @@ Critères d'acceptation :
 - **Tests** : `sortie.spec.ts` vérifie la page d'une sortie sans débordement sur téléphone (avant et après l'état des lieux, et vue par l'agent de terrain), et attend une page stable avant ses clics : après « terminer-edl », d'abord l'arrivée sur la page de la sortie, puis une seconde sans changement du DOM ni déplacement du bouton visé, du défilement ou de la largeur de la zone d'affichage (l'échec nomme ce qui change).
 - **CI** : traces des tests Playwright en échec et `apps/web/test-results` publiés 7 jours (artefact `playwright-test-results`).
 
+
+## Lot 11 — Import Excel — en cours
+
+Prompt : `prompts/lot-11-import-excel.md`.
+
+### Étape 0
+- CI de `main` verte sur la fusion de la PR 66 (exécution 144, commit `56aa015`).
+- Titre du lot 10 ter : « en cours » remplacé par « terminé » (tests et critères cochés, lot 11 lancé par le porteur le 22/11/2026).
+
+### Bibliothèque Excel (validée par le porteur, 22/11/2026)
+- **Lecture** : `read-excel-file` 9.3.20 (MIT, publiée le 19/11/2026). Dépendances : `fflate` 0.8.3 (MIT), `saxen` 11.2.0 (MIT), `worker-f` 0.1.25 (MIT), `unzipper-esm` 0.13.3 (MIT), qui tire `graceful-fs` 4.2.12 (BlueOak-1.0.0) et `node-int64` 0.4.0 (MIT).
+- **Écriture du modèle** : `write-excel-file` 4.1.1 (MIT, 08/06/2026), dépendance `fflate` ; listes déroulantes par `@onparallel/write-excel-file-data-validation` **1.0.2, version exacte figée** (MIT, 09/10/2026, petit éditeur ; aucune dépendance, `write-excel-file` en dépendance paire).
+- Le `.csv` n'est lu par aucune des deux : lecteur pur dans `packages/shared` (séparateur `;` ou `,`, guillemets, BOM, UTF-8 ou Windows-1252).
+- Écartées : ExcelJS 4.4.0 (dernière version stable du 19/10/2023, dépendances anciennes), SheetJS (version npm 0.18.5 du 24/03/2022 avec failles connues ; listes déroulantes réservées à l'offre payante).
+- **Essai jetable dans LibreOffice, avant l'installation** : modèle de trois onglets écrit avec deux listes déroulantes vers un onglet « Listes » caché (attribut `state="hidden"` posé par le crochet `xl/workbook.xml` de `write-excel-file`) ; LibreOffice l'ouvre, reconnaît les deux listes (`cell-content-is-in-list`) et garde l'onglet caché, y compris après un aller-retour `.ods` puis `.xlsx` ; le fichier enregistré par LibreOffice se relit. Une cellule formule est lue par sa **valeur en cache** (vide sans valeur), jamais la formule ; un texte qui commence par `=` reste un texte ; une date mise en forme est lue comme date, un numéro de série non mis en forme comme nombre.
+- **Constat pour l'étape 3** : `read-excel-file` décompresse en mémoire tous les fichiers `.xml` de l'archive, sans limite de taille. La taille **réelle** décompressée sera mesurée avant elle avec `node:zlib` (`maxOutputLength`), sans dépendance de plus.
+
+### Réponses du porteur au plan (22/11/2026)
+Plan validé, avec ces ajouts :
+1. **Fichier hostile** : lecture dans la tâche de fond seulement, jamais dans la requête HTTP ; limites de taille décompressée, de nombre d'onglets, de lignes et de cellules, de durée d'analyse ; valeurs seulement, jamais les formules ; test : une archive qui se décompresse démesurément est refusée proprement.
+2. **Rapport téléchargeable** : les cellules qui commencent par `=`, `+`, `-` ou `@` sont neutralisées (injection de formules à la réouverture dans Excel), avec un test.
+3. **Lignes en erreur** : une ligne en erreur est écartée, et ce qui en dépend l'est aussi, en cascade ; la prévisualisation le dit (« Ligne 14 de Baux écartée : l'unité B-01-A2 est en erreur »). La transaction par onglet ne sert qu'aux erreurs imprévues, à l'exécution.
+4. **Fichier libre sur une seule feuille** : validé, dans une étape à part (4b), après le parcours avec le modèle.
+
+Points du plan validés : regroupement en un seul mandat des biens d'un même propriétaire aux mêmes conditions ; état technique par défaut « prête » si un bail est importé, « à remettre en état » si l'unité est libre (motif « Import : état à vérifier ») ; quartiers jamais créés par l'import, une correction choisie une fois valant pour toutes les lignes de même orthographe ; signal « Une autre fiche porte ce numéro » et écran « Contrats à déposer » ; import en ligne seulement, expliqué à l'écran.
+
+### Réponses du porteur aux questions (22/11/2026)
+1. **Date de bascule** : une seule par import, choisie par l'organisation à l'envoi, le 1er du mois en cours par défaut, jamais dans le futur. Les échéances sont générées à partir d'elle ; le bail garde sa vraie date de début.
+2. **Solde d'ouverture** : exigible dès la date de bascule, compté dans les impayés ; relances selon les réglages habituels de l'organisation ; avant l'exécution, l'écran prévient « N baux ont un solde antérieur, ils apparaîtront dans les impayés ». Solde négatif (avance du locataire) : ligne refusée, « Saisissez 0 et notez l'avance sur la fiche du locataire ». Arriéré encaissé plus tard : au relevé du propriétaire avec la commission habituelle, comme tout loyer encaissé.
+3. **Bail ancien** : un bail à durée déterminée échu sans congé est importé à durée indéterminée, sa date de fin d'origine gardée pour information. Le loyer importé est le loyer actuel, sans historique des révisions.
+4. **Avance** : sans objet pour un bail commencé avant la bascule ; une colonne remplie est ignorée avec un avertissement.
+5. **Baux terminés** : ignorés, avec une ligne au rapport. Un bail signé pas encore commencé est importé comme réservé.
+6. **Caution ancienne** : option b, décision **D33** (`docs/DECISIONS.md`) : un mouvement « versement » sans encaissement, accepté par la base seulement pour une ligne d'import, daté du versement réel (à défaut, du début du bail), sans reçu, journalisé. Montant reçu inférieur au convenu : les deux sont importés, la différence apparaît comme complément à recevoir. Le seuil de deux mois se calcule sur le loyer actuel. Phrase de la règle 14 de `CLAUDE.md` proposée au porteur, non appliquée avant sa validation.
+7. **Annulation sous 24 heures** : accord. Un bail né de l'import et sans encaissement peut être annulé (« import annulé »), ses échéances abandonnées ; fiches archivées, mandats révoqués avec un motif ; caution annulée par la contre-écriture `received_cancelled`.
+8. **Même numéro, noms différents** : importé avec un avertissement (colocataires, membres d'une même famille). Même numéro et même nom : doublon, la fiche existante est proposée.
+
+### Découpage
+- Étape 1 : fonctions pures et définition du modèle (`packages/shared`), registre fictif dans les fixtures.
+- Étape 2 : migration 0025 (`import_jobs`, identifiant de l'import sur les lignes créées, échéance « Solde antérieur », versement d'import D33, annulation d'un bail importé), tests d'accès croisé.
+- Étape 3 : API et tâches de fond (lecture sous limites, analyse, prévisualisation, exécution, rapport, annulation, quotas).
+- Étape 4a : écrans du parcours avec le modèle, « Contrats à déposer », signal de fiche en double, Playwright.
+- Étape 4b : fichier libre sur une seule feuille.
+- Étape 5 : critères, journal, `.env.example`. Le critère « registre réel d'une agence pilote » sera marqué « à faire avec la première agence pilote ».
