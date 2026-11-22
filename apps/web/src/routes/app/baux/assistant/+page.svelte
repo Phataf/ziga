@@ -227,6 +227,13 @@
 		utilities = util ? String(util.agreed_amount) : '';
 		holder = (sec?.holder as DepositHolder) ?? proposedHolder;
 	});
+	// Le détenteur proposé dépend du mandat, lu dans la base locale peut-être après l'entrée dans l'étape : tant que la
+	// personne n'a pas choisi et qu'aucune caution n'est enregistrée, il suit la proposition.
+	let holderChosen = $state(false);
+	$effect(() => {
+		if (step !== 3 || holderChosen || accountRows.some((a) => a.type === 'security_deposit')) return;
+		holder = proposedHolder;
+	});
 
 	async function db() {
 		return sync.db ?? (await sync.start());
@@ -715,7 +722,7 @@
 							</div>
 							<div class={field}>
 								<label for="detenteur" class={labelClass}>{t.holder}</label>
-								<select id="detenteur" bind:value={holder} class={select}>
+								<select id="detenteur" bind:value={holder} onchange={() => (holderChosen = true)} class={select}>
 									{#each holders as h (h)}<option value={h}>{t.holders[h]}</option>{/each}
 								</select>
 								<p class="text-sm text-muted-foreground">{t.holderProposed}</p>

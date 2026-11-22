@@ -1356,6 +1356,10 @@ Prompt : `prompts/lot-10bis-sortie-locataire.md`.
 - [x] Une unité ne réapparaît jamais comme disponible tant que le gestionnaire ne l'a pas déclarée prête (base, tâche du jour, liste « À remettre en état », `sortie.spec.ts`).
 - [x] Journal des lots mis à jour, avec les réponses du porteur aux questions ouvertes.
 
+### Écarts hors de l'étape (courses relevées par la suite Playwright complète)
+- Dépenses (étape 0 de ce lot) : le formulaire ouvert avant l'arrivée des biens de la base locale gardait un bien vide, et la dépense était refusée sur l'appareil ; le premier bien est maintenant choisi dès qu'il arrive.
+- Assistant de bail (lot 08) : le détenteur de la caution proposé était fixé une seule fois à l'entrée de l'étape 3, avant parfois la lecture du mandat ; il suit maintenant la proposition tant que la personne n'a pas choisi et qu'aucune caution n'est enregistrée.
+
 ### Dette technique et questions ouvertes (étape 4)
 - Le catalogue de l'organisation (`inspection_catalog_entries`) n'a pas encore d'écran d'édition : l'état des lieux propose les pièces et éléments par défaut de `packages/shared` (hors périmètre du prompt de l'étape).
 - La part non contestée affichée est la restitution proposée moins ce qui a déjà été restitué ; la plateforme n'arbitre pas le montant contesté.
