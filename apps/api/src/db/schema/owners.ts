@@ -10,6 +10,8 @@ const tstz = (name: string) => timestamp(name, { withTimezone: true, mode: 'date
 export const owners = pgTable('owners', {
 	id: uuid('id').primaryKey(),
 	organizationId: uuid('organization_id').notNull(),
+	/** Lot 11 : import Excel qui a créé la ligne (posé par la base depuis le contexte de la transaction, jamais écrit). */
+	importJobId: uuid('import_job_id'),
 	type: text('type', { enum: ['person', 'company', 'group'] }).notNull(),
 	name: text('name').notNull(),
 	phone: text('phone').notNull(),
@@ -47,6 +49,8 @@ const mandateTerms = {
 export const mandates = pgTable('mandates', {
 	id: uuid('id').primaryKey(),
 	organizationId: uuid('organization_id').notNull(),
+	/** Lot 11 : import Excel qui a créé la ligne (posé par la base depuis le contexte de la transaction, jamais écrit). */
+	importJobId: uuid('import_job_id'),
 	ownerId: uuid('owner_id').notNull(),
 	type: text('type', { enum: ['rental_management', 'letting', 'sale', 'self_managed', 'other'] }).notNull(),
 	...mandateTerms,
@@ -61,6 +65,8 @@ export const mandates = pgTable('mandates', {
 export const mandateVersions = pgTable('mandate_versions', {
 	id: uuid('id').primaryKey(),
 	organizationId: uuid('organization_id').notNull(),
+	/** Lot 11 : import Excel qui a créé la ligne (posé par la base depuis le contexte de la transaction, jamais écrit). */
+	importJobId: uuid('import_job_id'),
 	mandateId: uuid('mandate_id').notNull(),
 	version: integer('version').notNull(),
 	...mandateTerms,
@@ -72,6 +78,8 @@ export const mandateVersions = pgTable('mandate_versions', {
 export const mandateScopes = pgTable('mandate_scopes', {
 	id: uuid('id').primaryKey(),
 	organizationId: uuid('organization_id').notNull(),
+	/** Lot 11 : import Excel qui a créé la ligne (posé par la base depuis le contexte de la transaction, jamais écrit). */
+	importJobId: uuid('import_job_id'),
 	mandateId: uuid('mandate_id').notNull(),
 	propertyId: uuid('property_id').notNull(),
 	unitId: uuid('unit_id'),

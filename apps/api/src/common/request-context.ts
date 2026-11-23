@@ -9,8 +9,11 @@ import type { OrganizationRole, OrganizationType } from '@ziga/shared/permission
 import { AppError } from './app-error.js';
 import type { Tx } from '../db/database.js';
 
-/** `portal` (lot 10 ter) : lecture ou demande d'une personne depuis son espace, écrite dans l'organisation concernée. */
-export type AuditOrigin = 'app' | 'api' | 'admin' | 'sync' | 'job' | 'portal';
+/**
+ * `portal` (lot 10 ter) : lecture ou demande d'une personne depuis son espace, écrite dans l'organisation concernée.
+ * `import` (lot 11) : écriture de l'exécution d'un import Excel, au nom de la personne qui l'a lancé.
+ */
+export type AuditOrigin = 'app' | 'api' | 'admin' | 'sync' | 'job' | 'portal' | 'import';
 
 export interface OrganizationScope {
 	organizationId: string;

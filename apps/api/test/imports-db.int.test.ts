@@ -84,7 +84,8 @@ describe('import_jobs : cloisonnement et règles (règle 1, prompt §4)', () => 
 				 values ($1, $2, $3, 'uploaded', 'x.xlsx', 'xlsx', 10, 'k', $4)`,
 				[newId(), b.id, a.director.userId, firstOfMonth()]
 			);
-			expect(other.code).toBe('42501');
+			// Depuis A, la base ne voit pas les membres de B : la création est refusée avant même la RLS.
+			expect(other.message).toContain('IMPORT_RUNNER');
 		});
 	});
 
@@ -322,7 +323,7 @@ describe('échéance « Solde antérieur » (prompt §3, réponse 2)', () => {
 			const twice = await sqlError(
 				api,
 				`insert into rent_dues (id, organization_id, lease_id, kind, period_start, period_end, due_on, rent, charges, amount_due, status, lease_version)
-				 values ($1, $2, $3, 'opening_balance', '2021-04-01', $4::date - 1, $4, 1000, 0, 1000, 'overdue', 1)`,
+				 values ($1, $2, $3, 'opening_balance', '2021-03-01', $4::date - 1, $4, 1000, 0, 1000, 'overdue', 1)`,
 				[newId(), a.id, lease, firstOfMonth()]
 			);
 			expect(twice.code).toBe('23505');

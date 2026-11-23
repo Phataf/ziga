@@ -33,6 +33,7 @@ import {
 	type ImportSheetKey
 } from './import-template.js';
 import { makeIssue, readImportRows, type ImportIssue, type ImportRow } from './import-rows.js';
+import { LEGAL_LEASE_DEFAULTS } from './leases.js';
 import { formatFcfa } from './money.js';
 import type { OrganizationType } from './permissions.js';
 import { anniversaryStart, endOnFromDuration, type RentBillingMode } from './rent-schedule.js';
@@ -60,6 +61,11 @@ export interface ImportContext {
 		places?: Record<string, string | null>;
 		/** Clé d'un rapprochement (`MatchProposal.key`) → fiche existante, ou null : nouvelle fiche. */
 		matches?: Record<string, string | null>;
+		/**
+		 * Cautions dont le montant reçu est vide (inconnu, réponse du porteur après l'étape 1) : un seul choix pour toutes,
+		 * « versée en entier » (`full`) ou « à compléter » (`to_complete`). Sans ce choix, l'exécution est refusée.
+		 */
+		depositReceived?: 'full' | 'to_complete';
 	};
 }
 
@@ -182,8 +188,11 @@ export interface PlannedDeposit {
 	leaseRef: string;
 	type: 'security_deposit' | 'utilities_guarantee';
 	agreedAmount: number;
-	receivedAmount: number;
+	/** Null : montant reçu vide, en attente du choix unique (`ImportContext.choices.depositReceived`). */
+	receivedAmount: number | null;
 	receivedOn: string | null;
+	/** Complément attendu (montant convenu moins montant reçu) ; null tant que le montant reçu est inconnu. */
+	outstanding: number | null;
 	holder: 'organization' | 'owner';
 }
 
@@ -221,8 +230,18 @@ export interface MatchProposal {
 	chosen: 'existing' | 'new';
 }
 
+/** Raison qui refuse l'exécution tant qu'elle n'est pas levée (choix à faire, date de bascule refusée). */
+export interface ImportBlocker {
+	code: 'DEPOSIT_RECEIVED_UNKNOWN' | 'SWITCH_DATE_FUTURE' | 'SWITCH_DATE_FIRST_OF_MONTH';
+	message: string;
+}
+
 export interface ImportPlan {
 	issues: ImportIssue[];
+	/** Vide : l'exécution est possible. */
+	blockers: ImportBlocker[];
+	/** Lignes qui attendent un choix de la personne (Cautions : montant reçu vide). */
+	pending: { depositsWithoutReceived: number[] };
 	owners: PlannedOwner[];
 	mandates: PlannedMandate[];
 	properties: PlannedProperty[];
@@ -263,6 +282,26 @@ export function editDistance(a: string, b: string): number {
  * Première échéance d'un bail repris (réponse 1) : la date de bascule, ou, en facturation à la date anniversaire, la
  * première date anniversaire du bail à la bascule ou après.
  */
+/** Date de bascule proposée : le 1er du mois en cours (réponse 1). */
+export function defaultSwitchOn(today: string): string {
+	return `${today.slice(0, 7)}-01`;
+}
+
+/**
+ * Date de bascule refusée (réponses 1 et 3) : jamais dans le futur ; le 1er d'un mois quand l'organisation facture le
+ * premier mois en entier (sinon la première échéance couvrirait de nouveau ce que le solde d'ouverture couvre déjà).
+ */
+export function switchDateIssue(switchOn: string, today: string, mode: RentBillingMode): ImportBlocker | null {
+	if (switchOn > today) return { code: 'SWITCH_DATE_FUTURE', message: 'La date de bascule ne peut pas être dans le futur.' };
+	if (mode === 'calendar_full_first' && !switchOn.endsWith('-01')) {
+		return {
+			code: 'SWITCH_DATE_FIRST_OF_MONTH',
+			message: 'Votre organisation facture le premier mois en entier : la date de bascule est le 1er d’un mois.'
+		};
+	}
+	return null;
+}
+
 export function importedDuesStartOn(startsOn: string, switchOn: string, mode: RentBillingMode): string {
 	if (mode !== 'anniversary') return switchOn;
 	const [sy, sm] = startsOn.split('-').map(Number) as [number, number];
@@ -323,6 +362,16 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 	const because = (what: string, feminine: boolean, dep: Tracked<unknown>, depSheet: ImportSheetKey) =>
 		`écartée : ${what} ${dep.status === 'error' ? 'est en erreur' : feminine ? 'est écartée' : 'est écarté'} (${sheetName(depSheet)}, ligne ${dep.row}).`;
 	const v = <T>(row: ImportRow, key: string) => row.values[key] as T | null;
+	const shortNotice = (row: ImportRow, key: string, months: number, legal: number) =>
+		issue(
+			'leases',
+			row.row,
+			key,
+			'warning',
+			'NOTICE_SHORTER_THAN_LAW',
+			`${months} mois, plus court que le préavis prévu par la loi pour ce bail (${legal} mois) ; vérifiez le contrat.`,
+			row.cells[key] ?? null
+		);
 	const choice = (key: string) => ctx.choices?.matches?.[key];
 
 	// ------------------------------------------------ propriétaires
@@ -919,15 +968,22 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 		}
 		const dueDay = v<number>(row, 'dueDay');
 		if (dueDay !== null) terms.dueDay = dueDay;
+		// Une seule colonne par partie : la même durée en durée déterminée et indéterminée (réponse du porteur). Plus
+		// courte que la loi pour ce bail (selon son type, après le passage d'un bail échu à durée indéterminée) : signalée.
+		const fixedTerm = terms.endsOn !== null;
 		const noticeTenant = v<number>(row, 'noticeTenantMonths');
 		if (noticeTenant !== null) {
 			terms.noticeTenantFixedTermMonths = noticeTenant;
 			terms.noticeTenantOpenEndedMonths = noticeTenant;
+			const legal = fixedTerm ? LEGAL_LEASE_DEFAULTS.noticeTenantFixedTermMonths : LEGAL_LEASE_DEFAULTS.noticeTenantOpenEndedMonths;
+			if (noticeTenant < legal) shortNotice(row, 'noticeTenantMonths', noticeTenant, legal);
 		}
 		const noticeLessor = v<number>(row, 'noticeLessorMonths');
 		if (noticeLessor !== null) {
 			terms.noticeLessorFixedTermMonths = noticeLessor;
 			terms.noticeLessorOpenEndedMonths = noticeLessor;
+			const legal = fixedTerm ? LEGAL_LEASE_DEFAULTS.noticeLessorFixedTermMonths : LEGAL_LEASE_DEFAULTS.noticeLessorOpenEndedMonths;
+			if (noticeLessor < legal) shortNotice(row, 'noticeLessorMonths', noticeLessor, legal);
 		}
 		const renewal = v<'open_ended' | 'same_duration'>(row, 'renewalMode');
 		if (renewal && !terms.renewalMode) terms.renewalMode = renewal;
@@ -995,6 +1051,7 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 	// ------------------------------------------------ cautions
 	const deposits: PlannedDeposit[] = [];
 	const depositSeen = new Map<string, number>();
+	const depositsWithoutReceived: number[] = [];
 	let depositsAboveCap = 0;
 	for (const row of read('deposits')) {
 		const lease = leaseOf('deposits', row);
@@ -1011,14 +1068,19 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 			continue;
 		}
 		const agreed = v<number>(row, 'agreedAmount')!;
-		const received = v<number>(row, 'receivedAmount') ?? agreed;
-		if (received > agreed) error('deposits', row, 'receivedAmount', `le montant reçu dépasse le montant convenu (${formatFcfa(agreed)}).`);
+		const written = v<number>(row, 'receivedAmount');
+		const choice = ctx.choices?.depositReceived;
+		const received = written ?? (choice === 'full' ? agreed : choice === 'to_complete' ? 0 : null);
+		if (received !== null && received > agreed) {
+			error('deposits', row, 'receivedAmount', `le montant reçu dépasse le montant convenu (${formatFcfa(agreed)}).`);
+		}
 		let receivedOn = v<string>(row, 'receivedOn');
 		if (receivedOn && receivedOn > ctx.today) error('deposits', row, 'receivedOn', 'la date du versement est dans le futur.');
 		if (agreed === 0) error('deposits', row, 'agreedAmount', 'indiquez le montant convenu.');
 		if (rowHasError('deposits', row.row)) continue;
 		depositSeen.set(seenKey, row.row);
-		if (received === 0) receivedOn = null;
+		if (written === null) depositsWithoutReceived.push(row.row);
+		if (received === null || received === 0) receivedOn = null;
 		else receivedOn = receivedOn ?? (lease.terms.startsOn <= ctx.today ? lease.terms.startsOn : ctx.today);
 		const unit = units.get(refKey(lease.unitRef))!;
 		const holder: PlannedDeposit['holder'] = agency
@@ -1043,6 +1105,7 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 			agreedAmount: agreed,
 			receivedAmount: received,
 			receivedOn,
+			outstanding: received === null ? null : agreed - received,
 			holder
 		});
 	}
@@ -1111,6 +1174,8 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 		openingBalances,
 		places: [...places.values()],
 		matches,
+		blockers: importBlockers(ctx, depositsWithoutReceived),
+		pending: { depositsWithoutReceived },
 		summary: {
 			newUnits: plannedUnits.length,
 			leases: plannedLeases.length,
@@ -1118,4 +1183,22 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 			depositsAboveCap
 		}
 	};
+}
+
+function importBlockers(ctx: ImportContext, depositsWithoutReceived: readonly number[]): ImportBlocker[] {
+	const blockers: ImportBlocker[] = [];
+	const switchIssue = switchDateIssue(ctx.switchOn, ctx.today, ctx.billingMode);
+	if (switchIssue) blockers.push(switchIssue);
+	if (depositsWithoutReceived.length && !ctx.choices?.depositReceived) {
+		const n = depositsWithoutReceived.length;
+		const lines =
+			n === 1
+				? `ligne ${depositsWithoutReceived[0]}`
+				: `lignes ${depositsWithoutReceived.slice(0, -1).join(', ')} et ${depositsWithoutReceived[n - 1]}`;
+		blockers.push({
+			code: 'DEPOSIT_RECEIVED_UNKNOWN',
+			message: `${n} ${n === 1 ? 'caution n’a' : 'cautions n’ont'} pas de montant reçu (Cautions, ${lines}) : choisissez pour toutes « versée en entier » ou « à compléter ».`
+		});
+	}
+	return blockers;
 }

@@ -106,13 +106,15 @@ export const auditLog = pgTable('audit_log', {
 	actorUserId: uuid('actor_user_id'),
 	actorRole: text('actor_role'),
 	organizationId: uuid('organization_id'),
+	/** Lot 11 : import Excel qui a créé la ligne (posé par la base depuis le contexte de la transaction, jamais écrit). */
+	importJobId: uuid('import_job_id'),
 	subjectUserId: uuid('subject_user_id'),
 	action: text('action').notNull(),
 	objectType: text('object_type').notNull(),
 	objectId: uuid('object_id'),
 	before: jsonb('before'),
 	after: jsonb('after'),
-	origin: text('origin', { enum: ['app', 'api', 'admin', 'sync', 'job', 'migration', 'portal'] }).notNull(),
+	origin: text('origin', { enum: ['app', 'api', 'admin', 'sync', 'job', 'migration', 'portal', 'import'] }).notNull(),
 	ip: inet('ip'),
 	requestId: text('request_id')
 });
