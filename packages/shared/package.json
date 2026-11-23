@@ -143,6 +143,34 @@
 		"./dashboard": {
 			"types": "./dist/dashboard.d.ts",
 			"default": "./dist/dashboard.js"
+		},
+		"./import-values": {
+			"types": "./dist/import-values.d.ts",
+			"default": "./dist/import-values.js"
+		},
+		"./import-csv": {
+			"types": "./dist/import-csv.d.ts",
+			"default": "./dist/import-csv.js"
+		},
+		"./import-template": {
+			"types": "./dist/import-template.d.ts",
+			"default": "./dist/import-template.js"
+		},
+		"./import-rows": {
+			"types": "./dist/import-rows.d.ts",
+			"default": "./dist/import-rows.js"
+		},
+		"./import-plan": {
+			"types": "./dist/import-plan.d.ts",
+			"default": "./dist/import-plan.js"
+		},
+		"./import-report": {
+			"types": "./dist/import-report.d.ts",
+			"default": "./dist/import-report.js"
+		},
+		"./same-phone": {
+			"types": "./dist/same-phone.d.ts",
+			"default": "./dist/same-phone.js"
 		}
 	},
 	"files": [
