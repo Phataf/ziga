@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { newId } from './ids.js';
+import { formatFcfa } from './money.js';
 import { isAvailable, OCCUPANCIES, RECORD_STATUSES, TECHNICAL_STATUSES } from './properties.js';
 import {
 	ARCHIVE_REASONS,
@@ -20,6 +21,7 @@ import {
 	listingPath,
 	listingPublicPoint,
 	manualLeadSchema,
+	moveInTotal,
 	MIN_LISTING_PHOTOS,
 	newListingReference,
 	parseListingSegment,
@@ -63,7 +65,9 @@ function rentCtx(
 		target: {
 			operation: 'rent',
 			unit: { recordStatus: 'active', technicalStatus: 'ready', occupancy: 'free', ...unit },
-			propertyLocated: true
+			propertyLocated: true,
+			depositAmount: 150_000,
+			advanceMonths: 3
 		},
 		organization: agency,
 		publicationEnabled: true,
@@ -199,6 +203,55 @@ describe('publicationBlockers : vente (D34)', () => {
 		expect(saleOccupancy(['reserved'])).toBe('occupied');
 		expect(saleOccupancy(['free', 'free'])).toBe('vacant');
 		expect(saleOccupancy([])).toBe('vacant');
+	});
+});
+
+describe('conditions d’entrée d’une location (Q7, Q16)', () => {
+	it('caution et avance renseignées (0 accepté) : exigées pour publier, toujours affichées', () => {
+		const ctx = (depositAmount: number | null, advanceMonths: number | null) => {
+			const c = rentCtx();
+			if (c.target.operation === 'rent') Object.assign(c.target, { depositAmount, advanceMonths });
+			return c;
+		};
+		expect(publicationBlockers(ctx(0, 0))).toEqual([]);
+		expect(publicationBlockers(ctx(null, 3))).toEqual(['MOVE_IN_TERMS_MISSING']);
+		expect(publicationBlockers(ctx(150_000, null))).toEqual(['MOVE_IN_TERMS_MISSING']);
+	});
+
+	it('avec une avance : caution + avance × (loyer + charges)', () => {
+		const t = moveInTotal({ rent: 75_000, charges: 5_000, depositAmount: 150_000, advanceMonths: 3 });
+		expect(t).toEqual({
+			monthly: 80_000,
+			depositAmount: 150_000,
+			advanceMonths: 3,
+			advanceAmount: 240_000,
+			firstMonthIncluded: false,
+			total: 390_000
+		});
+	});
+
+	it('sans avance : caution + un mois (loyer + charges), « dont le premier mois »', () => {
+		const t = moveInTotal({ rent: 75_000, charges: 5_000, depositAmount: 150_000, advanceMonths: 0 });
+		expect(t).toEqual({
+			monthly: 80_000,
+			depositAmount: 150_000,
+			advanceMonths: 0,
+			advanceAmount: 0,
+			firstMonthIncluded: true,
+			total: 230_000
+		});
+	});
+
+	it('sans charges', () => {
+		expect(moveInTotal({ rent: 50_000, charges: null, depositAmount: 100_000, advanceMonths: 2 }).total).toBe(200_000);
+		expect(moveInTotal({ rent: 50_000, charges: 0, depositAmount: 100_000, advanceMonths: 0 }).total).toBe(150_000);
+	});
+
+	it('total au format FCFA, entier (règle 2)', () => {
+		const { total } = moveInTotal({ rent: 75_000, charges: 5_000, depositAmount: 150_000, advanceMonths: 3 });
+		expect(formatFcfa(total)).toBe('390\u202f000\u00a0FCFA');
+		expect(() => moveInTotal({ rent: 75_000.5, charges: 0, depositAmount: 0, advanceMonths: 1 })).toThrow();
+		expect(() => moveInTotal({ rent: 75_000, charges: 0, depositAmount: 0, advanceMonths: 1.5 })).toThrow();
 	});
 });
 
