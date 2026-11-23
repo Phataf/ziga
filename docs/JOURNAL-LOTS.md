@@ -1791,10 +1791,16 @@ Ajouts du porteur :
 - **Prospects** : statuts (on avance, on rouvre un prospect clos, jamais de retour à « nouveau »), formulaire de contact (champ piège, 3 secondes au moins, jeton de 6 heures au plus), doublon sur 24 heures, prospect noté à la main (WhatsApp ou appel seulement).
 - Tests : 70 dans `listings.test.ts`, écrits d'abord en rouge. `pnpm lint` et `pnpm typecheck` verts ; `pnpm test` vert sauf les 17 tests qui exigent Gotenberg et SeaweedFS, absents de cette session (sans Docker) et lancés par la CI.
 
+### Réponse du porteur après l'étape 1 (23/11/2026)
+- **Total à réunir pour entrer** (Q16) : avec une avance, caution + avance × (loyer + charges) ; sans avance, caution + un mois (loyer + charges), libellé « dont le premier mois » (le premier loyer tombe quelques jours après l'entrée). Mention sous le total : « Hors premier mois incomplet éventuel et hors frais d'agence ». Aucun champ pour les frais d'entrée ; question ajoutée pour le juriste au lot 13 (`docs/DECISIONS.md`) et à la liste d'après le lot 14 (`docs/LOTS.md`).
+- **Conséquence** : caution et avance (0 accepté) sont exigées pour publier une location, puisqu'elles sont toujours affichées (`MOVE_IN_TERMS_MISSING`). Effacées plus tard sur l'unité, elles ne suspendent pas l'annonce : la vitrine affiche « À demander » sans total.
+- « Libre le » au lendemain de la fin du bail, et annonce suspendue à la sortie puis republiée à la main une fois l'unité prête : confirmés.
+- `moveInTotal` (`listings.ts`), tests écrits d'abord en rouge : avec avance, sans avance, sans charges, format FCFA du total.
+
 ### Notes pour le lot 13
 - **Tuiles** : rendu des tuiles de Ouagadougou et Saaba (zooms 13 à 17, environ 15 000 tuiles, environ 300 Mo) à partir de l'extrait OSM (ODbL), hors du dépôt, puis dépôt sur notre stockage derrière Cloudflare. **Jamais** par téléchargement en masse depuis `tile.openstreetmap.org`, que sa politique d'usage interdit. Mention « © les contributeurs d'OpenStreetMap » conservée.
 - **Purge du CDN** : implémentation Cloudflare de `CdnPurger` (lot 12 : `console` et `memory`).
-- **Juriste** : durée de conservation des coordonnées des prospects.
+- **Juriste** : durée de conservation des coordonnées des prospects ; frais d'agence à la charge du locataire à l'entrée.
 
 ### Découpage
 - Étape 1 : règles pures (`packages/shared/src/listings.ts`) : conditions de publication et ce qui manque, machine d'états de l'annonce, quatrième dimension de l'unité, référence et adresse, message WhatsApp, textes Open Graph, filtres de recherche, prospects (schémas, statuts, champ piège).

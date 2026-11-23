@@ -20,7 +20,7 @@ import { z } from 'zod';
 import { addDays, daysBetween, isIsoDate } from './dates.js';
 import { publicLocation, type OptionalPoint, type PlaceOfProperty } from './geography.js';
 import { idSchema, isUuid } from './ids.js';
-import { fcfaSchema, type Fcfa } from './money.js';
+import { assertFcfa, fcfaSchema, type Fcfa } from './money.js';
 import type { MandateType } from './owners.js';
 import { base64Url } from './payments.js';
 import { phoneSchema, waNumber } from './phone.js';
@@ -98,6 +98,9 @@ export interface RentTarget {
 	unit: { recordStatus: RecordStatus; technicalStatus: TechnicalStatus; occupancy: Occupancy };
 	/** Le bien a sa commune et son quartier (la vitrine les affiche). */
 	propertyLocated: boolean;
+	/** Caution et avance de l'unité : toujours affichées sur une location (Q7) ; 0 veut dire « aucune ». */
+	depositAmount: Fcfa | null;
+	advanceMonths: number | null;
 }
 
 export interface SaleTarget {
@@ -129,7 +132,8 @@ export const PUBLICATION_BLOCKERS = [
 	'UNIT_OCCUPIED',
 	'UNIT_NOT_READY',
 	'NOT_ENOUGH_PHOTOS',
-	'PRICE_MISSING'
+	'PRICE_MISSING',
+	'MOVE_IN_TERMS_MISSING'
 ] as const;
 export type PublicationBlocker = (typeof PUBLICATION_BLOCKERS)[number];
 
@@ -156,6 +160,7 @@ export function publicationBlockers(ctx: PublicationContext): PublicationBlocker
 	}
 	if (ctx.photoCount < MIN_LISTING_PHOTOS) out.add('NOT_ENOUGH_PHOTOS');
 	if (ctx.price === null || ctx.price < 1) out.add('PRICE_MISSING');
+	if (t.operation === 'rent' && (t.depositAmount === null || t.advanceMonths === null)) out.add('MOVE_IN_TERMS_MISSING');
 	return PUBLICATION_BLOCKERS.filter((b) => out.has(b));
 }
 
@@ -171,6 +176,34 @@ export function publicationWarnings(input: {
 		return ['PRICE_DIFFERS_FROM_RENT'];
 	}
 	return [];
+}
+
+export interface MoveInTotal {
+	/** Loyer + charges d'un mois. */
+	monthly: Fcfa;
+	depositAmount: Fcfa;
+	advanceMonths: number;
+	advanceAmount: Fcfa;
+	/** Sans avance, le premier mois est compté (« dont le premier mois ») : il tombe quelques jours après l'entrée. */
+	firstMonthIncluded: boolean;
+	total: Fcfa;
+}
+
+/**
+ * Total à réunir pour entrer dans le logement (réponse du porteur, Q16) : caution + avance × (loyer + charges) ; sans
+ * avance, caution + un mois (loyer + charges). Hors premier mois incomplet éventuel et hors frais d'agence, que le
+ * registre ne connaît pas (mention affichée sous le total).
+ */
+export function moveInTotal(input: { rent: Fcfa; charges: Fcfa | null; depositAmount: Fcfa; advanceMonths: number }): MoveInTotal {
+	const rent = assertFcfa(input.rent);
+	const charges = assertFcfa(input.charges ?? 0);
+	const depositAmount = assertFcfa(input.depositAmount);
+	if (!Number.isInteger(input.advanceMonths) || input.advanceMonths < 0) throw new RangeError(`Avance invalide : ${input.advanceMonths}`);
+	const monthly = assertFcfa(rent + charges);
+	const advanceAmount = assertFcfa(monthly * input.advanceMonths);
+	const firstMonthIncluded = input.advanceMonths === 0;
+	const total = assertFcfa(depositAmount + (firstMonthIncluded ? monthly : advanceAmount));
+	return { monthly, depositAmount, advanceMonths: input.advanceMonths, advanceAmount, firstMonthIncluded, total };
 }
 
 /** Disponibilité affichée d'une location : maintenant, ou « Libre le » lendemain de la fin du bail en préavis. */
@@ -233,6 +266,8 @@ const BLOCKER_SUSPENSION: Partial<Record<PublicationBlocker, SuspensionReason>> 
 	SALE_RESERVED_TO_VERIFIED_AGENCIES: 'organization_not_eligible',
 	NOT_ENOUGH_PHOTOS: 'photos_missing'
 	// PUBLICATION_DISABLED : l'interrupteur masque sans suspendre. PRICE_MISSING : le prix ne change qu'à la main.
+	// MOVE_IN_TERMS_MISSING : la caution ou l'avance effacée sur l'unité ne suspend pas ; la vitrine affiche alors
+	// « À demander » sans total, et la modification de l'unité la signale.
 };
 
 /** Cause de suspension la plus forte parmi ce qui manque, ou rien. */

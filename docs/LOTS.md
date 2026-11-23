@@ -41,6 +41,7 @@ Ces lots ne sont pas détaillés volontairement : leur contenu dépendra du pilo
 - Visites 360° (`media.virtual_tour_360`).
 - Extension à Bobo-Dioulasso.
 - Approbation d’une dépense par le propriétaire avant engagement (circuit d’accord de `docs/UX.md` §10).
+- Frais d'agence à la charge du locataire à l'entrée : encadrés par la loi ? À afficher sur l'annonce ? (question ouverte pour le juriste au lot 13 ; aucun champ au lot 12.)
 
 ## Règle de priorité pendant le pilote
 
