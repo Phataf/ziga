@@ -261,3 +261,78 @@ test('en ligne seulement : hors connexion, l’envoi est impossible et l’écra
 	await ctx.setOffline(false);
 	await ctx.close();
 });
+
+// ---------------------------------------------------------------- étape 4b : fichier libre sur une seule feuille
+
+const FREE = join(import.meta.dirname, '../../api/test/fixtures/imports/registre-libre.xlsx');
+
+/** Colonne du fichier vers un champ : glisser sur ordinateur, liste sur téléphone et tablette. */
+async function mapColumn(page: Page, target: string, header: string, drag: boolean) {
+	const zone = page.locator(`[data-testid="cible"][data-cible="${target}"]`);
+	if (drag) {
+		await page.getByTestId('colonne-fichier').filter({ hasText: header }).first().dragTo(zone);
+	} else {
+		await zone.getByTestId('cible-colonne').selectOption({ label: header });
+	}
+	await expect(zone).toHaveAttribute('data-colonne', /\d+/);
+}
+
+async function setConstant(page: Page, target: string, value: string, choice: boolean) {
+	const field = page.locator(`[data-testid="cible"][data-cible="${target}"]`).getByTestId('valeur-commune');
+	if (choice) await field.selectOption({ label: value });
+	else await field.fill(value);
+}
+
+for (const [label, options, drag] of [
+	['téléphone', phone, false],
+	['ordinateur', desktop, true]
+] as const) {
+	test(`${label} : fichier libre sur une seule feuille, colonnes mises en correspondance, import`, async ({ browser, request }) => {
+		test.setTimeout(240_000);
+		const agency = await freshAgency(request, `Agence registre libre ${label}`);
+		const { ctx, page } = await open(browser, options, agency.director, '/app/import');
+		await page.getByTestId('fichier-import').setInputFiles(FREE);
+		await page.getByTestId('envoyer-import').click();
+		await expect(page.getByTestId('statut-import')).toHaveAttribute('data-statut', 'analyzed', { timeout: 60_000 });
+
+		// Aucun onglet du modèle : l'écran propose de faire correspondre les colonnes de la feuille.
+		const mapping = page.getByTestId('correspondance');
+		await expect(mapping).toBeVisible();
+		await expect(page.getByTestId('blocage').first()).toBeVisible();
+		await expect(page.getByTestId('lancer-import')).toBeDisabled();
+		await expect(mapping.getByTestId('colonne-fichier')).toHaveCount(12);
+		// Suggestions d'après les en-têtes ; « Contact » reste à choisir (propriétaire ou locataire ?).
+		await expect(page.locator('[data-testid="cible"][data-cible="tenants.fullName"]')).toHaveAttribute('data-colonne', '7');
+		await expect(page.locator('[data-testid="cible"][data-cible="tenants.phone"]')).not.toHaveAttribute('data-colonne', /\d/);
+		await expectNoHorizontalOverflow(page, `${label} : correspondance`);
+
+		await mapColumn(page, 'properties.name', 'Maison', drag);
+		await mapColumn(page, 'owners.phone', 'Tél propriétaire', drag);
+		await mapColumn(page, 'tenants.phone', 'Contact', drag);
+		await setConstant(page, 'owners.type', 'Personne', true);
+		await setConstant(page, 'properties.type', 'Cour commune', true);
+		await setConstant(page, 'properties.commune', 'Ouagadougou', false);
+		await setConstant(page, 'properties.mandateType', 'Gestion locative', true);
+		await setConstant(page, 'properties.commissionRate', '10', false);
+		await setConstant(page, 'properties.mandateStartsOn', '2020-01-01', false);
+		await setConstant(page, 'units.type', 'Chambre-salon', true);
+		await expect(page.getByTestId('champ-manquant')).toHaveCount(0);
+		await page.getByTestId('appliquer-correspondance').click();
+		await expect(page.getByTestId('statut-import')).toHaveAttribute('data-statut', 'analyzed', { timeout: 60_000 });
+
+		// Prévisualisation des sept groupes ; le message cite la feuille et la colonne du fichier.
+		await expect(page.getByTestId('onglet-apercu')).toHaveCount(7);
+		const errors = page.getByTestId('ligne-import').filter({ has: page.locator('[data-severite="error"]') });
+		await expect(errors).toHaveCount(1);
+		await expect(errors.first()).toContainText('Ligne 7 de Feuil1, colonne Contact');
+		await page.getByTestId('caution-full').check();
+		await page.getByTestId('appliquer-choix').click();
+		await expect(page.getByTestId('statut-import')).toHaveAttribute('data-statut', 'analyzed', { timeout: 60_000 });
+		await expect(page.getByTestId('blocage')).toHaveCount(0);
+		await expectNoHorizontalOverflow(page, `${label} : fichier libre prêt`);
+		await page.getByTestId('lancer-import').click();
+		await expect(page.getByTestId('statut-import')).toHaveAttribute('data-statut', 'completed', { timeout: 120_000 });
+		await expect(page.getByTestId('rapport-onglet').filter({ hasText: 'Baux' })).toContainText('6 créé(s)');
+		await ctx.close();
+	});
+}

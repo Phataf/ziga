@@ -40,6 +40,7 @@ import {
 	UNITS,
 	type FixtureSheet
 } from './fixtures/imports/registre-fictif.js';
+import { FREE_EXPECTED, FREE_MAPPING, FREE_SHEET } from './fixtures/imports/registre-libre.js';
 import { deflatedSpaces, minimalXlsx } from './fixtures/imports/zip.js';
 import { startApp, type TestApp } from './http.js';
 import { analyze, call, execute, firstOfThisMonth, refusal, settled, uploadImport, workbook } from './imports-api.js';
@@ -517,6 +518,54 @@ describe('annulation d’un bien importé sans quartier (étape 4a)', () => {
 		expect(cancelled.status).toBe('cancelled');
 		expect(await createdBy(a.id, job.id, 'properties', `and record_status = 'archived' and neighborhood_id is null`)).toBe(1);
 		expect(await createdBy(a.id, job.id, 'leases', `and status = 'cancelled'`)).toBe(2);
+	}, 120_000);
+});
+
+describe('fichier libre sur une seule feuille (étape 4b)', () => {
+	it('aucun onglet reconnu : la prévisualisation montre les colonnes de la feuille et propose une correspondance ; import impossible', async () => {
+		const a = await createOrg(t, 'agency', 'Agence du fichier libre');
+		const up = await uploadImport(a.director, local, await workbook([FREE_SHEET]));
+		const job = await analyze(a.director, up.id);
+		expect(job.status).toBe('analyzed');
+		expect(job.preview!.sheets).toEqual([]);
+		expect(job.preview!.fileSheets).toHaveLength(1);
+		expect(job.preview!.fileSheets[0]).toMatchObject({ name: 'Feuil1', headers: FREE_SHEET.headers, rows: FREE_SHEET.rows.length });
+		expect(job.preview!.fileSheets[0]!.suggested).toMatchObject({ 'tenants.fullName': 7, 'leases.startsOn': 9 });
+		expect(job.preview!.blockers.map((b) => b.code)).toContain('NOTHING_TO_IMPORT');
+		expect(await refusal(a.director, 'POST', `/imports/${up.id}/execute`)).toMatchObject({ status: 409, code: 'IMPORT_BLOCKED' });
+	});
+
+	it('correspondance incomplète : le champ obligatoire manquant est nommé, l’exécution refusée', async () => {
+		const a = await createOrg(t, 'agency', 'Agence de la correspondance incomplète');
+		const up = await uploadImport(a.director, local, await workbook([FREE_SHEET]));
+		await analyze(a.director, up.id);
+		const constants: Record<string, string> = { ...FREE_MAPPING.constants };
+		delete constants['properties.type'];
+		const job = await analyze(a.director, up.id, { mapping: { single: { ...FREE_MAPPING, constants } } });
+		const blocker = job.preview!.blockers.find((b) => b.code === 'MAPPING_INCOMPLETE')!;
+		expect(blocker.message).toContain('Type de bien');
+		expect(await refusal(a.director, 'POST', `/imports/${up.id}/execute`)).toMatchObject({ status: 409, code: 'IMPORT_BLOCKED' });
+	});
+
+	it('correspondance faite : répartition dans les sept groupes, répétitions réunies, messages sur la feuille du fichier, import', async () => {
+		const a = await createOrg(t, 'agency', 'Agence du registre libre');
+		const up = await uploadImport(a.director, local, await workbook([FREE_SHEET]));
+		await analyze(a.director, up.id);
+		const analyzed = await analyze(a.director, up.id, { mapping: { single: FREE_MAPPING }, choices: { depositReceived: 'full' } });
+		expect(analyzed.mapping).toEqual({ single: FREE_MAPPING });
+		expect(analyzed.preview!.blockers).toEqual([]);
+		expect(analyzed.preview!.sheets.map((s) => s.key)).toEqual(['owners', 'properties', 'units', 'tenants', 'leases', 'deposits', 'opening_balances']);
+		const phone = analyzed.preview!.issues.find((i) => i.severity === 'error')!;
+		expect(phone.message).toMatch(/^Ligne 7 de Feuil1, colonne Contact : /);
+		const job = await execute(a.director, up.id);
+		expect(job.status, JSON.stringify(job.report)).toBe('completed');
+		expect(await createdBy(a.id, job.id, 'owners')).toBe(FREE_EXPECTED.owners);
+		expect(await createdBy(a.id, job.id, 'properties')).toBe(FREE_EXPECTED.properties);
+		expect(await createdBy(a.id, job.id, 'units')).toBe(FREE_EXPECTED.units);
+		expect(await createdBy(a.id, job.id, 'tenants')).toBe(FREE_EXPECTED.tenants);
+		expect(await createdBy(a.id, job.id, 'leases', `and status = 'active'`)).toBe(FREE_EXPECTED.leases);
+		expect(await createdBy(a.id, job.id, 'rent_dues', `and kind = 'opening_balance'`)).toBe(FREE_EXPECTED.openingBalances);
+		expect(await createdBy(a.id, job.id, 'mandates')).toBe(3);
 	}, 120_000);
 });
 
