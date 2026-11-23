@@ -1557,7 +1557,7 @@ Critères d'acceptation :
 - **CI** : traces des tests Playwright en échec et `apps/web/test-results` publiés 7 jours (artefact `playwright-test-results`).
 
 
-## Lot 11 — Import Excel — en cours
+## Lot 11 — Import Excel — terminé
 
 Prompt : `prompts/lot-11-import-excel.md`.
 
@@ -1731,3 +1731,60 @@ Questions ouvertes et dette :
 1. **Valeurs communes du registre sur une seule feuille** : la liste de l'étape 4b est validée, avec une exclusion. Le solde d'ouverture, le montant reçu de la caution et l'avance ne prennent **jamais** de valeur commune, même s'ils sont des nombres : un même arriéré, une même caution reçue ou une même avance sur toutes les lignes serait une erreur silencieuse. Fait dans `import-single-sheet.ts` (`NEVER_CONSTANT`) : ces champs n'offrent pas de valeur commune à l'écran, et une valeur commune envoyée quand même à l'API pour eux (ou pour tout champ qui n'en accepte pas) est ignorée, à l'import comme dans le calcul des champs manquants. Test écrit d'abord en rouge (`import-single-sheet.test.ts`).
 2. **Limite de temps de la CI** : job Playwright porté de 20 à 30 minutes (`.github/workflows/ci.yml`).
 - Le lot 12 sera fait dans une nouvelle session.
+
+## Lot 12 — Vitrine publique, annonces et prospects — en cours
+
+Prompt : `prompts/lot-12-vitrine-annonces.md`.
+
+### Étape 0
+- CI de `main` verte sur la fusion de la PR 73 (exécution 159, commit `c72cf2e`).
+- Titre du lot 11 : « en cours » remplacé par « terminé » (lot 12 lancé par le porteur le 23/11/2026) ; le critère du registre réel reste à cocher avec la première agence pilote.
+- Décision **D34** ajoutée à `docs/DECISIONS.md` (vente : exception à la règle 7, réservée aux agences vérifiées) ; phrase de la règle 7 de `CLAUDE.md` proposée au porteur, non appliquée avant sa validation.
+- Exception à `docs/UX.md` §3 écrite dans `docs/UX.md` : la vitrine sans JavaScript est un seul arbre mis en page par CSS.
+- Question ajoutée aux questions ouvertes de `docs/DECISIONS.md` : durée de conservation des coordonnées des prospects (juriste, lot 13).
+
+### Constats avant le plan
+- **Vente** : les mandats du lot 06 la couvrent déjà. Type `sale` avec `can_publish`, portée « bien entier » (`mandate_scopes.unit_id` vide) ; le bien porte `operation` (`rent`, `sale`, `both`) et ses documents fonciers déclarés. Aucun type de mandat ajouté.
+- Permissions `listing.publish` (direction, gestion) et `lead.manage` (direction, gestion, agent de terrain), et les quatre clés d'interrupteurs du lot, existent depuis les lots 03 et 04.
+
+### Plan validé et réponses du porteur (23/11/2026)
+Règles métier :
+1. **Vente** :
+   - seules les **agences vérifiées** publient une vente, avec un mandat `sale` en vigueur, `can_publish`, sur une portée « bien entier ». Un bailleur particulier ou une agence non vérifiée ne publie que des locations ; motif dans la liste de ce qui manque : « La vente est réservée aux agences vérifiées » ;
+   - un bien dont des unités sont louées peut être mis en vente, affiché « Vendu occupé », sans aucun détail sur les baux ni les locataires ;
+   - exception à la règle 7 (unité disponible) : décision D34.
+2. **Suspension** : une annonce suspendue (« Loué », « Indisponible ») est retirée automatiquement au bout de 30 jours. Si l'unité redevient disponible, la republication se fait à la main. Seul le retour de l'interrupteur `listings.publication` rétablit automatiquement les annonces.
+3. **`pending_review`** : les quelques secondes de préparation des photos et de l'image Open Graph, après la demande de publication.
+4. **Bailleur particulier** : « Proposé directement par le propriétaire », sans nom ni page agence. Son numéro n'est affiché (Appeler, WhatsApp) **qu'avec son accord** : case à cocher à sa première publication, « Mon numéro sera visible sur l'annonce », journalisée et modifiable. Sans accord, formulaire de contact seul.
+5. **Prospects** : l'agent de terrain ne voit que les prospects qui lui sont affectés ; le profil lecture n'en voit aucun. Aucune durée d'effacement pour l'instant (question pour le juriste au lot 13).
+6. **Emplacement exact** : le point, oui ; le repère (« derrière la pharmacie ») jamais.
+7. **Prix et conditions** : prix prérempli avec le loyer de l'unité, modifiable, avertissement si les deux diffèrent. Les charges, la caution et l'avance sont **toujours** affichées sur une annonce de location, avec le total à réunir pour entrer dans le logement.
+
+Choix techniques :
+8. **Profil « 3G »** : celui de Lighthouse mobile (aller-retour 150 ms, 1,6 Mbit/s en réception, 750 kbit/s en envoi, processeur ralenti 4 fois). Le profil « Fast 3G » de DevTools (aller-retour 562,5 ms, 1,44 Mbit/s) n'est pas retenu : sur une connexion neuve, résolution du nom, connexion TCP et poignée de main TLS coûtent déjà environ trois allers-retours, soit 1,7 seconde avant le premier octet du HTML ; 2,5 secondes seraient inatteignables pour tout site HTTPS, quel que soit le poids de la page.
+9. **Organisation** : `public_slug` et `public_presentation`, modifiables par le directeur. Les mots réservés des routes (`app`, `espace`, `admin`, `annonce`…) sont refusés ; un changement d'adresse redirige l'ancienne en 301.
+10. **`showcase_listings`** (projection publique) lisible par tous. Un test compare la liste de ses colonnes à une liste autorisée écrite dans le test : toute nouvelle colonne doit y être ajoutée exprès.
+11. **Vitrine sans JavaScript** : un seul arbre mis en page par CSS ; exception à `docs/UX.md` §3, écrite dans ce document et limitée à la vitrine.
+12. **`lighthouse` 13.6.0** (Apache-2.0) en dépendance de développement, dans un job CI séparé.
+13. **Publication en ligne seulement**, comme les contrats.
+14. **Police à empattement** : Source Serif 4 (OFL-1.1), une graisse, caractères latins, woff2 versionné avec sa licence.
+15. **Tuiles de la carte** : tuiles pré-rendues sur notre stockage en production (principe validé).
+- Carte de saisie du point GPS (dette du lot 07) : hors périmètre.
+
+Ajouts du porteur :
+- **Annonce suspendue ou retirée (410)** : la page dit « Ce logement n'est plus disponible » (ou « Loué »), avec un lien vers les autres annonces de l'organisation et vers la recherche. Un lien partagé sur WhatsApp ne finit jamais sur une page vide.
+- **Formulaire de contact** : sous le bouton, « Vos coordonnées seront transmises à <organisation> pour répondre à votre demande. »
+- **Bouton WhatsApp** : ne crée aucun prospect au simple clic ; un échange WhatsApp devient un prospect seulement s'il est noté à la main.
+
+### Notes pour le lot 13
+- **Tuiles** : rendu des tuiles de Ouagadougou et Saaba (zooms 13 à 17, environ 15 000 tuiles, environ 300 Mo) à partir de l'extrait OSM (ODbL), hors du dépôt, puis dépôt sur notre stockage derrière Cloudflare. **Jamais** par téléchargement en masse depuis `tile.openstreetmap.org`, que sa politique d'usage interdit. Mention « © les contributeurs d'OpenStreetMap » conservée.
+- **Purge du CDN** : implémentation Cloudflare de `CdnPurger` (lot 12 : `console` et `memory`).
+- **Juriste** : durée de conservation des coordonnées des prospects.
+
+### Découpage
+- Étape 1 : règles pures (`packages/shared/src/listings.ts`) : conditions de publication et ce qui manque, machine d'états de l'annonce, quatrième dimension de l'unité, référence et adresse, message WhatsApp, textes Open Graph, filtres de recherche, prospects (schémas, statuts, champ piège).
+- Étape 2 : migration 0028 (`listings`, `listing_photos`, `leads`, `showcase_listings`, colonnes publiques de l'organisation), streams, schéma local, tests SQL d'accès croisé et des colonnes de la projection.
+- Étape 3 : API (publication, crochets de disponibilité, tâche de nuit, purge, image Open Graph, cache Redis, routes publiques et limites de débit, prospects et synchronisation).
+- Étape 4a : vitrine (accueil, résultats, annonce, agence, 410, maintenance, plan du site), Playwright sur trois appareils, données privées, Open Graph, poids, 3G, Lighthouse.
+- Étape 4b : écrans de l'application (Publier, aperçu, annonces, prospects, notification), Playwright.
+- Étape 5 : critères, journal, `.env.example`.

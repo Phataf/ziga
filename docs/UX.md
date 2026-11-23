@@ -71,6 +71,8 @@ Conteneurs : `page` (32 rem sur téléphone, pleine largeur sur tablette, 80 rem
 
 **Règle d'implémentation** : une forme différente selon l'appareil s'affiche avec `{#if device.kind === …}` (store `device`), pas en masquant l'autre version en CSS. Un seul arbre dans la page : plus léger, et lisible par les lecteurs d'écran et les tests. Le CSS responsive (`md:`, `xl:`) sert aux ajustements de mise en page, pas à doubler un composant.
 
+**Exception : la vitrine sans JavaScript** (lot 12, validée par le porteur le 23/11/2026). Les pages publiques de la vitrine sont rendues par le serveur sans JavaScript (`csr = false`) : le serveur ne connaît pas la largeur de l'écran, et le store `device` n'existe pas. Chaque page y est **un seul arbre**, mis en page par CSS : le carrousel de photos du téléphone devient une mosaïque à partir de `md:` (mêmes éléments, défilement par crans puis grille) ; la barre WhatsApp et Appeler fixée en bas devient la carte de contact collante ; la feuille de filtres (`<details>`) devient la colonne de filtres toujours visible à `xl:`. Aucun composant n'est écrit deux fois ni masqué en double. L'exception ne vaut que pour la vitrine sans JavaScript ; l'application, les espaces personnels et le back-office suivent la règle ci-dessus.
+
 ---
 
 ## 4. Transformations de composants
