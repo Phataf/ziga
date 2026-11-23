@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { newId } from './ids.js';
+import { isAvailable, OCCUPANCIES, RECORD_STATUSES, TECHNICAL_STATUSES } from './properties.js';
 import {
 	ARCHIVE_REASONS,
 	canTransitionLead,
@@ -54,7 +55,10 @@ const agency = { type: 'agency' as const, verificationStatus: 'verified' as cons
 const rentMandate = { type: 'rental_management' as const, canPublish: true, wholeProperty: false };
 const saleMandate = { type: 'sale' as const, canPublish: true, wholeProperty: true };
 
-function rentCtx(over: Partial<PublicationContext> = {}, unit: Partial<{ recordStatus: string; technicalStatus: string; occupancy: string }> = {}) {
+function rentCtx(
+	over: Partial<PublicationContext> = {},
+	unit: Partial<{ recordStatus: string; technicalStatus: string; occupancy: string }> = {}
+) {
 	return {
 		target: {
 			operation: 'rent',
@@ -106,13 +110,23 @@ describe('publicationBlockers : location (règle 7)', () => {
 	});
 
 	it('plusieurs conditions manquantes : toutes listées, dans un ordre stable', () => {
-		expect(publicationBlockers(rentCtx({ publicationEnabled: false, mandates: [], photoCount: 0, price: null }, { occupancy: 'occupied' }))).toEqual([
-			'PUBLICATION_DISABLED',
-			'NO_PUBLISHING_MANDATE',
-			'UNIT_OCCUPIED',
-			'NOT_ENOUGH_PHOTOS',
-			'PRICE_MISSING'
-		]);
+		expect(
+			publicationBlockers(rentCtx({ publicationEnabled: false, mandates: [], photoCount: 0, price: null }, { occupancy: 'occupied' }))
+		).toEqual(['PUBLICATION_DISABLED', 'NO_PUBLISHING_MANDATE', 'UNIT_OCCUPIED', 'NOT_ENOUGH_PHOTOS', 'PRICE_MISSING']);
+	});
+
+	it('unité : bloquée exactement quand isAvailable dit non (règle 13, 48 combinaisons)', () => {
+		const unitBlockers = ['UNIT_NOT_ACTIVE', 'UNIT_OCCUPIED', 'UNIT_NOT_READY'];
+		for (const recordStatus of RECORD_STATUSES)
+			for (const occupancy of OCCUPANCIES)
+				for (const technicalStatus of TECHNICAL_STATUSES) {
+					const blocked = publicationBlockers(rentCtx({}, { recordStatus, occupancy, technicalStatus })).some((b) =>
+						unitBlockers.includes(b)
+					);
+					expect(blocked, `${recordStatus}/${occupancy}/${technicalStatus}`).toBe(
+						!isAvailable({ recordStatus, occupancy, technicalStatus })
+					);
+				}
 	});
 
 	it('unité en préavis : publiable', () => {
@@ -125,7 +139,9 @@ describe('publicationBlockers : location (règle 7)', () => {
 			expect(publicationBlockers(rentCtx({ mandates: [{ type, canPublish: true, wholeProperty: true }] }))).toEqual([]);
 		}
 		for (const type of ['sale', 'other'] as const) {
-			expect(publicationBlockers(rentCtx({ mandates: [{ type, canPublish: true, wholeProperty: true }] }))).toEqual(['NO_PUBLISHING_MANDATE']);
+			expect(publicationBlockers(rentCtx({ mandates: [{ type, canPublish: true, wholeProperty: true }] }))).toEqual([
+				'NO_PUBLISHING_MANDATE'
+			]);
 		}
 		expect(publicationBlockers(rentCtx({ mandates: [{ ...rentMandate, canPublish: false }] }))).toEqual(['NO_PUBLISHING_MANDATE']);
 	});
@@ -133,7 +149,10 @@ describe('publicationBlockers : location (règle 7)', () => {
 	it('un bailleur particulier publie ses locations', () => {
 		expect(
 			publicationBlockers(
-				rentCtx({ organization: { type: 'landlord', verificationStatus: 'pending' }, mandates: [{ type: 'self_managed', canPublish: true, wholeProperty: true }] })
+				rentCtx({
+					organization: { type: 'landlord', verificationStatus: 'pending' },
+					mandates: [{ type: 'self_managed', canPublish: true, wholeProperty: true }]
+				})
 			)
 		).toEqual([]);
 	});
@@ -146,9 +165,14 @@ describe('publicationBlockers : vente (D34)', () => {
 	});
 
 	it('réservée aux agences vérifiées : bailleur particulier et agence non vérifiée refusés', () => {
-		const landlord = saleCtx({ organization: { type: 'landlord', verificationStatus: 'verified' }, mandates: [{ type: 'self_managed', canPublish: true, wholeProperty: true }] });
+		const landlord = saleCtx({
+			organization: { type: 'landlord', verificationStatus: 'verified' },
+			mandates: [{ type: 'self_managed', canPublish: true, wholeProperty: true }]
+		});
 		expect(publicationBlockers(landlord)).toContain('SALE_RESERVED_TO_VERIFIED_AGENCIES');
-		expect(publicationBlockers(saleCtx({ organization: { type: 'agency', verificationStatus: 'pending' } }))).toEqual(['SALE_RESERVED_TO_VERIFIED_AGENCIES']);
+		expect(publicationBlockers(saleCtx({ organization: { type: 'agency', verificationStatus: 'pending' } }))).toEqual([
+			'SALE_RESERVED_TO_VERIFIED_AGENCIES'
+		]);
 		expect(publicationBlockers(saleCtx({ organization: { type: 'agency', verificationStatus: 'suspended' } }))).toEqual([
 			'SALE_RESERVED_TO_VERIFIED_AGENCIES'
 		]);
@@ -282,7 +306,13 @@ describe('reconcileListing : l’annonce suit l’unité', () => {
 	});
 
 	it('plusieurs causes : « Loué » l’emporte', () => {
-		expect(reconcileListing(published, rentCtx({ mandates: [], photoCount: 0 }, { occupancy: 'occupied', technicalStatus: 'under_works' }), today)).toEqual({
+		expect(
+			reconcileListing(
+				published,
+				rentCtx({ mandates: [], photoCount: 0 }, { occupancy: 'occupied', technicalStatus: 'under_works' }),
+				today
+			)
+		).toEqual({
 			kind: 'suspend',
 			reason: 'unit_rented'
 		});
@@ -300,16 +330,29 @@ describe('reconcileListing : l’annonce suit l’unité', () => {
 		expect(SUSPENSION_RETENTION_DAYS).toBe(30);
 		expect(reconcileListing(suspended, rentCtx(), '2026-11-23')).toEqual({ kind: 'none' });
 		expect(reconcileListing(suspended, rentCtx(), '2026-11-24')).toEqual({ kind: 'archive', reason: 'suspension_expired' });
-		expect(reconcileListing(suspended, rentCtx({}, { occupancy: 'occupied' }), '2026-12-30')).toEqual({ kind: 'archive', reason: 'suspension_expired' });
+		expect(reconcileListing(suspended, rentCtx({}, { occupancy: 'occupied' }), '2026-12-30')).toEqual({
+			kind: 'archive',
+			reason: 'suspension_expired'
+		});
 	});
 
 	it('brouillon et annonce retirée : rien', () => {
-		expect(reconcileListing({ visibility: 'internal', suspendedOn: null }, rentCtx({}, { occupancy: 'occupied' }), today)).toEqual({ kind: 'none' });
-		expect(reconcileListing({ visibility: 'archived', suspendedOn: null }, rentCtx({}, { occupancy: 'occupied' }), today)).toEqual({ kind: 'none' });
+		expect(reconcileListing({ visibility: 'internal', suspendedOn: null }, rentCtx({}, { occupancy: 'occupied' }), today)).toEqual({
+			kind: 'none'
+		});
+		expect(reconcileListing({ visibility: 'archived', suspendedOn: null }, rentCtx({}, { occupancy: 'occupied' }), today)).toEqual({
+			kind: 'none'
+		});
 	});
 
 	it('listes fermées', () => {
-		expect([...SUSPENSION_REASONS]).toEqual(['unit_rented', 'unit_unavailable', 'mandate_ended', 'organization_not_eligible', 'photos_missing']);
+		expect([...SUSPENSION_REASONS]).toEqual([
+			'unit_rented',
+			'unit_unavailable',
+			'mandate_ended',
+			'organization_not_eligible',
+			'photos_missing'
+		]);
 		expect([...ARCHIVE_REASONS]).toEqual(['withdrawn', 'suspension_expired']);
 	});
 });
@@ -383,7 +426,10 @@ describe('référence et adresse de l’annonce', () => {
 	it('adresse : titre puis référence ; la référence suffit à retrouver l’annonce', () => {
 		const path = listingPath('Appartement 2 chambres, Tampouy', 'ZG-7K4M2P');
 		expect(path).toBe('/annonce/appartement-2-chambres-tampouy-zg-7k4m2p');
-		expect(parseListingSegment('appartement-2-chambres-tampouy-zg-7k4m2p')).toEqual({ reference: 'ZG-7K4M2P', slug: 'appartement-2-chambres-tampouy' });
+		expect(parseListingSegment('appartement-2-chambres-tampouy-zg-7k4m2p')).toEqual({
+			reference: 'ZG-7K4M2P',
+			slug: 'appartement-2-chambres-tampouy'
+		});
 		// Titre changé : l'ancienne adresse retrouve l'annonce par sa référence (redirection 301 vers la nouvelle).
 		expect(parseListingSegment('ancien-titre-zg-7k4m2p')?.reference).toBe('ZG-7K4M2P');
 		expect(parseListingSegment('zg-7k4m2p')).toEqual({ reference: 'ZG-7K4M2P', slug: '' });
@@ -403,7 +449,18 @@ describe('adresse publique de l’organisation (Q9)', () => {
 		}
 	});
 	it('mots réservés des routes refusés', () => {
-		for (const word of ['app', 'espace', 'admin', 'annonce', 'agence', 'louer', 'acheter', 'api', 'media', 'sitemap.xml'.replace('.xml', '')]) {
+		for (const word of [
+			'app',
+			'espace',
+			'admin',
+			'annonce',
+			'agence',
+			'louer',
+			'acheter',
+			'api',
+			'media',
+			'sitemap.xml'.replace('.xml', '')
+		]) {
 			expect(RESERVED_PUBLIC_SLUGS).toContain(word);
 			expect(publicSlugSchema.safeParse(word).success, word).toBe(false);
 		}
@@ -433,12 +490,25 @@ describe('parseShowcaseQuery : paramètres tolérants, forme canonique', () => {
 	const neighborhood = newId();
 
 	it('location : commune, quartier, type, budget, chambres, meublé', () => {
-		const { filters } = parseShowcaseQuery('rent', q(`commune=ouagadougou&quartier=${neighborhood}&type=apartment&budget=75%20000&chambres=2&meuble=1`));
-		expect(filters).toEqual({ communeId: 'ouagadougou', neighborhoodId: neighborhood, type: 'apartment', budgetMax: 75_000, bedroomsMin: 2, furnished: true });
+		const { filters } = parseShowcaseQuery(
+			'rent',
+			q(`commune=ouagadougou&quartier=${neighborhood}&type=apartment&budget=75%20000&chambres=2&meuble=1`)
+		);
+		expect(filters).toEqual({
+			communeId: 'ouagadougou',
+			neighborhoodId: neighborhood,
+			type: 'apartment',
+			budgetMax: 75_000,
+			bedroomsMin: 2,
+			furnished: true
+		});
 	});
 
 	it('valeurs invalides ignorées, jamais une erreur', () => {
-		const { filters, cursor } = parseShowcaseQuery('rent', q('commune=Ouaga%20!&quartier=abc&type=castle&budget=-5&chambres=99&meuble=peut-etre&apres=xxx'));
+		const { filters, cursor } = parseShowcaseQuery(
+			'rent',
+			q('commune=Ouaga%20!&quartier=abc&type=castle&budget=-5&chambres=99&meuble=peut-etre&apres=xxx')
+		);
 		expect(filters).toEqual({});
 		expect(cursor).toBeNull();
 	});
@@ -510,11 +580,30 @@ describe('cache des pages publiques', () => {
 describe('schémas des annonces', () => {
 	const photos = [newId(), newId(), newId()];
 	it('location : une unité ; vente : un bien', () => {
-		const rent = createListingSchema.parse({ id: newId(), operation: 'rent', unitId: newId(), title: 'Studio meublé à Tampouy', price: 50_000, photoIds: photos });
+		const rent = createListingSchema.parse({
+			id: newId(),
+			operation: 'rent',
+			unitId: newId(),
+			title: 'Studio meublé à Tampouy',
+			price: 50_000,
+			photoIds: photos
+		});
 		expect(rent.locationPrecision).toBe('neighborhood');
 		expect(rent.description).toBeNull();
-		expect(createListingSchema.safeParse({ id: newId(), operation: 'rent', propertyId: newId(), title: 'Studio meublé', price: 1, photoIds: [] }).success).toBe(false);
-		expect(createListingSchema.safeParse({ id: newId(), operation: 'sale', propertyId: newId(), title: 'Villa à vendre', price: 1, photoIds: [] }).success).toBe(true);
+		expect(
+			createListingSchema.safeParse({ id: newId(), operation: 'rent', propertyId: newId(), title: 'Studio meublé', price: 1, photoIds: [] })
+				.success
+		).toBe(false);
+		expect(
+			createListingSchema.safeParse({
+				id: newId(),
+				operation: 'sale',
+				propertyId: newId(),
+				title: 'Villa à vendre',
+				price: 1,
+				photoIds: []
+			}).success
+		).toBe(true);
 	});
 	it('prix entier en FCFA, au moins 1', () => {
 		const base = { id: newId(), operation: 'rent', unitId: newId(), title: 'Studio meublé', photoIds: [] };
@@ -555,7 +644,13 @@ describe('prospects : statuts', () => {
 describe('formulaire de contact', () => {
 	const ok = { name: '  Awa Ouédraogo ', phone: '70 12 34 56', message: ' Je souhaite visiter. ', website: '', token: '1732350000000.abc' };
 	it('nom, téléphone en E.164, message facultatif', () => {
-		expect(contactFormSchema.parse(ok)).toEqual({ name: 'Awa Ouédraogo', phone: '+22670123456', message: 'Je souhaite visiter.', website: '', token: '1732350000000.abc' });
+		expect(contactFormSchema.parse(ok)).toEqual({
+			name: 'Awa Ouédraogo',
+			phone: '+22670123456',
+			message: 'Je souhaite visiter.',
+			website: '',
+			token: '1732350000000.abc'
+		});
 		expect(contactFormSchema.parse({ ...ok, message: '' }).message).toBeNull();
 		expect(contactFormSchema.safeParse({ ...ok, phone: '123' }).success).toBe(false);
 		expect(contactFormSchema.safeParse({ ...ok, name: 'A' }).success).toBe(false);
