@@ -1751,7 +1751,7 @@ Prompt : `prompts/lot-12-vitrine-annonces.md`.
 Règles métier :
 1. **Vente** :
    - seules les **agences vérifiées** publient une vente, avec un mandat `sale` en vigueur, `can_publish`, sur une portée « bien entier ». Un bailleur particulier ou une agence non vérifiée ne publie que des locations ; motif dans la liste de ce qui manque : « La vente est réservée aux agences vérifiées » ;
-   - un bien dont des unités sont louées peut être mis en vente, affiché « Vendu occupé », sans aucun détail sur les baux ni les locataires ;
+   - un bien dont des unités sont louées peut être mis en vente, affiché « Vente occupée », sans aucun détail sur les baux ni les locataires ;
    - exception à la règle 7 (unité disponible) : décision D34.
 2. **Suspension** : une annonce suspendue (« Loué », « Indisponible ») est retirée automatiquement au bout de 30 jours. Si l'unité redevient disponible, la republication se fait à la main. Seul le retour de l'interrupteur `listings.publication` rétablit automatiquement les annonces.
 3. **`pending_review`** : les quelques secondes de préparation des photos et de l'image Open Graph, après la demande de publication.
@@ -1775,6 +1775,9 @@ Ajouts du porteur :
 - **Annonce suspendue ou retirée (410)** : la page dit « Ce logement n'est plus disponible » (ou « Loué »), avec un lien vers les autres annonces de l'organisation et vers la recherche. Un lien partagé sur WhatsApp ne finit jamais sur une page vide.
 - **Formulaire de contact** : sous le bouton, « Vos coordonnées seront transmises à <organisation> pour répondre à votre demande. »
 - **Bouton WhatsApp** : ne crée aucun prospect au simple clic ; un échange WhatsApp devient un prospect seulement s'il est noté à la main.
+
+### Règle 7 de `CLAUDE.md` (validée par le porteur, 23/11/2026)
+- Phrase ajoutée à la fin de la règle 7, avec deux corrections du porteur : le libellé est « Vente occupée » (et non « Vendu occupé », qu'un visiteur lirait comme un bien déjà vendu), remplacé partout (`CLAUDE.md`, D34, journal, puis `fr.ts`) ; les autres conditions (au moins 3 photos, `listings.publication` active) restent exigées pour une vente.
 
 ### Notes pour le lot 13
 - **Tuiles** : rendu des tuiles de Ouagadougou et Saaba (zooms 13 à 17, environ 15 000 tuiles, environ 300 Mo) à partir de l'extrait OSM (ODbL), hors du dépôt, puis dépôt sur notre stockage derrière Cloudflare. **Jamais** par téléchargement en masse depuis `tile.openstreetmap.org`, que sa politique d'usage interdit. Mention « © les contributeurs d'OpenStreetMap » conservée.
