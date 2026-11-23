@@ -4,12 +4,14 @@
  * - `registre-fictif.xlsx` : les sept onglets, cellules texte, nombre ou date comme dans un vrai registre ;
  * - `registre-fictif-locataires.csv` : l'onglet Locataires, en Windows-1252 avec point-virgule, comme l'enregistre
  *   Excel en français (« CSV (séparateur : point-virgule) »).
+ * - `registre-libre.xlsx` (étape 4b) : le registre libre, une seule feuille (`registre-libre.ts`).
  * Relancer après toute modification des données : `node apps/api/scripts/generate-import-fixtures.mjs`.
  * `registre-fictif.test.ts` vérifie que les fichiers versionnés correspondent aux données.
  */
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import writeXlsxFile from 'write-excel-file/node';
+import { FREE_SHEET } from '../test/fixtures/imports/registre-libre.ts';
 import { REGISTRY_SHEETS, TENANTS } from '../test/fixtures/imports/registre-fictif.ts';
 
 const out = (name) => fileURLToPath(new URL(`../test/fixtures/imports/${name}`, import.meta.url));
@@ -28,6 +30,17 @@ const sheets = REGISTRY_SHEETS.map((s) => ({
 	columns: s.headers.map((h) => ({ width: Math.max(12, Math.min(40, h.length + 4)) }))
 }));
 writeFileSync(out('registre-fictif.xlsx'), await writeXlsxFile(sheets).toBuffer());
+
+// Étape 4b : registre libre, une seule feuille.
+writeFileSync(
+	out('registre-libre.xlsx'),
+	await writeXlsxFile([
+		{
+			sheet: FREE_SHEET.name,
+			data: [FREE_SHEET.headers.map((h) => ({ value: h, type: String, fontWeight: 'bold' })), ...FREE_SHEET.rows.map((r) => r.map(cell))]
+		}
+	]).toBuffer()
+);
 
 /** Windows-1252 : ASCII et Latin-1 sur un octet, plus les quelques signes propres à Windows. */
 const CP1252 = new Map([

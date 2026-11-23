@@ -6,8 +6,9 @@ import { z } from 'zod';
 import { isIsoDate } from './dates.js';
 import { idSchema } from './ids.js';
 import type { ImportBlocker, MatchProposal, PlaceResolution, ImportPlan } from './import-plan.js';
+import type { FileSheetPreview } from './import-single-sheet.js';
 import type { ImportIssue } from './import-rows.js';
-import { IMPORT_SHEET_KEYS, type ColumnIssue, type ImportSheetKey } from './import-template.js';
+import type { ColumnIssue, ImportSheetKey } from './import-template.js';
 
 /** Fichier envoyé : 5 Mo au plus (un registre de plusieurs milliers de lignes tient en moins d'1 Mo). */
 export const IMPORT_MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -42,8 +43,30 @@ export const importChoicesSchema = z.object({
 });
 export type ImportChoices = z.output<typeof importChoicesSchema>;
 
-/** Correspondance des colonnes choisie à la main (fichier libre, étape 4b) : onglet → champ → colonne. */
-export const importMappingSchema = z.record(z.enum(IMPORT_SHEET_KEYS), z.record(z.string().max(60), z.number().int().min(0).max(500)));
+/**
+ * Correspondance des colonnes choisie à la main (fichier libre sur une seule feuille, étape 4b) : la feuille, chaque
+ * champ (`onglet.champ`) relié à une colonne, et les valeurs communes à toutes les lignes.
+ */
+export const singleSheetMappingSchema = z.object({
+	sheet: z.string().trim().min(1).max(120),
+	columns: z.record(
+		z
+			.string()
+			.regex(/^[a-z_]+\.[A-Za-z]+$/)
+			.max(60),
+		z.number().int().min(0).max(500)
+	),
+	constants: z
+		.record(
+			z
+				.string()
+				.regex(/^[a-z_]+\.[A-Za-z]+$/)
+				.max(60),
+			z.string().trim().max(200)
+		)
+		.default({})
+});
+export const importMappingSchema = z.object({ single: singleSheetMappingSchema.optional() });
 export type ImportMapping = z.output<typeof importMappingSchema>;
 
 export const analyzeImportSchema = z.object({
@@ -75,6 +98,8 @@ export interface ImportSheetPreview {
 export interface ImportPreview {
 	sheets: ImportSheetPreview[];
 	unknownSheets: string[];
+	/** Étape 4b : feuilles du fichier qui ne suivent pas le modèle, pour la correspondance des colonnes à la main. */
+	fileSheets: FileSheetPreview[];
 	columnIssues: ColumnIssue[];
 	issues: ImportIssue[];
 	blockers: ImportBlocker[];
@@ -110,6 +135,7 @@ export interface ImportJobView {
 	/** Fin du délai d'annulation (24 heures), tant qu'il court. */
 	cancellableUntil: string | null;
 	choices: ImportChoices;
+	mapping: ImportMapping;
 	preview: ImportPreview | null;
 	report: ImportReportView | null;
 }

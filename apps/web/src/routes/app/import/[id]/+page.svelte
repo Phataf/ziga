@@ -11,16 +11,19 @@
 	import { resolve } from '$app/paths';
 	import { formatDate } from '@ziga/shared/dates';
 	import { IMPORT_SHEET_KEYS, IMPORT_SHEET_NAMES } from '@ziga/shared/import-template';
+	import type { SingleSheetMapping } from '@ziga/shared/import-single-sheet';
 	import type { ImportChoices, ImportJobView } from '@ziga/shared/imports';
 	import { can } from '@ziga/shared/permissions';
 	import FormAlert from '#lib/components/auth/FormAlert.svelte';
 	import FeatureGate from '#lib/components/FeatureGate.svelte';
+	import ColumnMapping from '#lib/components/imports/ColumnMapping.svelte';
 	import ImportStatusBadge from '#lib/components/imports/ImportStatusBadge.svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.ts';
 	import { Button } from '#lib/components/ui/button/index.ts';
 	import { messageOf } from '#lib/auth/forms.ts';
 	import { device } from '#lib/device.svelte.ts';
+	import { freeFileNeeded } from '#lib/imports/single-sheet.ts';
 	import { importBusy, issuesBySheet } from '#lib/imports/views.ts';
 	import { fr } from '#lib/i18n/fr.ts';
 	import { organizations } from '#lib/org/organizations.svelte.ts';
@@ -107,6 +110,11 @@
 		});
 	}
 
+	/** Étape 4b : nouvelle analyse avec la correspondance des colonnes d'un fichier libre. */
+	function applyMapping(single: SingleSheetMapping) {
+		return act(() => organizations.call<ImportJobView>('POST', `/imports/${id}/analyze`, { mapping: { single } }));
+	}
+
 	const run = () => act(() => organizations.call<ImportJobView>('POST', `/imports/${id}/execute`));
 
 	async function report() {
@@ -186,6 +194,9 @@
 			{#if !sync.online}<FormAlert message={t.offline} tone="info" />{/if}
 			<FormAlert {message} />
 
+			{#if preview && job.status === 'analyzed' && freeFileNeeded(job)}
+				<ColumnMapping {job} type={organizations.active?.type ?? 'agency'} disabled={acting || !sync.online} onapply={applyMapping} />
+			{/if}
 			{#if preview && job.status === 'analyzed'}
 				<section class="min-w-0 space-y-3 rounded-2xl border bg-card p-4 md:p-6" data-testid="apercu">
 					<h2 class="text-lg font-semibold">{t.preview.title}</h2>

@@ -236,7 +236,13 @@ export interface MatchProposal {
 
 /** Raison qui refuse l'exécution tant qu'elle n'est pas levée (choix à faire, date de bascule refusée). */
 export interface ImportBlocker {
-	code: 'DEPOSIT_RECEIVED_UNKNOWN' | 'SWITCH_DATE_FUTURE' | 'SWITCH_DATE_FIRST_OF_MONTH';
+	code:
+		| 'DEPOSIT_RECEIVED_UNKNOWN'
+		| 'SWITCH_DATE_FUTURE'
+		| 'SWITCH_DATE_FIRST_OF_MONTH'
+		// Étape 4b : fichier libre.
+		| 'NOTHING_TO_IMPORT'
+		| 'MAPPING_INCOMPLETE';
 	message: string;
 }
 
