@@ -214,12 +214,14 @@ test('facturation du premier mois en entier : seulement le 1er d’un mois, expl
 	});
 	expect(r.status(), await r.text()).toBeLessThan(300);
 	const { ctx, page } = await open(browser, phone, agency.director, '/app/import');
+	// Le mode de facturation vient de la base locale : la liste remplace le champ de date dès qu'il est lu.
+	await expect(page.getByTestId('aide-bascule')).toContainText('premier mois en entier');
 	const input = page.getByTestId('date-bascule');
+	await expect(input.locator('option').first()).toBeAttached();
 	await expect(input).toHaveValue(firstOfMonth);
 	const values = await input.locator('option').evaluateAll((o) => o.map((x) => (x as HTMLOptionElement).value));
 	expect(values.length).toBeGreaterThan(1);
 	expect(values.every((v) => v.endsWith('-01') && v <= today)).toBe(true);
-	await expect(page.getByTestId('aide-bascule')).toContainText('premier mois en entier');
 	await expectNoHorizontalOverflow(page, 'mois entier : envoi');
 	await ctx.close();
 });
