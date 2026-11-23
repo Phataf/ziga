@@ -50,7 +50,8 @@ describe('navigation par profil (docs/UX.md §2)', () => {
 			'Relevés propriétaires',
 			'Contrats',
 			'À valider',
-			'Équipe'
+			'Équipe',
+			'Import Excel'
 		]);
 	});
 
@@ -62,6 +63,12 @@ describe('navigation par profil (docs/UX.md §2)', () => {
 
 	it('lot 08 bis : « Contrats » pour la direction, la gestion et le bailleur ; ni pour le profil lecture ni pour l’agent', () => {
 		const has = (id: keyof typeof profiles) => profiles[id].nav.some((i) => i.href === '/app/contrats');
+		expect([has('director'), has('manager'), has('landlord')]).toEqual([true, true, true]);
+		expect([has('viewer'), has('field_agent')]).toEqual([false, false]);
+	});
+
+	it('lot 11 : « Import Excel » pour la direction, la gestion et le bailleur ; ni pour le profil lecture ni pour l’agent', () => {
+		const has = (id: keyof typeof profiles) => profiles[id].nav.some((i) => i.href === '/app/import');
 		expect([has('director'), has('manager'), has('landlord')]).toEqual([true, true, true]);
 		expect([has('viewer'), has('field_agent')]).toEqual([false, false]);
 	});

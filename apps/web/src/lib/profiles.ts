@@ -10,6 +10,7 @@ import {
 	ClipboardCheck,
 	Ellipsis,
 	FilePenLine,
+	FileSpreadsheet,
 	FileText,
 	HandCoins,
 	History,
@@ -89,7 +90,7 @@ function organizationItems(opts: { team: boolean; settings: boolean }, section: 
 	];
 }
 
-function agencyNav(opts: { team: boolean; settings: boolean; contracts: boolean }): NavItem[] {
+function agencyNav(opts: { team: boolean; settings: boolean; contracts: boolean; imports: boolean }): NavItem[] {
 	return [
 		item({ path: 'app', label: n.dashboard, short: n.home, icon: LayoutDashboard, section: s.steering, tab: true }),
 		item({ path: 'app/biens', label: n.propertiesLong, short: n.properties, icon: Building2, section: s.management, tab: true }),
@@ -106,6 +107,8 @@ function agencyNav(opts: { team: boolean; settings: boolean; contracts: boolean 
 		...(opts.contracts ? [item({ path: 'app/contrats', label: n.contracts, icon: FilePenLine, section: s.management })] : []),
 		item({ path: 'app/a-valider', label: n.toValidate, icon: ClipboardCheck, section: s.control }),
 		...organizationItems(opts, s.agency),
+		// Lot 11 : import Excel, direction et gestion (`import.run`).
+		...(opts.imports ? [item({ path: 'app/import', label: n.imports, icon: FileSpreadsheet, section: s.agency })] : []),
 		plus('app')
 	];
 }
@@ -116,7 +119,7 @@ export const profiles: Record<ProfileId, Profile> = {
 		label: fr.profiles.director,
 		space: 'agency',
 		home: 'app',
-		nav: agencyNav({ team: true, settings: true, contracts: true })
+		nav: agencyNav({ team: true, settings: true, contracts: true, imports: true })
 	},
 	// Le gestionnaire voit l'équipe en lecture (affectation des agents au lot 07).
 	manager: {
@@ -124,14 +127,14 @@ export const profiles: Record<ProfileId, Profile> = {
 		label: fr.profiles.manager,
 		space: 'agency',
 		home: 'app',
-		nav: agencyNav({ team: true, settings: false, contracts: true })
+		nav: agencyNav({ team: true, settings: false, contracts: true, imports: true })
 	},
 	viewer: {
 		id: 'viewer',
 		label: fr.profiles.viewer,
 		space: 'agency',
 		home: 'app',
-		nav: agencyNav({ team: false, settings: false, contracts: false })
+		nav: agencyNav({ team: false, settings: false, contracts: false, imports: false })
 	},
 	field_agent: {
 		id: 'field_agent',
@@ -165,6 +168,7 @@ export const profiles: Record<ProfileId, Profile> = {
 			item({ path: 'app/depenses', label: n.expenses, icon: Receipt, section: s.myHomes }),
 			// Le bailleur est directeur de son organisation : ses paramètres (logo des reçus) et son journal.
 			...organizationItems({ team: false, settings: true }, s.myHomes),
+			item({ path: 'app/import', label: n.imports, icon: FileSpreadsheet, section: s.myHomes }),
 			plus('app')
 		]
 	},

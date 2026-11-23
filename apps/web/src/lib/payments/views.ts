@@ -7,7 +7,7 @@
  * Fonctions pures, testées.
  */
 import { forecastRentAllocation } from '@ziga/shared/allocation';
-import { outstandingBalance, rentDueBalance } from '@ziga/shared/leases';
+import { outstandingBalance, rentDueBalance, type RentDueKind } from '@ziga/shared/leases';
 import type { MobileMoneyOperator, PaymentKind, PaymentMeans, PaymentPurpose, PaymentStatus } from '@ziga/shared/payments';
 import {
 	receiptDocument,
@@ -179,6 +179,8 @@ export interface DueForScreen {
 	waived: boolean;
 	isAdvance: boolean;
 	overdueFrom?: string | null;
+	/** Lot 11 : « Solde antérieur » d'un bail importé. */
+	kind?: RentDueKind;
 }
 
 /** Encaissements de loyer pas encore imputés (en attente d'envoi, de validation ou de rapprochement). */
@@ -263,7 +265,13 @@ export function localSnapshot(input: LocalSnapshotInput): ReceiptSnapshot {
 			.filter((l) => l.target === 'rent_due')
 			.map((l) => {
 				const d = byId.get(l.targetId!)!;
-				return { start: d.periodStart, end: d.periodEnd, amount: l.amount, isAdvance: d.isAdvance };
+				return {
+					start: d.periodStart,
+					end: d.periodEnd,
+					amount: l.amount,
+					isAdvance: d.isAdvance,
+					...(d.kind === 'opening_balance' ? { openingBalance: true } : {})
+				};
 			}),
 		credit,
 		deposit: null,

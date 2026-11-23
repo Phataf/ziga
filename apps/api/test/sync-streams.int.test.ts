@@ -227,4 +227,16 @@ describe('Sync Streams (lot 05, D30)', () => {
 		const owners = yaml.split('\n').filter((line) => /FROM owners\b/.test(line));
 		for (const line of owners) expect(line).not.toMatch(/\buser_id\b/);
 	});
+	it('lot 11 : nature des échéances, date de fin d’origine et import d’un bail descendent ; jamais les imports eux-mêmes', () => {
+		const yaml = readFileSync(CONFIG, 'utf8');
+		const leases = yaml.split('\n').filter((line) => /FROM leases WHERE/.test(line));
+		expect(leases).toHaveLength(2);
+		for (const line of leases) expect(line).toMatch(/\boriginal_ends_on\b.*\bimport_job_id\b|\bimport_job_id\b.*\boriginal_ends_on\b/);
+		const dues = yaml.split('\n').filter((line) => /FROM rent_dues WHERE/.test(line));
+		expect(dues).toHaveLength(2);
+		for (const line of dues) expect(line).toMatch(/\bkind\b/);
+		expect(yaml).not.toMatch(/\bimport_jobs\b/);
+		expect(SYNCED_TABLES.leases).toMatchObject({ original_ends_on: 'text', import_job_id: 'text' });
+		expect(SYNCED_TABLES.rent_dues).toMatchObject({ kind: 'text' });
+	});
 });

@@ -180,6 +180,13 @@ describe('contenu du reçu', () => {
 			`Loyer du 01/01/2027 au 31/01/2027 : 80${THIN_NBSP}000${NBSP}FCFA`,
 			`Loyer du 01/02/2027 au 28/02/2027 (avance) : 5${THIN_NBSP}000${NBSP}FCFA`
 		]);
+		// Lot 11 : l'échéance « Solde antérieur » d'un bail importé n'est pas un loyer de la période.
+		expect(
+			receiptObject({
+				...snapshot,
+				periods: [{ start: '2021-03-01', end: '2026-10-31', amount: 250_000, isAdvance: false, openingBalance: true }]
+			})
+		).toEqual([`Solde antérieur (du 01/03/2021 au 31/10/2026) : 250${THIN_NBSP}000${NBSP}FCFA`]);
 		expect(receiptObject({ ...snapshot, periods: [], credit: 20_000 })).toEqual([
 			`Avance sur les loyers à venir : 20${THIN_NBSP}000${NBSP}FCFA`
 		]);

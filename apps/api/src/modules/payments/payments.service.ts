@@ -112,6 +112,11 @@ export function tokenHash(token: string): Buffer {
 
 const iso = (d: Date | null) => (d ? d.toISOString() : null);
 
+/** Période du reçu ; le « Solde antérieur » d'un bail importé (lot 11) est nommé ainsi, jamais « Loyer du… ». */
+function receiptPeriod(d: DueForPayment, amount: number): ReceiptPeriod {
+	return { start: d.periodStart, end: d.periodEnd, amount, isAdvance: d.isAdvance, ...(d.openingBalance ? { openingBalance: true } : {}) };
+}
+
 /** Transition de la machine d'états (packages/shared), refus nommé PAYMENT_TRANSITION_FORBIDDEN. */
 function transition(from: PaymentRow['status'], to: PaymentRow['status']): void {
 	try {
@@ -320,7 +325,7 @@ export class PaymentsService implements OnModuleInit {
 				c.userId
 			);
 			await this.leases.refreshDueStatusesAfterPayment([due.id], today, c.actor, c.tx);
-			periods = [{ start: due.periodStart, end: due.periodEnd, amount: input.amount, isAdvance: due.isAdvance }];
+			periods = [receiptPeriod(due, input.amount)];
 			balanceDue = await this.leases.outstandingOf(input.leaseId, today, c.tx);
 		} else {
 			const claim = (await this.expenseClaims.get(c.tx, input.expenseId!)) as ExpenseClaim;
@@ -756,7 +761,7 @@ export class PaymentsService implements OnModuleInit {
 				.filter((l) => l.target === 'rent_due')
 				.map((l) => {
 					const d = byId.get(l.targetId!)!;
-					return { start: d.periodStart, end: d.periodEnd, amount: l.amount, isAdvance: d.isAdvance };
+					return receiptPeriod(d, l.amount);
 				});
 			credit = lines.filter((l) => l.target === 'credit').reduce((s, l) => s + l.amount, 0);
 			balanceDue = await this.leases.outstandingOf(payment.leaseId, today, c.tx);

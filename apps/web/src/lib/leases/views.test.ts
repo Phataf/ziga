@@ -60,6 +60,33 @@ describe('vues locales des baux (lot 08)', () => {
 		expect(toLease(leaseRow({ status: 'active' }), true).alerts).toEqual([]);
 	});
 
+	it('lot 11 : bail importé (fin d’origine d’un bail échu passé à durée indéterminée) ; échéance « Solde antérieur »', () => {
+		const imported = toLease(leaseRow({ status: 'active', ends_on: null, original_ends_on: '2025-02-28', import_job_id: 'job-1' }));
+		expect(imported).toMatchObject({ endsOn: null, originalEndsOn: '2025-02-28', importJobId: 'job-1' });
+		expect(toLease(leaseRow())).toMatchObject({ originalEndsOn: null, importJobId: null });
+		const due = (kind: string) =>
+			toRentDue(
+				{
+					id: 'd1',
+					lease_id: 'l1',
+					kind,
+					period_start: '2021-03-01',
+					period_end: '2026-10-31',
+					due_on: '2026-11-01',
+					rent: 90000,
+					charges: 0,
+					amount_due: 90000,
+					amount_paid: 0,
+					status: 'due',
+					prorated: 0,
+					is_advance: 0
+				},
+				TODAY
+			);
+		expect(due('opening_balance').kind).toBe('opening_balance');
+		expect(due('rent').kind).toBe('rent');
+	});
+
 	it('aperçu de l’échéancier : la même fonction pure que le serveur', () => {
 		const lease = toLease(leaseRow());
 		const preview = previewSchedule(lease, TODAY);

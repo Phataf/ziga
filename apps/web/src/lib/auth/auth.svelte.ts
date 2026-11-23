@@ -144,7 +144,12 @@ class Auth {
 	}
 
 	/** Appel authentifié ; un 401 renouvelle le jeton une fois puis réessaie. */
-	async request<T>(method: Method, path: string, body?: unknown, options: { organization?: string | null; file?: Blob } = {}): Promise<T> {
+	async request<T>(
+		method: Method,
+		path: string,
+		body?: unknown,
+		options: { organization?: string | null; file?: Blob; blob?: boolean } = {}
+	): Promise<T> {
 		const status = await this.ensure();
 		if (status === 'offline') throw new NetworkError();
 		if (status === 'signed_out') throw new ApiError(401, 'SESSION_INVALID', 'Session expirée. Reconnectez-vous.');

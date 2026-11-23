@@ -225,12 +225,14 @@
 	let agreementProposedOn = $state(today);
 	let agreementText = $state('');
 	const openDues = $derived(dues.filter((d) => d.status !== 'waived' && d.status !== 'paid' && d.balance > 0));
+	/** Mois proposés pour une imputation sur loyer : jamais le « Solde antérieur » d'un import (un impayé, pas un mois). */
+	const agreementDues = $derived(openDues.filter((d) => d.kind !== 'opening_balance'));
 	const held = $derived(settlement ? settlement.received - alreadyRefunded : (account?.balances.held ?? 0));
 	const plan = $derived(
 		agreementPlan({
 			held,
 			keep: Math.min(parseFcfa(agreementKeep) ?? 0, held),
-			months: openDues
+			months: agreementDues
 				.filter((d) => agreementMonths.includes(d.periodStart))
 				.map((d) => ({ periodStart: d.periodStart, outstanding: d.balance }))
 		})
@@ -238,7 +240,7 @@
 
 	function openAgreement(type: typeof agreementType) {
 		agreementType = type;
-		agreementMonths = type === 'deposit_applied_to_rent' && openDues.at(-1) ? [openDues.at(-1)!.periodStart] : [];
+		agreementMonths = type === 'deposit_applied_to_rent' && agreementDues.at(-1) ? [agreementDues.at(-1)!.periodStart] : [];
 		agreementKeep = '';
 		agreementProposedBy = 'tenant';
 		agreementProposedOn = today;
@@ -704,7 +706,7 @@
 		{#if agreementType === 'deposit_applied_to_rent'}
 			<fieldset class="space-y-2">
 				<legend class="text-base font-medium">{ta.months}</legend>
-				{#each openDues as d (d.id)}
+				{#each agreementDues as d (d.id)}
 					<label class="flex min-h-11 items-center gap-3">
 						<input type="checkbox" class="size-5" value={d.periodStart} bind:group={agreementMonths} />{formatDate(d.periodStart)} – {formatDate(
 							d.periodEnd

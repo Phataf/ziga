@@ -65,6 +65,7 @@ export const fr = {
 		owners: 'Propriétaires',
 		tenants: 'Locataires',
 		contracts: 'Contrats',
+		imports: 'Import Excel',
 		toValidate: 'À valider',
 		team: 'Équipe',
 		settings: 'Paramètres',
@@ -931,6 +932,10 @@ export const fr = {
 		start: 'Début',
 		end: 'Fin',
 		openEnded: 'Sans fin (durée indéterminée)',
+		originalEnd: 'Fin prévue à l’origine',
+		originalEndHint: 'Bail échu sans congé, importé à durée indéterminée.',
+		openingBalance: 'Solde antérieur',
+		openingBalanceHint: 'Dû avant la bascule (import), exigible à la date de bascule.',
 		duration: 'Durée (mois)',
 		durationHint: 'Laissez vide pour un bail sans fin ; la date de fin se calcule.',
 		duesStart: 'Première date facturée',
@@ -2686,6 +2691,135 @@ export const fr = {
 		revoked: 'Liaison révoquée.',
 		whatsappText: (organization: string, url: string) =>
 			`${organization} vous invite à retrouver vos logements et vos documents sur Ziga : ${url}`
+	},
+	/** Lot 11 : import Excel (direction, gestion, bailleur), en ligne seulement. */
+	imports: {
+		title: 'Import Excel',
+		noAccess: 'L’import est réservé à la direction et à la gestion.',
+		unavailable: 'L’import Excel n’est pas ouvert à votre organisation.',
+		subtitle: 'Reprenez votre registre : propriétaires, biens, unités, locataires, baux, cautions et soldes.',
+		online:
+			'L’import se fait en ligne : le fichier est lu et vérifié sur le serveur, puis tout est créé d’un coup. Gardez la connexion jusqu’à la fin de l’envoi.',
+		offline: 'Vous êtes hors connexion : l’import reprendra quand la connexion reviendra.',
+		template: {
+			title: '1. Remplissez le modèle',
+			help: 'Un onglet par type, en-têtes en français, une ligne d’exemple et des listes déroulantes. Les colonnes peuvent être dans un autre ordre.',
+			download: 'Télécharger le modèle'
+		},
+		send: {
+			title: '2. Envoyez votre fichier',
+			switchOn: 'Date de bascule',
+			switchHelp:
+				'Les échéances sont générées à partir de cette date ; ce qui était dû avant va dans l’onglet Soldes d’ouverture. Par défaut, le 1er du mois en cours ; jamais dans le futur.',
+			switchFullFirst:
+				'Votre organisation facture le premier mois en entier : la date de bascule est le 1er d’un mois, pour que la première échéance ne couvre pas une seconde fois ce que le solde d’ouverture couvre déjà.',
+			file: 'Fichier (.xlsx ou .csv, 5 Mo au plus)',
+			submit: 'Envoyer et vérifier',
+			sending: 'Envoi…',
+			badFormat: 'Choisissez un fichier .xlsx ou .csv.',
+			emptyFile: 'Ce fichier est vide.',
+			tooLarge: 'Fichier trop volumineux : 5 Mo au plus.',
+			uploadFailed: 'Le fichier n’a pas pu être envoyé. Réessayez.'
+		},
+		history: 'Imports précédents',
+		none: 'Aucun import pour l’instant.',
+		status: {
+			uploaded: 'Envoyé',
+			analyzing: 'Vérification en cours',
+			analyzed: 'Prêt à importer',
+			analysis_failed: 'Fichier refusé',
+			running: 'Import en cours',
+			completed: 'Terminé',
+			failed: 'Échoué',
+			cancelled: 'Annulé'
+		} as Record<string, string>,
+		createdOn: (date: string) => `Envoyé le ${date}`,
+		switchOnLabel: (date: string) => `Bascule au ${date}`,
+		back: 'Imports',
+		working: 'Le serveur lit et vérifie votre fichier. Cette page se met à jour toute seule.',
+		running: 'Import en cours, onglet par onglet. Cette page se met à jour toute seule.',
+		preview: {
+			title: 'Prévisualisation',
+			help: 'Rien n’est encore créé. Une ligne en erreur est écartée avec ce qui en dépend ; corrigez le fichier et renvoyez-le, ou importez sans elle.',
+			sheet: 'Onglet',
+			rows: 'Lignes',
+			planned: 'À créer',
+			errors: 'Erreurs',
+			skipped: 'Écartées',
+			warnings: 'Avertissements',
+			unknownSheets: (names: string) => `Onglets ignorés (inconnus du modèle) : ${names}.`,
+			severity: { error: 'Erreur', skipped: 'Écartée', warning: 'Avertissement' } as Record<string, string>,
+			noIssue: 'Aucune ligne en erreur.',
+			openingBalances: (n: number) =>
+				`${n} ${n > 1 ? 'baux ont un solde antérieur, ils apparaîtront' : 'bail a un solde antérieur, il apparaîtra'} dans les impayés.`,
+			summary: (units: number, leases: number) => `${units} unité(s) nouvelle(s), ${leases} bail(aux) à importer.`,
+			depositsAboveCap: (n: number) => `${n} caution(s) dépassent deux mois de loyer : l’avertissement sera journalisé à l’import.`
+		},
+		choices: {
+			title: 'Vos choix',
+			deposits: (n: number) => `${n} caution(s) sans « Montant reçu » : que s’est-il passé ?`,
+			depositsHelp:
+				'Une case vide veut souvent dire « inconnu ». Ce choix vaut pour toutes ces lignes ; sans lui, l’import ne peut pas être lancé.',
+			full: 'Versée en entier',
+			toComplete: 'À compléter : le complément attendu sera affiché sur le bail',
+			places: 'Quartiers à vérifier',
+			placesHelp:
+				'Un quartier inconnu du référentiel : choisissez le bon ; le choix vaut pour toutes les lignes de même orthographe. Sans quartier, le bien est importé en brouillon.',
+			placeUnresolved: 'À choisir',
+			placeNone: 'Sans quartier (bien en brouillon)',
+			suggestions: 'Suggestions',
+			allNeighborhoods: 'Tous les quartiers',
+			placeRows: (n: number) => `${n} ligne(s)`,
+			matches: 'Fiches déjà enregistrées',
+			matchesHelp: 'Même numéro et même nom : utilisez la fiche existante plutôt que d’en créer une seconde.',
+			useExisting: (name: string) => `Utiliser la fiche « ${name} »`,
+			createNew: 'Créer une nouvelle fiche',
+			apply: 'Appliquer mes choix et revérifier'
+		},
+		run: 'Lancer l’import',
+		runHelp:
+			'L’import crée tout en tâche de fond, onglet par onglet. Vous pourrez l’annuler pendant 24 heures, tant qu’aucun loyer n’a été encaissé.',
+		blocked: 'Import impossible pour l’instant :',
+		report: {
+			title: 'Compte rendu',
+			created: (n: number) => `${n} créé(s)`,
+			sheetStatus: { done: 'Importé', failed: 'Échec : rien n’est importé pour cet onglet', not_run: 'Non exécuté' } as Record<
+				string,
+				string
+			>,
+			download: 'Télécharger le rapport',
+			contracts: 'Contrats à déposer'
+		},
+		cancel: {
+			action: 'Annuler l’import',
+			until: (date: string) => `Annulation possible jusqu’au ${date}, tant qu’aucun loyer n’a été encaissé.`,
+			title: 'Annuler l’import',
+			help: 'Les baux de l’import sont annulés, les fiches archivées, les mandats révoqués. Rien n’est supprimé.',
+			reason: 'Motif',
+			confirm: 'Confirmer l’annulation',
+			cancelledOn: (date: string, reason: string) => `Annulé le ${date} : ${reason}`,
+			waiting: 'Annulation en cours. Cette page se met à jour toute seule.',
+			notDone: 'L’annulation n’a pas abouti. Réessayez ; si le refus persiste, contactez l’assistance.'
+		},
+		fileDeleted: 'Le fichier d’origine a été effacé (conservé 90 jours).',
+		contracts: {
+			title: 'Contrats à déposer',
+			subtitle:
+				'Baux de vos imports sans contrat signé. Déposez le scan de chaque contrat papier : il est enregistré « signé, scan déposé » et l’alerte « Contrat non signé » disparaît.',
+			none: 'Aucun contrat à déposer.',
+			count: (n: number) => `${n} contrat(s) à déposer`,
+			since: (date: string) => `Bail depuis le ${date}`,
+			file: 'Scan signé (PDF ou photo)',
+			deposit: 'Déposer le scan',
+			deposited: 'Scan déposé.',
+			openLease: 'Voir le bail'
+		}
+	},
+	/** Lot 11 (dette du lot 10 ter) : autre fiche active au même numéro, dans la même organisation. */
+	samePhone: {
+		title: 'Une autre fiche porte ce numéro',
+		sameName: 'Même nom : sans doute la même personne, enregistrée deux fois.',
+		otherName: 'Nom différent : un colocataire ou un parent, peut-être.'
 	},
 	/** Lot 10 ter, étape 3 : signalements des locataires, sur la fiche du bail. */
 	maintenance: {

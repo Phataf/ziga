@@ -133,6 +133,19 @@ describe('reçu provisoire de l’appareil', () => {
 			today: TODAY
 		});
 		expect(snap.periods.map((p) => p.amount)).toEqual([80_000, 20_000]);
+		// Lot 11 : le « Solde antérieur » d'un bail importé est nommé ainsi sur le reçu provisoire, comme sur le reçu émis.
+		const opening = localSnapshot({
+			organization: org,
+			tenantName: 'Fatimata Sana',
+			unit: { label: 'Résidence — A2', address: null },
+			payment,
+			dues: [due('old', '2026-11-01', 0, { kind: 'opening_balance', periodStart: '2021-03-01', periodEnd: '2026-10-31' })],
+			deposit: null,
+			collectedBy: 'Awa',
+			today: TODAY
+		});
+		expect(opening.periods).toEqual([{ start: '2021-03-01', end: '2026-10-31', amount: 80_000, isAdvance: false, openingBalance: true }]);
+		expect(snap.periods.every((p) => !('openingBalance' in p))).toBe(true);
 		expect(snap.balanceDue).toBe(60_000);
 		const doc = receiptToShow(
 			null,

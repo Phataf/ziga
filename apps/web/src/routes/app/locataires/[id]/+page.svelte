@@ -23,6 +23,7 @@
 	import { formatPhone } from '@ziga/shared/phone';
 	import FormAlert from '#lib/components/auth/FormAlert.svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
+	import SamePhoneNotice from '#lib/components/SamePhoneNotice.svelte';
 	import LinkedAccountSection from '#lib/components/portals/LinkedAccountSection.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.ts';
 	import { Button } from '#lib/components/ui/button/index.ts';
@@ -179,6 +180,7 @@
 	{#if loaded && !tenant}
 		<FormAlert message={t.notFound} />
 	{:else if tenant}
+		<SamePhoneNotice kind="tenant" record={{ id: tenant.id, name: tenant.fullName, phone: tenant.phone, status: tenant.status }} />
 		<section class="space-y-3 rounded-2xl border bg-card p-4 md:p-6">
 			<div class="flex flex-wrap items-center justify-between gap-2">
 				<h2 class="text-lg font-semibold">{t.outstanding}</h2>

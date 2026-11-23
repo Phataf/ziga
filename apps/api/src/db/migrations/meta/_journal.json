@@ -190,6 +190,13 @@
 			"when": 1801000000000,
 			"tag": "0026_import_purge",
 			"breakpoints": true
+		},
+		{
+			"idx": 27,
+			"version": "7",
+			"when": 1802000000000,
+			"tag": "0027_property_archive_unlocated",
+			"breakpoints": true
 		}
 	]
 }

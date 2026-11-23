@@ -219,6 +219,8 @@ export function leaseView(l: LeaseRow, hasSignedContract: boolean): LeaseView {
 		exitOn: l.exitOn,
 		version: l.version,
 		alerts: leaseAlerts({ status: l.status, hasSignedContract }),
+		originalEndsOn: l.originalEndsOn,
+		importJobId: l.importJobId,
 		createdAt: l.createdAt.toISOString(),
 		updatedAt: l.updatedAt.toISOString()
 	};
@@ -342,6 +344,8 @@ export interface DueForPayment {
 	amountPaid: number;
 	waived: boolean;
 	isAdvance: boolean;
+	/** Lot 11 : échéance « Solde antérieur » d'un bail importé (nommée ainsi sur le reçu). */
+	openingBalance: boolean;
 	overdueFrom: string;
 }
 
@@ -1743,6 +1747,7 @@ export class LeasesService {
 			amountPaid: r.amountPaid,
 			waived: r.status === 'waived',
 			isAdvance: r.isAdvance,
+			openingBalance: r.kind === 'opening_balance',
 			overdueFrom: rentDueOverdueFrom(r, lease.startsOn)
 		}));
 	}

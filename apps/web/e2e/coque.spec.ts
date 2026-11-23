@@ -44,7 +44,8 @@ const cases: Case[] = [
 			'À valider',
 			'Équipe',
 			'Paramètres de l’organisation',
-			'Journal'
+			'Journal',
+			'Import Excel'
 		],
 		sections: ['Pilotage', 'Gestion', 'Contrôle', 'Agence']
 	},
@@ -65,7 +66,8 @@ const cases: Case[] = [
 			'Relevés propriétaires',
 			'Contrats',
 			'À valider',
-			'Équipe'
+			'Équipe',
+			'Import Excel'
 		],
 		sections: ['Pilotage', 'Gestion', 'Contrôle', 'Agence']
 	},
@@ -112,7 +114,8 @@ const cases: Case[] = [
 			'Préavis et sorties',
 			'Dépenses',
 			'Paramètres de l’organisation',
-			'Journal'
+			'Journal',
+			'Import Excel'
 		],
 		sections: ['Mes logements']
 	},
@@ -193,6 +196,7 @@ test.describe('Téléphone (360 × 800)', () => {
 			'Équipe',
 			'Paramètres de l’organisation',
 			'Journal',
+			'Import Excel',
 			'Changer d’espace',
 			'Mon compte'
 		]);

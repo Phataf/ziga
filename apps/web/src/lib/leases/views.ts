@@ -106,6 +106,8 @@ export function toLease(r: Row, hasSignedContract = false): LeaseView {
 		exitOn: str(r.exit_on),
 		version: int(r.version) ?? 1,
 		alerts: leaseAlerts({ status, hasSignedContract }),
+		originalEndsOn: str(r.original_ends_on),
+		importJobId: str(r.import_job_id),
 		createdAt: str(r.created_at) ?? '',
 		updatedAt: str(r.updated_at) ?? ''
 	};
@@ -144,7 +146,7 @@ export function toRentDue(r: Row, today: string): RentDueView {
 		prorated: bool(r.prorated),
 		isAdvance: bool(r.is_advance),
 		leaseVersion: int(r.lease_version) ?? 1,
-		// Lot 11 : la nature arrive sur l'appareil avec la synchronisation de `kind` (étape 4a) ; d'ici là, échéance ordinaire.
+		// Lot 11 : « Solde antérieur » (import), hors de l'échéancier du bail.
 		kind: r.kind === 'opening_balance' ? 'opening_balance' : 'rent'
 	};
 }
