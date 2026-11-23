@@ -179,6 +179,10 @@
 		"./imports": {
 			"types": "./dist/imports.d.ts",
 			"default": "./dist/imports.js"
+		},
+		"./listings": {
+			"types": "./dist/listings.d.ts",
+			"default": "./dist/listings.js"
 		}
 	},
 	"files": [

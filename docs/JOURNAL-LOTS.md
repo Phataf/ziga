@@ -1751,7 +1751,7 @@ Prompt : `prompts/lot-12-vitrine-annonces.md`.
 Règles métier :
 1. **Vente** :
    - seules les **agences vérifiées** publient une vente, avec un mandat `sale` en vigueur, `can_publish`, sur une portée « bien entier ». Un bailleur particulier ou une agence non vérifiée ne publie que des locations ; motif dans la liste de ce qui manque : « La vente est réservée aux agences vérifiées » ;
-   - un bien dont des unités sont louées peut être mis en vente, affiché « Vendu occupé », sans aucun détail sur les baux ni les locataires ;
+   - un bien dont des unités sont louées peut être mis en vente, affiché « Vente occupée », sans aucun détail sur les baux ni les locataires ;
    - exception à la règle 7 (unité disponible) : décision D34.
 2. **Suspension** : une annonce suspendue (« Loué », « Indisponible ») est retirée automatiquement au bout de 30 jours. Si l'unité redevient disponible, la republication se fait à la main. Seul le retour de l'interrupteur `listings.publication` rétablit automatiquement les annonces.
 3. **`pending_review`** : les quelques secondes de préparation des photos et de l'image Open Graph, après la demande de publication.
@@ -1775,6 +1775,21 @@ Ajouts du porteur :
 - **Annonce suspendue ou retirée (410)** : la page dit « Ce logement n'est plus disponible » (ou « Loué »), avec un lien vers les autres annonces de l'organisation et vers la recherche. Un lien partagé sur WhatsApp ne finit jamais sur une page vide.
 - **Formulaire de contact** : sous le bouton, « Vos coordonnées seront transmises à <organisation> pour répondre à votre demande. »
 - **Bouton WhatsApp** : ne crée aucun prospect au simple clic ; un échange WhatsApp devient un prospect seulement s'il est noté à la main.
+
+### Règle 7 de `CLAUDE.md` (validée par le porteur, 23/11/2026)
+- Phrase ajoutée à la fin de la règle 7, avec deux corrections du porteur : le libellé est « Vente occupée » (et non « Vendu occupé », qu'un visiteur lirait comme un bien déjà vendu), remplacé partout (`CLAUDE.md`, D34, journal, puis `fr.ts`) ; les autres conditions (au moins 3 photos, `listings.publication` active) restent exigées pour une vente.
+
+### Étape 1 : règles pures (`packages/shared/src/listings.ts`)
+- Règle 7 de `CLAUDE.md` complétée (commit à part, phrase validée par le porteur) ; libellé « Vente occupée ».
+- **Publication** : `publicationBlockers` donne ce qui manque, dans un ordre stable : interrupteur, vente réservée aux agences vérifiées, mandat (location : gestion locative, mise en location ou bailleur, avec `can_publish` ; vente : mandat `sale` sur le bien entier), bien actif, à vendre et localisé, unité active, libre (ou en préavis) et prête, 3 photos, prix. Les trois contrôles de l'unité sont comparés à `isAvailable` sur les 48 combinaisons. `publicationWarnings` : prix différent du loyer (jamais bloquant).
+- **Disponibilité affichée** : « Libre le » lendemain de la fin du bail d'une unité en préavis ; « Vente occupée » dès qu'une unité du bien a un bail.
+- **Statut** : `internal` → `pending_review` → `published` ; `suspended` puis `archived` ; une annonce retirée ne revient jamais (une nouvelle publication crée une nouvelle annonce). Quatrième dimension de l'unité (`unitListingStatus`).
+- **Synchronisation automatique** (`reconcileListing`) : suspension avec une cause (« Loué » l'emporte sur « Indisponible », puis mandat, vérification, photos) ; retrait au bout de 30 jours ; jamais de remise en ligne. L'interrupteur ne change pas l'état : `showcaseVisible` masque.
+- **Emplacement publié** : point du bien seulement en précision « exacte », sinon centre du quartier ou de la commune ; jamais le repère.
+- **Adresses** : référence `ZG-XXXXXX` (alphabet de Crockford, sans I, L, O, U), `/annonce/<titre>-<référence>` retrouvée par la référence ; adresse publique de l'organisation avec ses mots réservés ; lien WhatsApp pré-rempli.
+- **Recherche** : paramètres en français, tolérants (une valeur invalide est ignorée), forme canonique, curseur base64url vérifié, clé de cache versionnée. En-têtes de cache et pages à purger.
+- **Prospects** : statuts (on avance, on rouvre un prospect clos, jamais de retour à « nouveau »), formulaire de contact (champ piège, 3 secondes au moins, jeton de 6 heures au plus), doublon sur 24 heures, prospect noté à la main (WhatsApp ou appel seulement).
+- Tests : 70 dans `listings.test.ts`, écrits d'abord en rouge. `pnpm lint` et `pnpm typecheck` verts ; `pnpm test` vert sauf les 17 tests qui exigent Gotenberg et SeaweedFS, absents de cette session (sans Docker) et lancés par la CI.
 
 ### Notes pour le lot 13
 - **Tuiles** : rendu des tuiles de Ouagadougou et Saaba (zooms 13 à 17, environ 15 000 tuiles, environ 300 Mo) à partir de l'extrait OSM (ODbL), hors du dépôt, puis dépôt sur notre stockage derrière Cloudflare. **Jamais** par téléchargement en masse depuis `tile.openstreetmap.org`, que sa politique d'usage interdit. Mention « © les contributeurs d'OpenStreetMap » conservée.
