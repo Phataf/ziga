@@ -140,6 +140,25 @@ describe('architecture', () => {
 		expect(callers.map((f) => f.path)).toEqual([]);
 	});
 
+	it('seul le module imports lit et écrit les tâches d’import (lot 11)', () => {
+		const offenders = all.filter(
+			(f) =>
+				!f.path.startsWith('modules/imports/') &&
+				f.path !== 'db/schema/imports.ts' &&
+				(imports(f.code).some((i) => /schema\/imports(\.js)?$/.test(i)) || /\bimport_jobs\b/.test(f.code))
+		);
+		expect(offenders.map((f) => f.path)).toEqual([]);
+		expect(readFileSync(join(src, 'db/schema/index.ts'), 'utf8')).not.toContain('imports');
+	});
+
+	it('le module imports n’écrit dans aucune table d’un autre module : il passe par leurs services (lot 11, CLAUDE.md §4)', () => {
+		// Seul son propre schéma : jamais celui des fiches, baux, cautions… (aucun SQL direct qui contournerait les services).
+		const offenders = all.filter(
+			(f) => f.path.startsWith('modules/imports/') && imports(f.code).some((i) => /db\/schema\/(?!imports\.js$)/.test(i))
+		);
+		expect(offenders.map((f) => f.path)).toEqual([]);
+	});
+
 	it('seul le module admin utilise la connexion app_admin', () => {
 		const offenders = all.filter((f) => !f.path.startsWith('modules/admin/') && imports(f.code).some((i) => i.includes('admin-database')));
 		expect(offenders.map((f) => f.path)).toEqual([]);

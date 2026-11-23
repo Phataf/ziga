@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { formatFcfa } from './money.js';
-import { planImport, type ImportContext, type ImportPlan } from './import-plan.js';
+import { defaultSwitchOn, planImport, switchDateIssue, type ImportContext, type ImportPlan } from './import-plan.js';
 import { importSheet, matchImportColumns, type ImportSheetKey } from './import-template.js';
 import type { CellValue, ImportSheetInput } from './import-rows.js';
 
@@ -188,8 +188,18 @@ describe('registre complet du modèle', () => {
 		expect(plan.units.every((u) => !('occupancy' in u.data))).toBe(true);
 	});
 
-	it('cautions (D33) : détenteur, reçu complet par défaut, reçu partiel, date du versement', () => {
-		const [kabore, traore] = plan.deposits;
+	it('cautions (D33) : montant reçu vide, inconnu ; le choix « versée en entier » le complète', () => {
+		expect(plan.pending.depositsWithoutReceived).toEqual([2]);
+		expect(plan.deposits[0]).toMatchObject({
+			leaseRef: 'B-01-A',
+			agreedAmount: 300000,
+			receivedAmount: null,
+			receivedOn: null,
+			outstanding: null
+		});
+		const full = planImport(registry(), ctx({ choices: { depositReceived: 'full' } }));
+		expect(full.blockers).toEqual([]);
+		const [kabore, traore] = full.deposits;
 		// B-01 : encaissement par l'agence → l'organisation détient la caution.
 		expect(kabore).toMatchObject({
 			leaseRef: 'B-01-A',
@@ -199,7 +209,14 @@ describe('registre complet du modèle', () => {
 			receivedOn: '2021-03-01',
 			holder: 'organization'
 		});
-		expect(traore).toMatchObject({ agreedAmount: 70000, receivedAmount: 50000, receivedOn: '2021-03-05', holder: 'owner' });
+		expect(kabore!.outstanding).toBe(0);
+		expect(traore).toMatchObject({
+			agreedAmount: 70000,
+			receivedAmount: 50000,
+			receivedOn: '2021-03-05',
+			holder: 'owner',
+			outstanding: 20000
+		});
 	});
 
 	it('solde d’ouverture : exigible à la date de bascule', () => {
@@ -739,5 +756,123 @@ describe('quartiers : référentiel du lot 07, suggestions, jamais créés (rép
 		const plan = withPlaces([['Ouagadougou', 'Tampoui']], { choices: { places: { [key]: 'nb-invente' } } });
 		expect(plan.properties[0]!.data.neighborhoodId).toBeNull();
 		expect(plan.places[0]!.status).toBe('unresolved');
+	});
+});
+
+describe('montant reçu vide : un seul choix pour toutes les lignes (réponse du porteur après l’étape 1)', () => {
+	it('sans choix : les lignes sont listées, et l’exécution est refusée', () => {
+		const plan = planImport(registry(), ctx());
+		expect(plan.pending.depositsWithoutReceived).toEqual([2]);
+		expect(plan.blockers).toEqual([
+			{
+				code: 'DEPOSIT_RECEIVED_UNKNOWN',
+				message: '1 caution n’a pas de montant reçu (Cautions, ligne 2) : choisissez pour toutes « versée en entier » ou « à compléter ».'
+			}
+		]);
+	});
+
+	it('plusieurs lignes : le message les nomme toutes', () => {
+		const r = registry();
+		r.deposits = sheet('deposits', DEPOSIT_H, [
+			['B-01-A', 'Caution', '300000', '', '', ''],
+			['B-02-1', 'Caution', '70000', '', '', '']
+		]);
+		expect(planImport(r, ctx()).blockers[0]!.message).toBe(
+			'2 cautions n’ont pas de montant reçu (Cautions, lignes 2 et 3) : choisissez pour toutes « versée en entier » ou « à compléter ».'
+		);
+	});
+
+	it('« à compléter » : compte de caution au montant convenu, sans versement ; le complément attendu est le montant convenu', () => {
+		const plan = planImport(registry(), ctx({ choices: { depositReceived: 'to_complete' } }));
+		expect(plan.blockers).toEqual([]);
+		expect(plan.deposits[0]).toMatchObject({ agreedAmount: 300000, receivedAmount: 0, receivedOn: null, outstanding: 300000 });
+		// Une ligne au montant reçu écrit garde son montant.
+		expect(plan.deposits[1]).toMatchObject({ receivedAmount: 50000, outstanding: 20000 });
+	});
+
+	it('montant reçu écrit partout : aucun choix demandé', () => {
+		const r = registry();
+		r.deposits = sheet('deposits', DEPOSIT_H, [['B-01-A', 'Caution', '300000', '300000', '', '']]);
+		const plan = planImport(r, ctx());
+		expect(plan.pending.depositsWithoutReceived).toEqual([]);
+		expect(plan.blockers).toEqual([]);
+	});
+
+	it('une ligne écartée ne demande pas de choix', () => {
+		const r = registry();
+		r.deposits = sheet('deposits', DEPOSIT_H, [['B-09', 'Caution', '300000', '', '', '']]);
+		expect(planImport(r, ctx()).pending.depositsWithoutReceived).toEqual([]);
+	});
+});
+
+describe('préavis : une seule colonne, plus court que la loi signalé (réponse du porteur après l’étape 1)', () => {
+	const NOTICE_H = [...LEASE_H, 'Préavis du locataire (mois)', 'Préavis du bailleur (mois)'];
+	const withNotice = (endsOn: string, tenant: string, lessor: string) => {
+		const r = registry();
+		r.leases = sheet('leases', NOTICE_H, [['B-01-A', 'L1', '01/03/2025', endsOn, '', '150000', '', '', tenant, lessor]]);
+		r.deposits = sheet('deposits', DEPOSIT_H, []);
+		r.opening_balances = sheet('opening_balances', BALANCE_H, []);
+		return planImport(r, ctx());
+	};
+
+	it('vide : aucun paramètre dans le plan, les valeurs légales s’appliquent selon le type de bail', () => {
+		const t = withNotice('', '', '').leases[0]!.terms;
+		expect(t).not.toHaveProperty('noticeTenantFixedTermMonths');
+		expect(t).not.toHaveProperty('noticeLessorOpenEndedMonths');
+	});
+
+	it('durée indéterminée : 1 mois pour le locataire, plus court que les 3 mois de la loi, signalé', () => {
+		const plan = withNotice('', '1', '3');
+		expect(plan.leases[0]!.terms).toMatchObject({ noticeTenantFixedTermMonths: 1, noticeTenantOpenEndedMonths: 1 });
+		expect(warnings(plan)).toContain(
+			'Ligne 2 de Baux, colonne Préavis du locataire (mois) : 1 mois, plus court que le préavis prévu par la loi pour ce bail (3 mois) ; vérifiez le contrat.'
+		);
+		expect(warnings(plan).some((w) => w.includes('Préavis du bailleur'))).toBe(false);
+	});
+
+	it('durée déterminée : 2 mois pour le locataire, égal à la loi, sans avertissement ; 1 mois pour le bailleur, signalé', () => {
+		const plan = withNotice('28/02/2027', '2', '1');
+		expect(warnings(plan).some((w) => w.includes('Préavis du locataire'))).toBe(false);
+		expect(warnings(plan)).toContain(
+			'Ligne 2 de Baux, colonne Préavis du bailleur (mois) : 1 mois, plus court que le préavis prévu par la loi pour ce bail (3 mois) ; vérifiez le contrat.'
+		);
+	});
+
+	it('plus long que la loi : sans avertissement', () => {
+		expect(warnings(withNotice('', '4', '6')).some((w) => w.includes('Préavis'))).toBe(false);
+	});
+});
+
+describe('date de bascule (réponses 1 et 3 du porteur)', () => {
+	it('par défaut : le 1er du mois en cours', () => {
+		expect(defaultSwitchOn('2026-11-22')).toBe('2026-11-01');
+		expect(defaultSwitchOn('2026-12-01')).toBe('2026-12-01');
+	});
+
+	it('jamais dans le futur', () => {
+		expect(switchDateIssue('2026-11-23', '2026-11-22', 'calendar_prorata')).toEqual({
+			code: 'SWITCH_DATE_FUTURE',
+			message: 'La date de bascule ne peut pas être dans le futur.'
+		});
+		expect(switchDateIssue('2026-11-22', '2026-11-22', 'calendar_prorata')).toBeNull();
+	});
+
+	it('premier mois facturé en entier : seul le 1er du mois est accepté', () => {
+		expect(switchDateIssue('2026-11-15', '2026-11-22', 'calendar_full_first')).toEqual({
+			code: 'SWITCH_DATE_FIRST_OF_MONTH',
+			message: 'Votre organisation facture le premier mois en entier : la date de bascule est le 1er d’un mois.'
+		});
+		expect(switchDateIssue('2026-11-01', '2026-11-22', 'calendar_full_first')).toBeNull();
+		// Les autres modes acceptent une date en milieu de mois.
+		expect(switchDateIssue('2026-11-15', '2026-11-22', 'calendar_prorata')).toBeNull();
+		expect(switchDateIssue('2026-11-15', '2026-11-22', 'anniversary')).toBeNull();
+	});
+
+	it('le plan refuse l’exécution avec une date de bascule refusée', () => {
+		const plan = planImport(
+			registry(),
+			ctx({ billingMode: 'calendar_full_first', switchOn: '2026-11-15', choices: { depositReceived: 'full' } })
+		);
+		expect(plan.blockers.map((b) => b.code)).toEqual(['SWITCH_DATE_FIRST_OF_MONTH']);
 	});
 });

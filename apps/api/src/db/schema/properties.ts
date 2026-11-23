@@ -11,6 +11,8 @@ const tstz = (name: string) => timestamp(name, { withTimezone: true, mode: 'date
 export const properties = pgTable('properties', {
 	id: uuid('id').primaryKey(),
 	organizationId: uuid('organization_id').notNull(),
+	/** Lot 11 : import Excel qui a créé la ligne (posé par la base depuis le contexte de la transaction, jamais écrit). */
+	importJobId: uuid('import_job_id'),
 	ownerId: uuid('owner_id').notNull(),
 	type: text('type', { enum: ['house', 'apartment_building', 'shared_compound', 'commercial', 'land'] }).notNull(),
 	operation: text('operation', { enum: ['rent', 'sale', 'both'] }).notNull(),
@@ -33,6 +35,8 @@ export const properties = pgTable('properties', {
 export const units = pgTable('units', {
 	id: uuid('id').primaryKey(),
 	organizationId: uuid('organization_id').notNull(),
+	/** Lot 11 : import Excel qui a créé la ligne (posé par la base depuis le contexte de la transaction, jamais écrit). */
+	importJobId: uuid('import_job_id'),
 	propertyId: uuid('property_id').notNull(),
 	type: text('type', {
 		enum: [

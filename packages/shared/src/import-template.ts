@@ -627,9 +627,9 @@ const SHEETS: { key: ImportSheetKey; for: Audience; help: Record<'agency' | 'lan
 		for: 'both',
 		help: {
 			agency:
-				'Une ligne par bail en cours ou signé. Un bail terminé (date de sortie passée) est ignoré : l’historique n’est pas importé. Les échéances sont générées à partir de la date de bascule ; ce qui était dû avant va dans l’onglet Soldes d’ouverture. Les paramètres laissés vides prennent les valeurs prévues par la loi.',
+				'Une ligne par bail en cours ou signé. Un bail terminé (date de sortie passée) est ignoré : l’historique n’est pas importé. Les échéances sont générées à partir de la date de bascule ; ce qui était dû avant va dans l’onglet Soldes d’ouverture. Les paramètres laissés vides prennent les valeurs prévues par la loi. La date de bascule se choisit à l’envoi du fichier ; si votre organisation facture le premier mois en entier, c’est toujours le 1er d’un mois.',
 			landlord:
-				'Une ligne par bail en cours ou signé. Un bail terminé (date de sortie passée) est ignoré : l’historique n’est pas importé. Les échéances sont générées à partir de la date de bascule ; ce qui était dû avant va dans l’onglet Soldes d’ouverture. Les paramètres laissés vides prennent les valeurs prévues par la loi.'
+				'Une ligne par bail en cours ou signé. Un bail terminé (date de sortie passée) est ignoré : l’historique n’est pas importé. Les échéances sont générées à partir de la date de bascule ; ce qui était dû avant va dans l’onglet Soldes d’ouverture. Les paramètres laissés vides prennent les valeurs prévues par la loi. La date de bascule se choisit à l’envoi du fichier ; si votre organisation facture le premier mois en entier, c’est toujours le 1er d’un mois.'
 		},
 		fields: [
 			{

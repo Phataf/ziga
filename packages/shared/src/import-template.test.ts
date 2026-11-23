@@ -82,6 +82,12 @@ describe('modèle Excel (prompt §1)', () => {
 		}
 	});
 
+	it('la notice des baux dit que la bascule est le 1er d’un mois quand le premier mois est facturé en entier', () => {
+		for (const type of ['agency', 'landlord'] as const) {
+			expect(importSheet('leases', type).help).toContain('facture le premier mois en entier, c’est toujours le 1er d’un mois');
+		}
+	});
+
 	it('aucune émoji dans le modèle (CLAUDE.md §6)', () => {
 		const text = JSON.stringify([importTemplate('agency'), importTemplate('landlord')]);
 		expect(text).not.toMatch(/\p{Extended_Pictographic}/u);

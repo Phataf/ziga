@@ -33,6 +33,8 @@ const fcfa = (name: string) => bigint(name, { mode: 'number' });
 export const tenants = pgTable('tenants', {
 	id: uuid('id').primaryKey(),
 	organizationId: uuid('organization_id').notNull(),
+	/** Lot 11 : import Excel qui a créé la ligne (posé par la base depuis le contexte de la transaction, jamais écrit). */
+	importJobId: uuid('import_job_id'),
 	civility: text('civility', { enum: ['mr', 'mrs', 'miss'] }),
 	fullName: text('full_name').notNull(),
 	phone: text('phone'),
@@ -62,6 +64,8 @@ export const tenants = pgTable('tenants', {
 export const leases = pgTable('leases', {
 	id: uuid('id').primaryKey(),
 	organizationId: uuid('organization_id').notNull(),
+	/** Lot 11 : import Excel qui a créé la ligne (posé par la base depuis le contexte de la transaction, jamais écrit). */
+	importJobId: uuid('import_job_id'),
 	unitId: uuid('unit_id').notNull(),
 	tenantId: uuid('tenant_id').notNull(),
 	startsOn: day('starts_on').notNull(),
@@ -107,13 +111,17 @@ export const leases = pgTable('leases', {
 	createdBy: uuid('created_by'),
 	updatedBy: uuid('updated_by'),
 	createdAt: tstz('created_at').notNull().defaultNow(),
-	updatedAt: tstz('updated_at').notNull().defaultNow()
+	updatedAt: tstz('updated_at').notNull().defaultNow(),
+	/** Lot 11 : fin d'origine d'un bail échu importé à durée indéterminée, gardée pour information (réponse 3). */
+	originalEndsOn: day('original_ends_on')
 });
 
 /** Écrite par la base seule (trigger) : l'application la lit, jamais ne l'écrit. */
 export const leaseVersions = pgTable('lease_versions', {
 	id: uuid('id').primaryKey(),
 	organizationId: uuid('organization_id').notNull(),
+	/** Lot 11 : import Excel qui a créé la ligne (posé par la base depuis le contexte de la transaction, jamais écrit). */
+	importJobId: uuid('import_job_id'),
 	leaseId: uuid('lease_id').notNull(),
 	version: integer('version').notNull(),
 	rent: fcfa('rent').notNull(),
@@ -135,6 +143,8 @@ export const leaseVersions = pgTable('lease_versions', {
 export const rentDues = pgTable('rent_dues', {
 	id: uuid('id').primaryKey(),
 	organizationId: uuid('organization_id').notNull(),
+	/** Lot 11 : import Excel qui a créé la ligne (posé par la base depuis le contexte de la transaction, jamais écrit). */
+	importJobId: uuid('import_job_id'),
 	leaseId: uuid('lease_id').notNull(),
 	periodStart: day('period_start').notNull(),
 	periodEnd: day('period_end').notNull(),
@@ -149,6 +159,8 @@ export const rentDues = pgTable('rent_dues', {
 	leaseVersion: integer('lease_version').notNull(),
 	// Lot 10 bis : dernière période ramenée au dernier jour facturé, une fois, à la sortie.
 	exitAdjustedAt: tstz('exit_adjusted_at'),
+	/** Lot 11 : `opening_balance`, l'échéance « Solde antérieur » d'un bail importé (du début du bail à la veille de la bascule). */
+	kind: text('kind').$type<'rent' | 'opening_balance'>().notNull().default('rent'),
 	createdAt: tstz('created_at').notNull().defaultNow(),
 	updatedAt: tstz('updated_at').notNull().defaultNow()
 });
@@ -157,6 +169,8 @@ export const rentDues = pgTable('rent_dues', {
 export const depositAccounts = pgTable('deposit_accounts', {
 	id: uuid('id').primaryKey(),
 	organizationId: uuid('organization_id').notNull(),
+	/** Lot 11 : import Excel qui a créé la ligne (posé par la base depuis le contexte de la transaction, jamais écrit). */
+	importJobId: uuid('import_job_id'),
 	leaseId: uuid('lease_id').notNull(),
 	type: text('type').$type<DepositType>().notNull(),
 	agreedAmount: fcfa('agreed_amount').notNull(),
@@ -174,6 +188,8 @@ export const depositAccounts = pgTable('deposit_accounts', {
 export const depositMovements = pgTable('deposit_movements', {
 	id: uuid('id').primaryKey(),
 	organizationId: uuid('organization_id').notNull(),
+	/** Lot 11 : import Excel qui a créé la ligne (posé par la base depuis le contexte de la transaction, jamais écrit). */
+	importJobId: uuid('import_job_id'),
 	accountId: uuid('account_id').notNull(),
 	type: text('type').$type<DepositMovementType>().notNull(),
 	amount: fcfa('amount').notNull(),

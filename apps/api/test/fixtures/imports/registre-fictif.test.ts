@@ -124,6 +124,15 @@ describe('plan d’import du registre fictif', async () => {
 		expect(plan.summary).toMatchObject({ newUnits: 52, leases: 46, leasesWithOpeningBalance: 9, depositsAboveCap: 1 });
 	});
 
+	it('cautions sans montant reçu : listées, et l’exécution attend un choix unique pour toutes', () => {
+		// 39 cautions importées, dont une seule avec son montant reçu (versée en partie).
+		expect(plan.pending.depositsWithoutReceived).toHaveLength(38);
+		expect(plan.blockers.map((b) => b.code)).toEqual(['DEPOSIT_RECEIVED_UNKNOWN']);
+		const full = planImport(sheets, { ...ctx, choices: { depositReceived: 'full' } });
+		expect(full.blockers).toEqual([]);
+		expect(full.deposits.filter((d) => d.outstanding === 0)).toHaveLength(38);
+	});
+
 	it('téléphones, montants et dates normalisés', () => {
 		expect(plan.tenants.every((t) => t.data.phone === null || /^\+226\d{8}$/.test(t.data.phone))).toBe(true);
 		expect(plan.owners.map((o) => o.data.phone)).toEqual(['+22670112233', '+22625304050', '+22676001122']);
