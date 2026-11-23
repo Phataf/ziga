@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	detectImportSheet,
+	detectSheetFromHeaders,
 	importSheet,
 	importTemplate,
 	matchImportColumns,
@@ -194,5 +195,19 @@ describe('classeur lu → onglets à importer', () => {
 		const { sheets, unknownSheets } = workbookImportSheets([{ sheet: 'Propriétaires', data: [['Nom']] }], 'landlord');
 		expect(sheets).toEqual({});
 		expect(unknownSheets).toEqual(['Propriétaires']);
+	});
+});
+
+describe('fichier CSV : l’onglet se reconnaît à ses en-têtes', () => {
+	it('les en-têtes des locataires désignent l’onglet Locataires ; ceux des baux, l’onglet Baux', () => {
+		expect(detectSheetFromHeaders(['Nom et prénoms', 'Téléphone', 'Civilité'], 'agency')).toBe('tenants');
+		expect(detectSheetFromHeaders(['Unité', 'Locataire', 'Date d’entrée', 'Loyer mensuel (FCFA)'], 'agency')).toBe('leases');
+		expect(detectSheetFromHeaders(['Référence du bien', 'Propriétaire', 'Type de bien', 'Nom du bien', 'Type de mandat'], 'agency')).toBe(
+			'properties'
+		);
+	});
+
+	it('en-têtes sans rapport : aucun onglet', () => {
+		expect(detectSheetFromHeaders(['Couleur', 'Taille'], 'agency')).toBeNull();
 	});
 });
