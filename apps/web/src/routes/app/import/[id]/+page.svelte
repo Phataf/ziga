@@ -45,6 +45,9 @@
 	let reason = $state('');
 	/** Annulation demandée : la tâche de fond la fait ; l'écran relit jusqu'à « annulé ». */
 	let awaitingCancel = $state(false);
+	let cancelRequestedAt = 0;
+	/** Au-delà, l'annulation n'a pas abouti (refus imprévu de la tâche de fond) : l'écran cesse d'attendre et le dit. */
+	const CANCEL_WAIT_MS = 120_000;
 	let communes = $state<Row[]>([]);
 	let neighborhoods = $state<Row[]>([]);
 	let timer: ReturnType<typeof setTimeout> | undefined;
@@ -74,6 +77,10 @@
 			adopt(await organizations.call<ImportJobView>('GET', `/imports/${id}`));
 		} catch (error) {
 			message = messageOf(error);
+		}
+		if (awaitingCancel && Date.now() - cancelRequestedAt > CANCEL_WAIT_MS) {
+			awaitingCancel = false;
+			message = t.cancel.notDone;
 		}
 		if (job && (importBusy(job.status) || awaitingCancel)) timer = setTimeout(() => void load(), POLL_MS);
 	}
@@ -122,6 +129,7 @@
 		return act(async () => {
 			const view = await organizations.call<ImportJobView>('POST', `/imports/${id}/cancel`, { reason });
 			awaitingCancel = true;
+			cancelRequestedAt = Date.now();
 			cancelOpen = false;
 			return view;
 		});
@@ -410,6 +418,7 @@
 				</section>
 			{/if}
 
+			{#if awaitingCancel}<FormAlert message={t.cancel.waiting} tone="info" />{/if}
 			{#if job.status === 'completed' && job.cancellableUntil && !awaitingCancel}
 				<section class="space-y-3 rounded-2xl border bg-card p-4 md:p-6">
 					<p class="text-base" data-testid="delai-annulation">{t.cancel.until(formatDate(job.cancellableUntil))}</p>

@@ -175,8 +175,8 @@ for (const [label, options] of [
 		await expect(items).toHaveCount(before - 1);
 
 		// Fiche en double : la famille au même numéro (Kaboré Awa et Kaboré Alima).
-		const tenants = await get<{ id: string; fullName: string }[]>(request, agency.headers, '/tenants');
-		const awa = tenants.find((t) => t.fullName === 'Kaboré Awa')!;
+		const tenants = await get<{ items: { id: string; fullName: string }[] }>(request, agency.headers, '/tenants?limit=200');
+		const awa = tenants.items.find((t) => t.fullName === 'Kaboré Awa')!;
 		await page.goto(`/app/locataires/${awa.id}`);
 		const same = page.getByTestId('meme-numero');
 		await expect(same).toBeVisible({ timeout: 20_000 });

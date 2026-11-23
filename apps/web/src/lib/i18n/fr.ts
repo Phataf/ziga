@@ -2797,7 +2797,9 @@ export const fr = {
 			help: 'Les baux de l’import sont annulés, les fiches archivées, les mandats révoqués. Rien n’est supprimé.',
 			reason: 'Motif',
 			confirm: 'Confirmer l’annulation',
-			cancelledOn: (date: string, reason: string) => `Annulé le ${date} : ${reason}`
+			cancelledOn: (date: string, reason: string) => `Annulé le ${date} : ${reason}`,
+			waiting: 'Annulation en cours. Cette page se met à jour toute seule.',
+			notDone: 'L’annulation n’a pas abouti. Réessayez ; si le refus persiste, contactez l’assistance.'
 		},
 		fileDeleted: 'Le fichier d’origine a été effacé (conservé 90 jours).',
 		contracts: {
