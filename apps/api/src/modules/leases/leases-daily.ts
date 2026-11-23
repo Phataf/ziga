@@ -60,7 +60,11 @@ export async function exitDuesPlan(
 	const input = await scheduleInput(tx, lease, rentEndsOn);
 	const endOn = lease.endsOn && lease.endsOn < rentEndsOn ? lease.endsOn : rentEndsOn;
 	const regenerated = generateRentSchedule({ ...input, endOn, until: rentEndsOn });
-	const q = tx.select().from(rentDues).where(eq(rentDues.leaseId, lease.id));
+	// Lot 11 : l'échéance « Solde antérieur » n'est ni raccourcie ni abandonnée à la sortie ; elle reste due.
+	const q = tx
+		.select()
+		.from(rentDues)
+		.where(and(eq(rentDues.leaseId, lease.id), eq(rentDues.kind, 'rent')));
 	const rows = lock ? await q.for('update') : await q;
 	return { rentEndsOn, origin: notice?.origin ?? null, adjustments: exitDueAdjustments(rows, regenerated, rentEndsOn) };
 }

@@ -113,6 +113,8 @@ export interface PlannedProperty {
 		addressHint: string | null;
 		notes: string | null;
 	};
+	/** Situé (commune et quartier du référentiel) : activé à l'import ; sinon il reste en brouillon. */
+	activate: boolean;
 }
 
 export interface PlannedUnit {
@@ -128,6 +130,8 @@ export interface PlannedUnit {
 	};
 	technicalStatus: 'ready' | 'to_refurbish' | 'under_works' | 'unavailable';
 	technicalReason: string | null;
+	/** Activée avec son bien (une unité ne s'active que dans un bien actif). */
+	activate: boolean;
 }
 
 export interface PlannedTenant {
@@ -300,6 +304,14 @@ export function switchDateIssue(switchOn: string, today: string, mode: RentBilli
 		};
 	}
 	return null;
+}
+
+/** Délai d'annulation d'un import terminé (prompt §4) ; la base le vérifie aussi, avec l'absence d'encaissement. */
+export const IMPORT_CANCEL_HOURS = 24;
+
+export function importCancellable(job: { status: string; completedAt: string | null }, now: Date): boolean {
+	if (job.status !== 'completed' || !job.completedAt) return false;
+	return now.getTime() <= Date.parse(job.completedAt) + IMPORT_CANCEL_HOURS * 3_600_000;
 }
 
 export function importedDuesStartOn(startsOn: string, switchOn: string, mode: RentBillingMode): string {
@@ -606,6 +618,18 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 				);
 			}
 		}
+		const activate = communeId !== null && neighborhoodId !== null;
+		if (!activate) {
+			issue(
+				'properties',
+				row.row,
+				'neighborhood',
+				'warning',
+				'PROPERTY_DRAFT',
+				'bien importé en brouillon ; choisissez sa commune et son quartier pour l’activer.',
+				neighborhoodRaw
+			);
+		}
 		tracked.planned = {
 			row: row.row,
 			ref: ref!,
@@ -617,7 +641,8 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 				neighborhoodId,
 				addressHint: v<string>(row, 'addressHint'),
 				notes: v<string>(row, 'notes')
-			}
+			},
+			activate
 		};
 		if (agency && mandate && ownerRef) {
 			const groupKey = JSON.stringify([refKey(ownerRef), mandate]);
@@ -671,7 +696,8 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 			},
 			// Fixé après les baux, si la colonne est vide.
 			technicalStatus: technical ?? 'ready',
-			technicalReason: technical && technical !== 'ready' ? (v<string>(row, 'technicalReason') ?? IMPORT_TECHNICAL_REASON) : null
+			technicalReason: technical && technical !== 'ready' ? (v<string>(row, 'technicalReason') ?? IMPORT_TECHNICAL_REASON) : null,
+			activate: property!.planned!.activate
 		};
 		tracked.technicalDefault = !technical;
 	}
@@ -890,6 +916,15 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 			}
 		}
 		const status: PlannedLease['status'] = startsOn! > ctx.today ? 'signed' : 'active';
+		// Un bail qui commence plus tard exige une unité disponible, donc active (règle 13) : son bien doit être situé.
+		if (status === 'signed' && !unit!.planned!.activate) {
+			error(
+				'leases',
+				row,
+				'unitRef',
+				`un bail qui commence plus tard exige une unité active ; choisissez la commune et le quartier du bien ${property.planned!.ref}.`
+			);
+		}
 		const slot = inForce.get(unitKey!) ?? {};
 		if (!rowHasError('leases', row.row)) {
 			if (status === 'active' && slot.active) {

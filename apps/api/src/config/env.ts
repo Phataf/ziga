@@ -119,6 +119,16 @@ export const envSchema = z
 		SENTRY_DSN: z.union([z.url(), z.literal('')]).default(''),
 		SENTRY_ENVIRONMENT: z.string().default('development'),
 
+		/**
+		 * Lot 11 : lecture d'un fichier importé, dans la tâche de fond, sous limites (fichier hostile) : taille décompressée,
+		 * onglets, lignes par onglet, cellules, durée. La taille du fichier envoyé est fixée par packages/shared (5 Mo).
+		 */
+		IMPORT_MAX_UNCOMPRESSED_BYTES: z.coerce.number().int().min(1_000_000).max(500_000_000).default(52_428_800),
+		IMPORT_MAX_SHEETS: z.coerce.number().int().min(1).max(50).default(12),
+		IMPORT_MAX_ROWS: z.coerce.number().int().min(10).max(100_000).default(5_000),
+		IMPORT_MAX_CELLS: z.coerce.number().int().min(100).max(5_000_000).default(250_000),
+		IMPORT_ANALYSIS_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(600_000).default(30_000),
+
 		JOBS_DASHBOARD: bool.default(false),
 		WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(100).default(5),
 

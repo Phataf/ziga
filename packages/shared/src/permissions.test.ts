@@ -70,6 +70,7 @@ const expected: Record<OrganizationRole, Action[]> = {
 		'person_link.manage',
 		'maintenance_request.read',
 		'maintenance_request.manage',
+		'import.run',
 		'listing.publish',
 		'lead.manage',
 		'visit.manage',
@@ -125,6 +126,10 @@ describe('matrice de permissions', () => {
 			expect(can(role, 'maintenance_request.manage')).toBe(role === 'director' || role === 'manager');
 			expect(can(role, 'maintenance_request.read')).toBe(true);
 		}
+	});
+
+	it('lot 11 : import Excel d’un registre, direction et gestion seulement', () => {
+		for (const role of ORGANIZATION_ROLES) expect(can(role, 'import.run')).toBe(role === 'director' || role === 'manager');
 	});
 
 	for (const role of ORGANIZATION_ROLES) {

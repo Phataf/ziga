@@ -951,6 +951,19 @@ const headerKey = (header: string) => labelKey(header.replace(/\*/g, ' '));
 /** Même chose, sans l'unité entre parenthèses (« Loyer (FCFA) » → « loyer ») : pour les variantes seulement. */
 const looseHeaderKey = (header: string) => headerKey(header.replace(/\((fcfa|f|%|mois|jours|m²|m2)\)/gi, ' '));
 
+/**
+ * Onglet d'un fichier sans nom d'onglet (CSV) : celui dont les en-têtes reconnaissent le plus de colonnes ; à égalité,
+ * l'ordre du modèle. Une colonne obligatoire absente est signalée ensuite, comme pour un classeur.
+ */
+export function detectSheetFromHeaders(headers: readonly CellValue[], type: OrganizationType): ImportSheetKey | null {
+	let best: { key: ImportSheetKey; score: number } | null = null;
+	for (const def of importTemplate(type)) {
+		const score = Object.keys(matchImportColumns(headers, def).columns).length;
+		if (score > 0 && (!best || score > best.score)) best = { key: def.key, score };
+	}
+	return best?.key ?? null;
+}
+
 export interface ColumnMatch {
 	/** Champ → indice de colonne (0 = première colonne). */
 	columns: Record<string, number>;

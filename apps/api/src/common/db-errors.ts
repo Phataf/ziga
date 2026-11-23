@@ -189,7 +189,31 @@ const RULES: Record<string, { status: number; message: string }> = {
 	PAYOUT_REVERSAL_INVALID: { status: 409, message: 'Une contre-écriture compense un reversement à l’identique.' },
 	PAYOUT_DATE_IN_FUTURE: { status: 400, message: 'La date du reversement est dans le futur.' },
 	PAYOUT_NOTHING_DUE: { status: 409, message: 'Rien à reverser sur ce relevé.' },
-	PAYOUT_EXCEEDS_NET: { status: 409, message: 'Le total reversé dépasserait le net du relevé.' }
+	PAYOUT_EXCEEDS_NET: { status: 409, message: 'Le total reversé dépasserait le net du relevé.' },
+	// Lot 11 : import Excel (migration 0025).
+	IMPORT_BORN_UPLOADED: { status: 409, message: 'Un import naît « envoyé ».' },
+	IMPORT_RUNNER: { status: 403, message: 'Seule la direction ou la gestion importe un registre ou annule un import.' },
+	IMPORT_SWITCH_FUTURE: { status: 400, message: 'La date de bascule ne peut pas être dans le futur.' },
+	IMPORT_SWITCH_FIRST_OF_MONTH: {
+		status: 400,
+		message: 'Votre organisation facture le premier mois en entier : la date de bascule est le 1er d’un mois.'
+	},
+	IMPORT_STATUS: { status: 409, message: 'Cet import n’est pas à la bonne étape pour cette action.' },
+	IMPORT_JOB_IMMUTABLE: { status: 409, message: 'Ce qui a été validé pour cet import ne change plus.' },
+	IMPORT_JOB_CLOSED: { status: 409, message: 'Un import annulé ne change plus.' },
+	IMPORT_CANCEL_NOW: { status: 409, message: 'Une annulation est datée de sa transaction.' },
+	IMPORT_CANCEL_EXPIRED: { status: 409, message: 'Un import ne s’annule que dans les 24 heures.' },
+	IMPORT_CANCEL_PAYMENTS: { status: 409, message: 'Un encaissement a été enregistré sur un bail de cet import : il ne s’annule plus.' },
+	IMPORT_JOB_UNKNOWN: { status: 409, message: 'Import introuvable dans cette organisation.' },
+	IMPORT_JOB_NOT_RUNNING: { status: 409, message: 'Seul un import en cours d’exécution crée des lignes.' },
+	DEPOSIT_IMPORT_ACCOUNT: { status: 409, message: 'Seul un compte de caution créé par cet import reçoit un versement repris.' },
+	DEPOSIT_IMPORT_FIRST: { status: 409, message: 'Le versement repris par l’import est le premier et le seul de ce compte.' },
+	DEPOSIT_IMPORT_CANCELLATION: { status: 409, message: 'Un versement repris par l’import ne s’annule qu’avec l’annulation de cet import.' },
+	RENT_DUE_OPENING_IMPORT: { status: 409, message: 'Un solde d’ouverture n’existe que pour un bail de l’import en cours.' },
+	RENT_DUE_OPENING_DATES: { status: 409, message: 'Un solde d’ouverture va du début du bail à la veille de la bascule.' },
+	RENT_DUE_OPENING_AMOUNT: { status: 409, message: 'Un solde d’ouverture est un seul montant, sans charges ni avance.' },
+	LEASE_ORIGINAL_END_IMPORT: { status: 409, message: 'La date de fin d’origine n’existe que pour un bail importé.' },
+	LEASE_ORIGINAL_END_IMMUTABLE: { status: 409, message: 'La date de fin d’origine d’un bail importé ne change pas.' }
 };
 
 /** Contraintes nommées traduites en refus métier (le reste : CONFLICT). */

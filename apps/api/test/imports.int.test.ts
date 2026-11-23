@@ -17,7 +17,7 @@ import { addDays, addMonths, toIsoDate } from '@ziga/shared/dates';
 import { newId } from '@ziga/shared/ids';
 import type { ImportJobView } from '@ziga/shared/imports';
 import type { LeaseDetailView } from '@ziga/shared/leases';
-import { newReceiptToken, provisionalReceiptNumber } from '@ziga/shared/receipts';
+import { newReceiptToken, provisionalReceiptNumber } from '@ziga/shared/payments';
 import { Queue, QueueEvents } from 'bullmq';
 import pg from 'pg';
 import readXlsxFile from 'read-excel-file/node';
@@ -63,13 +63,20 @@ async function createdBy(organizationId: string, jobId: string, table: string, e
 	await owner.query('BEGIN');
 	try {
 		await owner.query(`select set_config('app.organization_id', $1, true)`, [organizationId]);
-		const r = await owner.query(`select count(*)::int as n from ${table} where import_job_id = $1 ${extra}`, [jobId]);
+		const r = await owner.query(`select count(*)::int as n from ${table} where organization_id = $2 and import_job_id = $1 ${extra}`, [
+			jobId,
+			organizationId
+		]);
 		return r.rows[0].n as number;
 	} finally {
 		await owner.query('ROLLBACK');
 	}
 }
 
+/**
+ * Lecture SQL dans le contexte d'une organisation. Le rôle des migrations peut être superutilisateur (il passe alors
+ * outre la RLS) : chaque requête filtre aussi l'organisation, comme `createdBy`.
+ */
 async function inOrg<T>(organizationId: string, sql: string, params: unknown[] = []): Promise<T[]> {
 	await owner.query('BEGIN');
 	try {
@@ -220,7 +227,7 @@ describe('registre fictif : prévisualisation, choix unique, exécution, premier
 		expect(p.summary).toMatchObject({ newUnits: 52, leases: 46, leasesWithOpeningBalance: 9 });
 		expect(p.places.filter((x) => x.status === 'unresolved').map((x) => x.neighborhood)).toEqual(['Tampoui', 'Dasasgho', 'Pisy']);
 		// Rien n'est encore créé.
-		expect(await inOrg(a.id, `select id from units`)).toEqual([]);
+		expect(await inOrg(a.id, `select id from units where organization_id = $1`, [a.id])).toEqual([]);
 	});
 
 	it('exécution refusée tant que le choix unique des cautions n’est pas fait', async () => {
@@ -249,8 +256,8 @@ describe('registre fictif : prévisualisation, choix unique, exécution, premier
 		// Bail échu : durée indéterminée, date de fin d'origine gardée.
 		expect(await createdBy(a.id, job.id, 'leases', `and original_ends_on = '2024-02-28' and ends_on is null`)).toBe(1);
 		// Aucun reçu pour une caution reprise (D33), et aucun encaissement.
-		expect(await inOrg(a.id, `select id from receipts`)).toEqual([]);
-		expect(await inOrg(a.id, `select id from payments`)).toEqual([]);
+		expect(await inOrg(a.id, `select id from receipts where organization_id = $1`, [a.id])).toEqual([]);
+		expect(await inOrg(a.id, `select id from payments where organization_id = $1`, [a.id])).toEqual([]);
 	});
 
 	it('journal : origine « import », avec l’identifiant de l’import ; personne qui l’a lancé en acteur', async () => {
@@ -294,7 +301,8 @@ describe('registre fictif : prévisualisation, choix unique, exécution, premier
 		expect(await call(a.director, 'GET', `/units/${vacant!.id}`)).toMatchObject({ occupancy: 'free', technicalStatus: 'to_refurbish' });
 		const [leaseRow] = await inOrg<{ id: string }>(
 			a.id,
-			`select l.id from leases l join units u on u.id = l.unit_id where u.label = 'Appartement A2'`
+			`select l.id from leases l join units u on u.id = l.unit_id where l.organization_id = $1 and u.label = 'Appartement A2'`,
+			[a.id]
 		);
 		const lease = await call<LeaseDetailView>(a.director, 'GET', `/leases/${leaseRow!.id}`);
 		expect(lease.status).toBe('active');
@@ -304,12 +312,16 @@ describe('registre fictif : prévisualisation, choix unique, exécution, premier
 	});
 
 	it('premier reçu le jour même : l’encaissement solde d’abord le solde d’ouverture', async () => {
-		const [row] = await inOrg<{ id: string }>(a.id, `select l.id from leases l join units u on u.id = l.unit_id where u.label = 'Villa'`);
+		const [row] = await inOrg<{ id: string }>(
+			a.id,
+			`select l.id from leases l join units u on u.id = l.unit_id where l.organization_id = $1 and u.label = 'Villa'`,
+			[a.id]
+		);
 		const before = await call<LeaseDetailView>(a.director, 'GET', `/leases/${row!.id}`);
 		const opening = before.rentDues.find((d) => d.kind === 'opening_balance')!;
 		expect(opening).toMatchObject({ amountDue: 250_000, dueOn: firstOfThisMonth() });
 		const receiptId = newId();
-		const [paid] = await call<{ id: string; status: string; receipt: { id: string } | null }[]>(
+		const [paid] = await call<{ payment: { status: string }; receipt: { id: string } | null }[]>(
 			a.director,
 			'POST',
 			'/payments',
@@ -331,10 +343,11 @@ describe('registre fictif : prévisualisation, choix unique, exécution, premier
 			},
 			201
 		);
-		expect(paid!.status).toBe('confirmed');
+		expect(paid!.payment.status).toBe('confirmed');
+		expect(paid!.receipt).not.toBeNull();
 		const after = await call<LeaseDetailView>(a.director, 'GET', `/leases/${row!.id}`);
 		expect(after.rentDues.find((d) => d.kind === 'opening_balance')).toMatchObject({ amountPaid: 250_000, status: 'paid' });
-		expect(await inOrg(a.id, `select id from receipts`)).toHaveLength(1);
+		expect(await inOrg(a.id, `select id from receipts where organization_id = $1`, [a.id])).toHaveLength(1);
 	});
 
 	it('rapport téléchargeable : lignes importées, écartées et erreurs', async () => {
@@ -359,7 +372,7 @@ describe('accès croisé (règle 1)', () => {
 		const b = await createOrg(t, 'agency', 'Agence B cloisonnement import');
 		const job = await importedRegistry(a);
 		for (const table of ['owners', 'properties', 'units', 'tenants', 'leases', 'deposit_accounts', 'rent_dues']) {
-			expect(await inOrg(b.id, `select id from ${table}`), table).toEqual([]);
+			expect(await inOrg(b.id, `select id from ${table} where organization_id = $1`, [b.id]), table).toEqual([]);
 		}
 		expect((await refusal(b.director, 'GET', `/imports/${job.id}`)).status).toBe(404);
 		expect((await refusal(b.director, 'GET', `/imports/${job.id}/report`)).status).toBe(404);
@@ -384,7 +397,7 @@ describe('quota, rejeu, échec imprévu d’un onglet', () => {
 			'Cet import ajoute 52 unités ; votre formule en permet 10 (0 déjà utilisée). Passez à une formule supérieure ou contactez Ziga.'
 		);
 		expect((await call<ImportJobView>(a.director, 'GET', `/imports/${up.id}`)).status).toBe('analyzed');
-		expect(await inOrg(a.id, `select id from units`)).toEqual([]);
+		expect(await inOrg(a.id, `select id from units where organization_id = $1`, [a.id])).toEqual([]);
 	});
 
 	it('rejeu par BullMQ après une coupure : les onglets déjà validés sont sautés, aucun doublon', async () => {
@@ -442,7 +455,7 @@ describe('fichier hostile, envoyé par l’API', () => {
 		const job = await analyze(a.director, up.id);
 		expect(job).toMatchObject({ status: 'analysis_failed', preview: null });
 		expect(job.error).toContain('une fois décompressé, il dépasse 50 Mo');
-		expect(await inOrg(a.id, `select id from units`)).toEqual([]);
+		expect(await inOrg(a.id, `select id from units where organization_id = $1`, [a.id])).toEqual([]);
 	});
 });
 

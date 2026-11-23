@@ -5,6 +5,7 @@ import { ConfigModule } from './config/config.module.js';
 import type { AppConfig } from './config/env.js';
 import { DatabaseModule } from './db/database.module.js';
 import { ContractsWorkerModule } from './jobs/contracts-worker.module.js';
+import { ImportsWorkerModule } from './jobs/imports.processor.js';
 import { InspectionReportWorkerModule } from './jobs/inspection-report.processor.js';
 import { JobsModule } from './jobs/jobs.module.js';
 import { PaymentsWorkerModule } from './jobs/receipts.processor.js';
@@ -39,7 +40,9 @@ export class WorkerModule {
 				InspectionReportWorkerModule,
 				// Lot 09 : PDF des reçus et crédit du bail imputé sur les échéances émises la nuit.
 				PaymentsWorkerModule,
-				StatementsWorkerModule
+				StatementsWorkerModule,
+				// Lot 11 : import Excel (analyse, exécution, annulation, effacement des fichiers échus).
+				ImportsWorkerModule
 			]
 		};
 	}
