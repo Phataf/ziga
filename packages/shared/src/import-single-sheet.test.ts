@@ -187,7 +187,12 @@ describe('fichier libre sur une seule feuille : champs proposés', () => {
 			SHEET,
 			{
 				...MAPPING,
-				constants: { ...MAPPING.constants, 'opening_balances.amount': '50 000', 'deposits.receivedAmount': '70 000', 'leases.advanceMonths': '2' }
+				constants: {
+					...MAPPING.constants,
+					'opening_balances.amount': '50 000',
+					'deposits.receivedAmount': '70 000',
+					'leases.advanceMonths': '2'
+				}
 			},
 			'agency'
 		);

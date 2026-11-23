@@ -75,7 +75,8 @@ jobs:
   e2e:
     name: Playwright (vraie API, PowerSync, Gotenberg)
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # 30 minutes (lot 11) : 7 à 9 minutes de tests, mais une installation lente du runner a déjà fait dépasser 20.
+    timeout-minutes: 30
     # L'API de test crée et migre sa propre base (ziga_e2e) et utilise la base Redis n° 2.
     services:
       postgres:

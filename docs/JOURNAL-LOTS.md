@@ -1726,3 +1726,8 @@ Questions ouvertes et dette :
 - **Valeurs communes du fichier libre** (étape 4b) : la liste des champs qui acceptent une valeur commune est un choix technique proposé au porteur (PR de l'étape 4b), modifiable en un seul endroit (`import-single-sheet.ts`).
 - **Durée de la tâche Playwright en CI** : 7 à 9 minutes de tests pour une limite de 20 minutes ; une installation lente du runner a déjà fait dépasser la limite une fois (PR de l'étape 4a, relancée). À surveiller ; relever la limite si cela se reproduit.
 - Le titre du lot reste « en cours » jusqu'au lancement du lot suivant par le porteur, comme aux lots précédents ; le critère du registre réel reste à cocher avec la première agence pilote.
+
+### Réponses du porteur aux questions ouvertes du lot 11 (23/11/2026)
+1. **Valeurs communes du registre sur une seule feuille** : la liste de l'étape 4b est validée, avec une exclusion. Le solde d'ouverture, le montant reçu de la caution et l'avance ne prennent **jamais** de valeur commune, même s'ils sont des nombres : un même arriéré, une même caution reçue ou une même avance sur toutes les lignes serait une erreur silencieuse. Fait dans `import-single-sheet.ts` (`NEVER_CONSTANT`) : ces champs n'offrent pas de valeur commune à l'écran, et une valeur commune envoyée quand même à l'API pour eux (ou pour tout champ qui n'en accepte pas) est ignorée, à l'import comme dans le calcul des champs manquants. Test écrit d'abord en rouge (`import-single-sheet.test.ts`).
+2. **Limite de temps de la CI** : job Playwright porté de 20 à 30 minutes (`.github/workflows/ci.yml`).
+- Le lot 12 sera fait dans une nouvelle session.
