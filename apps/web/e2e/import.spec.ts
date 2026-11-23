@@ -107,8 +107,9 @@ for (const [label, options] of [
 		// Prévisualisation exacte : chaque erreur dit la ligne, la colonne et quoi corriger ; la cascade est dite.
 		const preview = page.getByTestId('apercu');
 		await expect(preview.getByTestId('onglet-apercu')).toHaveCount(7);
-		await expect(page.getByTestId('ligne-import').filter({ has: page.locator('[data-severite="error"]') })).toHaveCount(4);
-		await expect(page.getByTestId('ligne-import').filter({ hasText: 'Ligne' }).first()).toContainText('colonne');
+		const errors = page.getByTestId('ligne-import').filter({ has: page.locator('[data-severite="error"]') });
+		await expect(errors).toHaveCount(4);
+		for (const text of await errors.allTextContents()) expect(text).toMatch(/Ligne \d+ de .+, colonne .+ : /);
 		await expect(page.getByTestId('ligne-import').filter({ hasText: 'Saisissez 0 et notez l’avance' })).toHaveCount(1);
 		await expect(page.getByTestId('avertissement-soldes')).toContainText('ont un solde antérieur, ils apparaîtront dans les impayés');
 		// Choix unique des cautions sans montant reçu : sans lui, l'exécution est refusée.
@@ -164,7 +165,9 @@ for (const [label, options] of [
 		await expectNoHorizontalOverflow(page, `${label} : contrats à déposer`);
 		const first = items.first();
 		const unit = (await first.getByTestId('unite-a-deposer').textContent())!.trim();
-		await first.getByTestId('scan-fichier').setInputFiles({ name: 'bail-signe.pdf', mimeType: 'application/pdf', buffer: await onePagePdf() });
+		await first
+			.getByTestId('scan-fichier')
+			.setInputFiles({ name: 'bail-signe.pdf', mimeType: 'application/pdf', buffer: await onePagePdf() });
 		await first.getByTestId('deposer-scan').click();
 		await expect(items.filter({ has: page.getByTestId('unite-a-deposer').getByText(unit, { exact: true }) })).toHaveCount(0, {
 			timeout: 30_000
@@ -205,7 +208,10 @@ test('annulation dans les 24 heures, sans encaissement : baux annulés, plus rie
 
 test('facturation du premier mois en entier : seulement le 1er d’un mois, expliqué à l’écran (téléphone)', async ({ browser, request }) => {
 	const agency = await freshAgency(request, 'Agence mois entier');
-	const r = await request.put(`${API_URL}/organization/rent-billing-mode`, { headers: agency.headers, data: { mode: 'calendar_full_first' } });
+	const r = await request.put(`${API_URL}/organization/rent-billing-mode`, {
+		headers: agency.headers,
+		data: { mode: 'calendar_full_first' }
+	});
 	expect(r.status(), await r.text()).toBeLessThan(300);
 	const { ctx, page } = await open(browser, phone, agency.director, '/app/import');
 	const input = page.getByTestId('date-bascule');

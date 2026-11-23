@@ -143,7 +143,8 @@
 					balance: d.balance,
 					status: d.status as string | null,
 					isAdvance: d.isAdvance,
-					prorated: d.prorated
+					prorated: d.prorated,
+					opening: d.kind === 'opening_balance'
 				}))
 			: preview.map((d) => ({
 					key: d.periodStart,
@@ -154,7 +155,8 @@
 					balance: d.amountDue,
 					status: null as string | null,
 					isAdvance: d.isAdvance,
-					prorated: d.prorated
+					prorated: d.prorated,
+					opening: false
 				}))
 	);
 	const validated = $derived(!!lease && ['signed', 'active', 'notice'].includes(lease.status) && !pending);
@@ -292,6 +294,13 @@
 					<dt class="text-sm text-muted-foreground">{t.end}</dt>
 					<dd class="text-base">{lease.endsOn ? formatDate(lease.endsOn) : t.openEnded}</dd>
 				</div>
+				{#if lease.originalEndsOn}
+					<div>
+						<dt class="text-sm text-muted-foreground">{t.originalEnd}</dt>
+						<dd class="text-base" data-testid="fin-origine">{formatDate(lease.originalEndsOn)}</dd>
+						<dd class="text-sm text-muted-foreground">{t.originalEndHint}</dd>
+					</div>
+				{/if}
 				<div>
 					<dt class="text-sm text-muted-foreground">{t.rent}</dt>
 					<dd class="text-base tabular-nums" data-testid="loyer">{formatFcfa(lease.rent)}</dd>
@@ -463,8 +472,17 @@
 						</thead>
 						<tbody class="divide-y">
 							{#each list as d (d.key)}
-								<tr data-testid="echeance" data-preview={d.status === null ? '1' : undefined}>
-									<td class="px-4 py-2 whitespace-nowrap">{formatDate(d.start)} → {formatDate(d.end)}</td>
+								<tr
+									data-testid="echeance"
+									data-preview={d.status === null ? '1' : undefined}
+									data-kind={d.opening ? 'opening_balance' : 'rent'}
+								>
+									<td class="px-4 py-2">
+										{#if d.opening}<span class="block font-medium" title={t.openingBalanceHint}>{t.openingBalance}</span>{/if}
+										<span class={d.opening ? 'text-sm whitespace-nowrap text-muted-foreground' : 'whitespace-nowrap'}
+											>{formatDate(d.start)} → {formatDate(d.end)}</span
+										>
+									</td>
 									<td class="px-4 py-2 whitespace-nowrap">{formatDate(d.dueOn)}</td>
 									<td class="px-4 py-2 text-right whitespace-nowrap tabular-nums">{formatFcfa(d.amount)}</td>
 									<td class="px-4 py-2 text-right whitespace-nowrap tabular-nums">{formatFcfa(d.balance)}</td>
@@ -483,9 +501,18 @@
 			{:else}
 				<ul class="divide-y rounded-xl border">
 					{#each list as d (d.key)}
-						<li class="space-y-1 p-3" data-testid="echeance" data-preview={d.status === null ? '1' : undefined}>
+						<li
+							class="space-y-1 p-3"
+							data-testid="echeance"
+							data-preview={d.status === null ? '1' : undefined}
+							data-kind={d.opening ? 'opening_balance' : 'rent'}
+						>
+							{#if d.opening}<span class="block text-sm text-muted-foreground">{t.openingBalanceHint}</span>{/if}
 							<span class="flex flex-wrap items-center justify-between gap-2">
-								<span class="font-medium">{formatDate(d.start)} → {formatDate(d.end)}</span>
+								<span class="font-medium"
+									>{#if d.opening}{t.openingBalance} :
+									{/if}{formatDate(d.start)} → {formatDate(d.end)}</span
+								>
 								<span class="tabular-nums">{formatFcfa(d.amount)}</span>
 							</span>
 							<span class="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">

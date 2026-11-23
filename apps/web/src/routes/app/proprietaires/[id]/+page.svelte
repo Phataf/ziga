@@ -19,6 +19,7 @@
 	import MandateFields from '#lib/components/owners/MandateFields.svelte';
 	import OwnerFields from '#lib/components/owners/OwnerFields.svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
+	import SamePhoneNotice from '#lib/components/SamePhoneNotice.svelte';
 	import LinkedAccountSection from '#lib/components/portals/LinkedAccountSection.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.ts';
 	import { Button } from '#lib/components/ui/button/index.ts';
@@ -233,6 +234,7 @@
 	{:else if owner}
 		<FormAlert {message} />
 		<FormAlert message={info} tone="info" />
+		<SamePhoneNotice kind="owner" record={{ id: owner.id, name: owner.name, phone: owner.phone, status: owner.status }} />
 
 		<section class="space-y-3 rounded-2xl border bg-card p-4 md:p-6" aria-labelledby="titre-coordonnees">
 			<div class="flex flex-wrap items-center justify-between gap-2">

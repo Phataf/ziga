@@ -713,6 +713,10 @@ export interface LeaseView extends Omit<LeaseTerms, 'billingMode'> {
 	exitOn: string | null;
 	version: number;
 	alerts: LeaseAlert[];
+	/** Lot 11 : date de fin d'un bail à durée déterminée échu, importé à durée indéterminée (pour information). */
+	originalEndsOn: string | null;
+	/** Lot 11 : import qui a créé le bail (« Contrats à déposer »). */
+	importJobId: string | null;
 	createdAt: string;
 	updatedAt: string;
 }

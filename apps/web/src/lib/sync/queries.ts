@@ -213,7 +213,10 @@ export const LOCAL_QUERIES = {
 	allMembers: `SELECT * FROM organization_members WHERE organization_id = ? ORDER BY display_name`,
 	/** Modifications refusées par le serveur (table locale de l'appareil), de l'organisation, les plus récentes d'abord. */
 	rejections: `SELECT * FROM sync_rejections WHERE organization_id = ? ORDER BY rejected_at DESC, id DESC`,
-	rejectionCount: `SELECT count(*) AS n FROM sync_rejections WHERE organization_id = ?`
+	rejectionCount: `SELECT count(*) AS n FROM sync_rejections WHERE organization_id = ?`,
+	/** Lot 11 : fiches au même numéro, dans l'organisation (signal « Une autre fiche porte ce numéro »). */
+	tenantsSamePhone: `SELECT id, full_name AS name, phone, status FROM tenants WHERE organization_id = ? AND phone = ?`,
+	ownersSamePhone: `SELECT id, name, phone, status FROM owners WHERE organization_id = ? AND phone = ?`
 } as const;
 
 /** Référentiel géographique (lot 07) : tables de la plateforme, sans organisation, identiques pour tous. */

@@ -50,7 +50,8 @@ describe('navigation par profil (docs/UX.md §2)', () => {
 			'Relevés propriétaires',
 			'Contrats',
 			'À valider',
-			'Équipe'
+			'Équipe',
+			'Import Excel'
 		]);
 	});
 

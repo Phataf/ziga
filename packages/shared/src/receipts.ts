@@ -202,6 +202,8 @@ export interface ReceiptPeriod {
 	/** Montant imputé sur cette période par cet encaissement. */
 	amount: Fcfa;
 	isAdvance: boolean;
+	/** Lot 11 : échéance « Solde antérieur » d'un bail importé ; absent des reçus antérieurs. */
+	openingBalance?: boolean;
 }
 
 /** Contenu du reçu, copié à l'émission (confirmation) et jamais recalculé. */
@@ -262,8 +264,10 @@ export function receiptObject(s: Pick<ReceiptSnapshot, 'purpose' | 'periods' | '
 		const holder = s.deposit?.holder === 'owner' ? 'détenu par le propriétaire' : 'détenu par l’organisation';
 		return [`${what}, ${holder}`];
 	}
-	const lines = s.periods.map(
-		(p) => `Loyer du ${formatDate(p.start)} au ${formatDate(p.end)}${p.isAdvance ? ' (avance)' : ''} : ${formatFcfa(p.amount)}`
+	const lines = s.periods.map((p) =>
+		p.openingBalance
+			? `Solde antérieur (du ${formatDate(p.start)} au ${formatDate(p.end)}) : ${formatFcfa(p.amount)}`
+			: `Loyer du ${formatDate(p.start)} au ${formatDate(p.end)}${p.isAdvance ? ' (avance)' : ''} : ${formatFcfa(p.amount)}`
 	);
 	if (s.credit > 0) lines.push(`Avance sur les loyers à venir : ${formatFcfa(s.credit)}`);
 	return lines.length ? lines : ['Loyer'];

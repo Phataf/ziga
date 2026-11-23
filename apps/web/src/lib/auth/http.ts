@@ -35,10 +35,12 @@ export interface CallOptions {
 	/** Organisation active (en-tête X-Organization-Id), pour les routes de gestion. */
 	organization?: string | null;
 	signal?: AbortSignal;
+	/** Réponse binaire (modèle Excel du lot 11), rendue en Blob. */
+	blob?: boolean;
 }
 
 export async function call<T>(method: Method, path: string, options: CallOptions = {}): Promise<T> {
-	const headers: Record<string, string> = { Accept: 'application/json' };
+	const headers: Record<string, string> = { Accept: options.blob ? '*/*' : 'application/json' };
 	// Toujours un corps JSON pour les écritures : l'API l'exige sur /auth/refresh et /auth/logout (protection CSRF).
 	let body: BodyInit | undefined;
 	if (options.file) {
@@ -66,6 +68,7 @@ export async function call<T>(method: Method, path: string, options: CallOptions
 		throw new NetworkError();
 	}
 	if (response.status === 204) return undefined as T;
+	if (options.blob && response.ok) return (await response.blob()) as T;
 	const data: unknown = await response.json().catch(() => null);
 	if (!response.ok) {
 		const err = (data ?? {}) as { code?: string; message?: string; details?: unknown };

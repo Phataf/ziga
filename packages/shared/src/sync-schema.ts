@@ -331,6 +331,9 @@ export const SYNCED_TABLES = {
 		version: 'integer',
 		last_renewed_on: 'text',
 		last_renewal_automatic: 'integer',
+		/** Lot 11 : date de fin d'origine d'un bail échu importé à durée indéterminée, et import qui a créé le bail. */
+		original_ends_on: 'text',
+		import_job_id: 'text',
 		created_at: 'text',
 		updated_at: 'text'
 	},
@@ -357,6 +360,8 @@ export const SYNCED_TABLES = {
 	rent_dues: {
 		organization_id: 'text',
 		lease_id: 'text',
+		/** Lot 11 : `rent` ou `opening_balance` (« Solde antérieur », hors de l'échéancier du bail). */
+		kind: 'text',
 		period_start: 'text',
 		period_end: 'text',
 		due_on: 'text',

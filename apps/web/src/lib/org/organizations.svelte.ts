@@ -79,10 +79,10 @@ class Organizations {
 	}
 
 	/** Appel dans le contexte de l'organisation active. */
-	async call<T>(method: Method, path: string, body?: unknown, file?: Blob): Promise<T> {
+	async call<T>(method: Method, path: string, body?: unknown, file?: Blob, blob = false): Promise<T> {
 		const organization = this.activeId;
 		try {
-			return await auth.request<T>(method, path, body, { organization, file });
+			return await auth.request<T>(method, path, body, { organization, file, blob });
 		} catch (error) {
 			if (error instanceof ApiError && error.code === 'NOT_A_MEMBER' && organization) {
 				this.list = this.list.filter((m) => m.organizationId !== organization);
@@ -97,3 +97,16 @@ class Organizations {
 }
 
 export const organizations = new Organizations();
+
+/** Fichier servi par l'API (modèle d'import du lot 11), enregistré sur l'appareil sous `fileName`. */
+export async function downloadFromApi(path: string, fileName: string): Promise<void> {
+	const blob = await organizations.call<Blob>('GET', path, undefined, undefined, true);
+	const url = URL.createObjectURL(blob);
+	const a = document.createElement('a');
+	a.href = url;
+	a.download = fileName;
+	document.body.append(a);
+	a.click();
+	a.remove();
+	setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
