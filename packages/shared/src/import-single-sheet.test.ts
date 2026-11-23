@@ -173,6 +173,38 @@ describe('fichier libre sur une seule feuille : champs proposés', () => {
 			expect(byId.get(id)?.constantAllowed, id).toBe(false);
 	});
 
+	it('jamais de valeur commune pour le solde d’ouverture, le montant reçu de la caution ni l’avance (réponse du porteur après l’étape 4b)', () => {
+		// Un même arriéré, une même caution reçue ou une même avance sur toutes les lignes serait une erreur silencieuse.
+		for (const type of ['agency', 'landlord'] as const) {
+			const byId = new Map(singleSheetTargets(type).map((t) => [t.id, t]));
+			for (const id of ['opening_balances.amount', 'deposits.receivedAmount', 'leases.advanceMonths']) {
+				expect(byId.get(id), `${type} ${id}`).toBeDefined();
+				expect(byId.get(id)?.constantAllowed, `${type} ${id}`).toBe(false);
+			}
+		}
+		// Une valeur commune envoyée quand même pour ces champs est ignorée : la colonne du fichier seule compte.
+		const { sheets } = singleSheetImport(
+			SHEET,
+			{
+				...MAPPING,
+				constants: {
+					...MAPPING.constants,
+					'opening_balances.amount': '50 000',
+					'deposits.receivedAmount': '70 000',
+					'leases.advanceMonths': '2'
+				}
+			},
+			'agency'
+		);
+		const filledRows = (key: 'opening_balances' | 'deposits' | 'leases', field: string) => {
+			const col = sheets[key]!.columns[field]!;
+			return sheets[key]!.rows.slice(1).filter((r) => r[col] !== null && r[col] !== undefined && r[col] !== '').length;
+		};
+		expect(filledRows('opening_balances', 'amount')).toBe(1);
+		expect(filledRows('deposits', 'receivedAmount')).toBe(0);
+		expect(filledRows('leases', 'advanceMonths')).toBe(0);
+	});
+
 	it('suggestion d’après les en-têtes : sans ambiguïté seulement ; « Loyer » vaut pour l’unité et pour le bail', () => {
 		const s = suggestSingleSheetMapping(HEADERS, 'agency');
 		expect(s).toMatchObject({

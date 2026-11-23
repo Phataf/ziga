@@ -77,6 +77,13 @@ const CONSTANT_FIELDS = new Set([
 	'properties.commissionAmount'
 ]);
 
+/**
+ * Jamais de valeur commune, même pour un nombre (réponse du porteur après l'étape 4b) : un même arriéré, une même
+ * caution reçue ou une même avance sur toutes les lignes serait une erreur silencieuse. Une valeur commune envoyée
+ * quand même pour un de ces champs est ignorée.
+ */
+const NEVER_CONSTANT = new Set(['opening_balances.amount', 'deposits.receivedAmount', 'leases.advanceMonths']);
+
 /** Colonnes qui servent deux champs sans ambiguïté (loyer et charges de l'unité et du bail). */
 const SHARED_COLUMNS = [new Set(['units.rent', 'leases.rent']), new Set(['units.charges', 'leases.charges'])];
 
@@ -91,7 +98,7 @@ export function singleSheetTargets(type: OrganizationType): SingleSheetTarget[] 
 					sheet: def.key,
 					field: f,
 					required: f.required,
-					constantAllowed: CONSTANT_KINDS.has(f.kind) || CONSTANT_FIELDS.has(id)
+					constantAllowed: !NEVER_CONSTANT.has(id) && (CONSTANT_KINDS.has(f.kind) || CONSTANT_FIELDS.has(id))
 				};
 			})
 	);
@@ -117,8 +124,19 @@ function activeSheets(mapping: Pick<SingleSheetMapping, 'columns'>, type: Organi
 export function singleSheetMissing(mapping: SingleSheetMapping, type: OrganizationType): SingleSheetTarget[] {
 	const active = activeSheets(mapping, type);
 	return singleSheetTargets(type).filter(
-		(t) => t.required && active.has(t.sheet) && mapping.columns[t.id] === undefined && !filled(mapping.constants[t.id])
+		(t) =>
+			t.required && active.has(t.sheet) && mapping.columns[t.id] === undefined && !(t.constantAllowed && filled(mapping.constants[t.id]))
 	);
+}
+
+/** Valeurs communes retenues : seulement pour un champ qui en accepte une ; les autres sont ignorées. */
+function allowedConstants(mapping: SingleSheetMapping, type: OrganizationType): Record<SingleSheetTargetId, string> {
+	const allowed = new Set(
+		singleSheetTargets(type)
+			.filter((t) => t.constantAllowed)
+			.map((t) => t.id)
+	);
+	return Object.fromEntries(Object.entries(mapping.constants).filter(([id, v]) => allowed.has(id) && filled(v)));
 }
 
 /**
@@ -196,11 +214,12 @@ export function singleSheetImport(
 	const defs = new Map<ImportSheetKey, ImportSheetDefinition>(importTemplate(type).map((d) => [d.key, d]));
 	const active = activeSheets(mapping, type);
 	const data = sheet.data;
+	const constants = allowedConstants(mapping, type);
 	const get = (row: readonly CellValue[], id: string): CellValue => {
 		const col = mapping.columns[id];
 		if (col !== undefined) return row[col] ?? null;
-		const constant = mapping.constants[id];
-		return filled(constant) ? constant!.trim() : null;
+		const constant = constants[id];
+		return constant === undefined ? null : constant.trim();
 	};
 	const text = (row: readonly CellValue[], id: string) => importText(get(row, id)) ?? '';
 	const phoneKey = (row: readonly CellValue[], id: string) => {
@@ -294,7 +313,7 @@ export function singleSheetImport(
 		const target = GENERATED_SOURCE[id] ?? id;
 		const col = mapping.columns[target];
 		if (col !== undefined) return importText(headerRow[col]) ?? columnLetter(col);
-		if (filled(mapping.constants[target])) {
+		if (constants[target] !== undefined) {
 			const [k, f] = target.split('.') as [ImportSheetKey, string];
 			return `valeur commune « ${defs.get(k)?.fields.find((x) => x.key === f)?.header ?? f} »`;
 		}
