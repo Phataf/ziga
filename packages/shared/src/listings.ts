@@ -447,9 +447,19 @@ export interface ShowcaseCursor {
 
 const INSTANT_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?Z$/;
 
+/** Ce que la recherche lit d'une adresse (`URLSearchParams` dans le navigateur et dans Node). */
+export interface QueryParams {
+	get(name: string): string | null;
+}
+
+/** Codes d'un texte ASCII (le curseur ne contient qu'une date ISO et un identifiant). */
+function asciiCodes(text: string): number[] {
+	return [...text].map((ch) => ch.charCodeAt(0) & 0x7f);
+}
+
 /** Curseur de pagination : date de publication et identifiant, en base64url. */
 export function encodeShowcaseCursor(c: ShowcaseCursor): string {
-	return base64Url(new TextEncoder().encode(`${c.publishedAt}|${c.id}`));
+	return base64Url(Uint8Array.from(asciiCodes(`${c.publishedAt}|${c.id}`)));
 }
 
 const BASE64_URL_INDEX = new Map([...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'].map((ch, i) => [ch, i]));
@@ -475,7 +485,7 @@ export function decodeShowcaseCursor(token: string): ShowcaseCursor | null {
 	if (token.length > 200) return null;
 	const bytes = fromBase64Url(token);
 	if (!bytes) return null;
-	const [publishedAt, id, ...rest] = new TextDecoder().decode(bytes).split('|');
+	const [publishedAt, id, ...rest] = String.fromCharCode(...bytes).split('|');
 	if (rest.length || !publishedAt || !id) return null;
 	if (!INSTANT_PATTERN.test(publishedAt) || !Number.isFinite(Date.parse(publishedAt)) || !isUuid(id)) return null;
 	return { publishedAt, id };
@@ -487,7 +497,7 @@ export function decodeShowcaseCursor(token: string): ShowcaseCursor | null {
  */
 export function parseShowcaseQuery(
 	operation: ListingOperation,
-	params: URLSearchParams
+	params: QueryParams
 ): { filters: ShowcaseFilters; cursor: ShowcaseCursor | null } {
 	const filters: ShowcaseFilters = {};
 	const commune = params.get('commune');
@@ -516,15 +526,15 @@ export function parseShowcaseQuery(
 
 /** Forme canonique des paramètres (ordre fixe, valeurs normalisées) : adresse canonique et clé de cache. */
 export function showcaseQueryString(filters: ShowcaseFilters, cursor?: ShowcaseCursor | null): string {
-	const p = new URLSearchParams();
-	if (filters.communeId) p.set('commune', filters.communeId);
-	if (filters.neighborhoodId) p.set('quartier', filters.neighborhoodId);
-	if (filters.type) p.set('type', filters.type);
-	if (filters.budgetMax !== undefined) p.set('budget', String(filters.budgetMax));
-	if (filters.bedroomsMin !== undefined) p.set('chambres', String(filters.bedroomsMin));
-	if (filters.furnished) p.set('meuble', '1');
-	if (cursor) p.set('apres', encodeShowcaseCursor(cursor));
-	return p.toString();
+	const p: [string, string][] = [];
+	if (filters.communeId) p.push(['commune', filters.communeId]);
+	if (filters.neighborhoodId) p.push(['quartier', filters.neighborhoodId]);
+	if (filters.type) p.push(['type', filters.type]);
+	if (filters.budgetMax !== undefined) p.push(['budget', String(filters.budgetMax)]);
+	if (filters.bedroomsMin !== undefined) p.push(['chambres', String(filters.bedroomsMin)]);
+	if (filters.furnished) p.push(['meuble', '1']);
+	if (cursor) p.push(['apres', encodeShowcaseCursor(cursor)]);
+	return p.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
 }
 
 /** Clé Redis d'une page de résultats ; la version de la vitrine change à chaque modification de la projection. */
