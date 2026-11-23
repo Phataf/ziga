@@ -2802,6 +2802,29 @@ export const fr = {
 			notDone: 'L’annulation n’a pas abouti. Réessayez ; si le refus persiste, contactez l’assistance.'
 		},
 		fileDeleted: 'Le fichier d’origine a été effacé (conservé 90 jours).',
+		/** Étape 4b : fichier libre sur une seule feuille. */
+		mapping: {
+			title: 'Faites correspondre les colonnes de votre feuille',
+			help: 'Votre fichier ne suit pas le modèle. Pour chaque champ, choisissez la colonne de votre feuille qui le contient, ou donnez une valeur commune à toutes les lignes. Les propriétaires, biens et locataires répétés d’une ligne à l’autre ne sont créés qu’une fois.',
+			helpDesktop:
+				'Votre fichier ne suit pas le modèle. Glissez chaque colonne de votre feuille vers le champ qui lui correspond (ou choisissez-la dans la liste), ou donnez une valeur commune à toutes les lignes. Les propriétaires, biens et locataires répétés d’une ligne à l’autre ne sont créés qu’une fois.',
+			sheet: 'Feuille à importer',
+			sheetRows: (name: string, rows: number) => `${name} (${rows} ligne(s))`,
+			fileColumns: (name: string, rows: number) => `Colonnes de « ${name} » (${rows} ligne(s))`,
+			columnN: (n: number) => `Colonne ${n}`,
+			example: (value: string) => `Ex. : ${value}`,
+			column: 'Colonne du fichier',
+			columnOrDrop: 'Colonne du fichier (ou glissez-la ici)',
+			noColumn: 'Aucune',
+			constant: 'Ou valeur commune',
+			noConstant: 'Aucune',
+			required: 'obligatoire',
+			linked: (name: string) => `Relié à « ${name} »`,
+			unlink: 'Retirer',
+			others: (n: number) => `Autres champs (${n})`,
+			missing: 'Encore à relier ou à remplir :',
+			apply: 'Appliquer la correspondance et revérifier'
+		},
 		contracts: {
 			title: 'Contrats à déposer',
 			subtitle:

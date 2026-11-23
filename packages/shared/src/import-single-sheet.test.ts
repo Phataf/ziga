@@ -29,13 +29,78 @@ const ctx = (over: Partial<ImportContext> = {}): ImportContext => ({
 });
 
 /** Registre tenu sur une seule feuille : une ligne par logement, le propriétaire et le bien répétés. */
-const HEADERS = ['N°', 'Propriétaire', 'Tél propriétaire', 'Maison', 'Quartier', 'Logement', 'Loyer', 'Locataire', 'Contact', 'Entrée', 'Caution', 'Arriérés'];
+const HEADERS = [
+	'N°',
+	'Propriétaire',
+	'Tél propriétaire',
+	'Maison',
+	'Quartier',
+	'Logement',
+	'Loyer',
+	'Locataire',
+	'Contact',
+	'Entrée',
+	'Caution',
+	'Arriérés'
+];
 const ROWS: CellValue[][] = [
-	[1, 'Ouédraogo Mariam', '70 11 22 33', 'Cour Tampouy', 'Tampouy', 'Chambre 1', '35 000', 'Kaboré Awa', '76 00 00 01', '01/03/2022', '70 000', ''],
-	[2, 'Ouédraogo Mariam', '70 11 22 33', 'Cour Tampouy', 'Tampouy', 'Chambre 2', '35 000', 'Zongo Paul', '76 00 00 02', '01/06/2023', '70 000', '35 000'],
+	[
+		1,
+		'Ouédraogo Mariam',
+		'70 11 22 33',
+		'Cour Tampouy',
+		'Tampouy',
+		'Chambre 1',
+		'35 000',
+		'Kaboré Awa',
+		'76 00 00 01',
+		'01/03/2022',
+		'70 000',
+		''
+	],
+	[
+		2,
+		'Ouédraogo Mariam',
+		'70 11 22 33',
+		'Cour Tampouy',
+		'Tampouy',
+		'Chambre 2',
+		'35 000',
+		'Zongo Paul',
+		'76 00 00 02',
+		'01/06/2023',
+		'70 000',
+		'35 000'
+	],
 	[3, 'OUEDRAOGO Mariam', '70112233', 'Cour Tampouy', 'Tampouy', 'Chambre 3', '35 000', '', '', '', '', ''],
-	[4, 'SCI Wend Panga', '25 30 40 50', 'Villa Dassasgho', 'Dassasgho', 'Villa', '150 000', 'Traoré Issouf', '76 00 00 03', '15/01/2021', '300 000', ''],
-	[5, 'SCI Wend Panga', '25 30 40 50', 'Villa Dassasgho', 'Dassasgho', 'Annexe', '50 000', 'Kaboré Awa', '76 00 00 01', '01/09/2024', '', ''],
+	[
+		4,
+		'SCI Wend Panga',
+		'25 30 40 50',
+		'Villa Dassasgho',
+		'Dassasgho',
+		'Villa',
+		'150 000',
+		'Traoré Issouf',
+		'76 00 00 03',
+		'15/01/2021',
+		'300 000',
+		''
+	],
+	[
+		5,
+		'SCI Wend Panga',
+		'25 30 40 50',
+		'Villa Dassasgho',
+		'Dassasgho',
+		'Annexe',
+		'50 000',
+		'Kaboré Awa',
+		'76 00 00 01',
+		'01/09/2024',
+		'',
+		''
+	],
 	[6, 'Ouédraogo Mariam', '70 11 22 33', 'Cour Tampouy', 'Tampouy', 'Chambre 4', '35 000', 'Sawadogo Ali', '12345', '01/01/2024', '', '']
 ];
 const SHEET = { sheet: 'Feuil1', data: [HEADERS, ...ROWS] };
@@ -84,7 +149,9 @@ describe('fichier libre sur une seule feuille : champs proposés', () => {
 			'opening_balances.lease'
 		])
 			expect(ids).not.toContain(generated);
-		expect(ids).toEqual(expect.arrayContaining(['owners.name', 'properties.name', 'units.label', 'tenants.fullName', 'leases.rent', 'deposits.agreedAmount']));
+		expect(ids).toEqual(
+			expect.arrayContaining(['owners.name', 'properties.name', 'units.label', 'tenants.fullName', 'leases.rent', 'deposits.agreedAmount'])
+		);
 		// Bailleur particulier : ni propriétaire ni mandat.
 		const landlord = singleSheetTargets('landlord').map((t) => t.id);
 		expect(landlord.some((id) => id.startsWith('owners.') || id.startsWith('properties.mandate'))).toBe(false);
@@ -92,7 +159,15 @@ describe('fichier libre sur une seule feuille : champs proposés', () => {
 
 	it('valeur commune possible pour les listes, les dates du mandat et la commission ; jamais pour ce qui change à chaque ligne', () => {
 		const byId = new Map(singleSheetTargets('agency').map((t) => [t.id, t]));
-		for (const id of ['owners.type', 'properties.type', 'properties.mandateType', 'properties.mandateStartsOn', 'properties.commissionRate', 'properties.commune', 'units.type'])
+		for (const id of [
+			'owners.type',
+			'properties.type',
+			'properties.mandateType',
+			'properties.mandateStartsOn',
+			'properties.commissionRate',
+			'properties.commune',
+			'units.type'
+		])
 			expect(byId.get(id)?.constantAllowed, id).toBe(true);
 		for (const id of ['units.label', 'tenants.fullName', 'tenants.phone', 'leases.startsOn', 'leases.rent', 'deposits.agreedAmount'])
 			expect(byId.get(id)?.constantAllowed, id).toBe(false);
@@ -169,7 +244,11 @@ describe('fichier libre sur une seule feuille : répartition dans les sept group
 		expect(cascade.message).toMatch(/^Ligne 7 de Feuil1\b/);
 		expect(cascade.message).not.toMatch(/Locataires, ligne/);
 		// Une valeur commune est nommée comme telle.
-		const bad = singleSheetImport(SHEET, { ...MAPPING, constants: { ...MAPPING.constants, 'properties.mandateStartsOn': 'bientôt' } }, 'agency');
+		const bad = singleSheetImport(
+			SHEET,
+			{ ...MAPPING, constants: { ...MAPPING.constants, 'properties.mandateStartsOn': 'bientôt' } },
+			'agency'
+		);
 		const dated = bad.relabel(planImport(bad.sheets, ctx()).issues).find((i) => i.field === 'mandateStartsOn')!;
 		expect(dated.message).toMatch(/^Ligne 2 de Feuil1, valeur commune « Début du mandat » : /);
 	});

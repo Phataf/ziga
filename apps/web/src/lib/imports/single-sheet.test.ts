@@ -6,7 +6,9 @@ const preview = (over: Partial<ImportPreview> = {}): ImportPreview =>
 	({
 		sheets: [],
 		unknownSheets: ['Feuil1'],
-		fileSheets: [{ name: 'Feuil1', headers: ['Nom', 'Loyer'], samples: [], rows: 3, suggested: { 'tenants.fullName': 0, 'leases.rent': 1 } }],
+		fileSheets: [
+			{ name: 'Feuil1', headers: ['Nom', 'Loyer'], samples: [], rows: 3, suggested: { 'tenants.fullName': 0, 'leases.rent': 1 } }
+		],
 		columnIssues: [],
 		issues: [],
 		blockers: [],
@@ -43,6 +45,10 @@ describe('fichier libre : état de l’écran de correspondance', () => {
 		const b = withConstant(a, 'units.type', 'Chambre-salon');
 		expect(b).toEqual({ sheet: 'Feuil1', columns: {}, constants: { 'units.type': 'Chambre-salon' } });
 		expect(withColumn(b, 'units.type', null)).toEqual({ sheet: 'Feuil1', columns: {}, constants: { 'units.type': 'Chambre-salon' } });
-		expect(withConstant(withColumn(m, 'leases.rent', 2), 'leases.rent', '')).toEqual({ sheet: 'Feuil1', columns: { 'leases.rent': 2 }, constants: { 'units.type': 'Studio' } });
+		expect(withConstant(withColumn(m, 'leases.rent', 2), 'leases.rent', '')).toEqual({
+			sheet: 'Feuil1',
+			columns: { 'leases.rent': 2 },
+			constants: { 'units.type': 'Studio' }
+		});
 	});
 });

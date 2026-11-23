@@ -554,7 +554,15 @@ describe('fichier libre sur une seule feuille (étape 4b)', () => {
 		const analyzed = await analyze(a.director, up.id, { mapping: { single: FREE_MAPPING }, choices: { depositReceived: 'full' } });
 		expect(analyzed.mapping).toEqual({ single: FREE_MAPPING });
 		expect(analyzed.preview!.blockers).toEqual([]);
-		expect(analyzed.preview!.sheets.map((s) => s.key)).toEqual(['owners', 'properties', 'units', 'tenants', 'leases', 'deposits', 'opening_balances']);
+		expect(analyzed.preview!.sheets.map((s) => s.key)).toEqual([
+			'owners',
+			'properties',
+			'units',
+			'tenants',
+			'leases',
+			'deposits',
+			'opening_balances'
+		]);
 		const phone = analyzed.preview!.issues.find((i) => i.severity === 'error')!;
 		expect(phone.message).toMatch(/^Ligne 7 de Feuil1, colonne Contact : /);
 		const job = await execute(a.director, up.id);

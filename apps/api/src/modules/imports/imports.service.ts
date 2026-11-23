@@ -17,22 +17,26 @@ import {
 	IMPORT_CANCEL_HOURS,
 	planImport,
 	switchDateIssue,
+	type ImportBlocker,
 	type ImportContext,
 	type ImportPlan
 } from '@ziga/shared/import-plan';
+import { fileSheetPreview, singleSheetImport, singleSheetMissing, type FileSheetPreview } from '@ziga/shared/import-single-sheet';
 import {
 	importSheet,
 	IMPORT_SHEET_KEYS,
+	IMPORT_SHEET_NAMES,
 	workbookImportSheets,
-	type ImportSheetInput,
 	type ImportSheetKey
 } from '@ziga/shared/import-template';
+import { labelKey } from '@ziga/shared/import-values';
 import {
 	IMPORT_MIME_TYPES,
 	type AnalyzeImportData,
 	type CreateImportData,
 	type ImportChoices,
 	type ImportJobView,
+	type ImportMapping,
 	type ImportPreview,
 	type ImportReportView,
 	type ImportSheetOutcome
@@ -146,6 +150,7 @@ export class ImportsService {
 					? new Date(Date.parse(completedAt) + IMPORT_CANCEL_HOURS * 3_600_000).toISOString()
 					: null,
 			choices: (row.choices ?? {}) as ImportChoices,
+			mapping: (row.mapping ?? {}) as ImportMapping,
 			preview: (row.preview as unknown as ImportPreview | null) ?? null,
 			report: report ? reportView(report) : null
 		};
@@ -249,7 +254,7 @@ export class ImportsService {
 			action: 'import.analyze',
 			objectType: 'import_job',
 			objectId: id,
-			after: { switchOn: updated!.switchOn, choices }
+			after: { switchOn: updated!.switchOn, choices, mapping }
 		});
 		this.enqueue(IMPORT_ANALYZE_JOB, { organizationId: c.organizationId, importJobId: id, userId: c.userId });
 		return this.view(updated!);
@@ -377,17 +382,54 @@ export class ImportsService {
 		};
 	}
 
-	/** Onglets lus → onglets à importer (correspondance automatique, sauf correspondance choisie à la main) et plan. */
-	async plan(row: ImportJobRow, book: ReadSheet[]): Promise<{ plan: ImportPlan; read: ReturnType<typeof workbookImportSheets> }> {
+	/**
+	 * Onglets lus → onglets à importer, et plan. Classeur du modèle : correspondance automatique par les en-têtes.
+	 * Fichier libre sur une seule feuille (étape 4b) : la feuille choisie est répartie dans les onglets du modèle selon la
+	 * correspondance faite à la main, et les messages du plan nomment la feuille et les colonnes du fichier.
+	 */
+	async plan(row: ImportJobRow, book: ReadSheet[]): Promise<{ plan: ImportPlan; read: ImportRead }> {
 		const { organizationType } = this.context();
-		const read = workbookImportSheets(book, organizationType);
-		const mapping = (row.mapping ?? {}) as Partial<Record<ImportSheetKey, Record<string, number>>>;
-		for (const key of IMPORT_SHEET_KEYS) {
-			const sheet = read.sheets[key];
-			if (sheet && mapping[key]) read.sheets[key] = { ...sheet, columns: mapping[key] } satisfies ImportSheetInput;
+		const single = ((row.mapping ?? {}) as ImportMapping).single;
+		const source = single ? book.find((s) => s.sheet === single.sheet) : undefined;
+		const blockers: ImportBlocker[] = [];
+		let read: Omit<ImportRead, 'fileSheets'>;
+		let relabel = (issues: ImportPlan['issues']) => issues;
+		if (single && source) {
+			const split = singleSheetImport(source, single, organizationType);
+			read = {
+				sheets: split.sheets,
+				unknownSheets: book.filter((s) => s !== source && !isHelperSheet(s.sheet)).map((s) => s.sheet),
+				columnIssues: []
+			};
+			relabel = split.relabel;
+			const missing = singleSheetMissing(single, organizationType);
+			if (missing.length) {
+				blockers.push({
+					code: 'MAPPING_INCOMPLETE',
+					message: `Correspondance incomplète : reliez à une colonne, ou donnez une valeur commune à ${missing
+						.map((t) => `« ${t.field.header} » (${IMPORT_SHEET_NAMES[t.sheet]})`)
+						.join(', ')}.`
+				});
+			}
+		} else {
+			read = workbookImportSheets(book, organizationType);
 		}
-		const plan = planImport(read.sheets, await this.planContext(row.switchOn, (row.choices ?? {}) as ImportChoices));
-		return { plan, read };
+		if (!Object.keys(read.sheets).length) {
+			blockers.push({
+				code: 'NOTHING_TO_IMPORT',
+				message: 'Aucun onglet du modèle n’est reconnu : faites correspondre les colonnes de votre feuille, ou utilisez le modèle.'
+			});
+		}
+		// Feuilles proposées à la correspondance : celle déjà choisie, ou toutes celles du fichier quand rien n'est reconnu.
+		const fileSheets: FileSheetPreview[] =
+			single && source
+				? [fileSheetPreview(source, organizationType)]
+				: Object.keys(read.sheets).length
+					? []
+					: book.filter((s) => !isHelperSheet(s.sheet)).map((s) => fileSheetPreview(s, organizationType));
+		const planned = planImport(read.sheets, await this.planContext(row.switchOn, (row.choices ?? {}) as ImportChoices));
+		const plan = { ...planned, issues: relabel(planned.issues), blockers: [...blockers, ...planned.blockers] };
+		return { plan, read: { ...read, fileSheets } };
 	}
 
 	async finishAnalysis(id: string, book: ReadSheet[]): Promise<void> {
@@ -532,7 +574,13 @@ function plannedCount(plan: ImportPlan, key: ImportSheetKey): number {
 	}[key];
 }
 
-export function previewOf(plan: ImportPlan, read: ReturnType<typeof workbookImportSheets>, type: 'agency' | 'landlord'): ImportPreview {
+/** Onglets lus et feuilles du fichier proposées à la correspondance des colonnes. */
+export type ImportRead = ReturnType<typeof workbookImportSheets> & { fileSheets: FileSheetPreview[] };
+
+/** Notice et listes du modèle : jamais proposées à la correspondance. */
+const isHelperSheet = (name: string) => ['notice', 'listes'].includes(labelKey(name));
+
+export function previewOf(plan: ImportPlan, read: ImportRead, type: 'agency' | 'landlord'): ImportPreview {
 	return {
 		sheets: IMPORT_SHEET_KEYS.flatMap((key) => {
 			const sheet = read.sheets[key];
@@ -557,6 +605,7 @@ export function previewOf(plan: ImportPlan, read: ReturnType<typeof workbookImpo
 			];
 		}),
 		unknownSheets: read.unknownSheets,
+		fileSheets: read.fileSheets,
 		columnIssues: read.columnIssues,
 		issues: plan.issues,
 		blockers: plan.blockers,
