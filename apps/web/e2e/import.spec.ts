@@ -270,6 +270,8 @@ const FREE = join(import.meta.dirname, '../../api/test/fixtures/imports/registre
 async function mapColumn(page: Page, target: string, header: string, drag: boolean) {
 	const zone = page.locator(`[data-testid="cible"][data-cible="${target}"]`);
 	if (drag) {
+		// Les colonnes du fichier restent visibles à côté des champs (panneau fixe) : on va au champ, puis on glisse.
+		await zone.scrollIntoViewIfNeeded();
 		await page.getByTestId('colonne-fichier').filter({ hasText: header }).first().dragTo(zone);
 	} else {
 		await zone.getByTestId('cible-colonne').selectOption({ label: header });

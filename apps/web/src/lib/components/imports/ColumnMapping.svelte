@@ -153,33 +153,17 @@
 		{#if col !== undefined}
 			<p class="flex flex-wrap items-center gap-2 text-sm">
 				<span class="break-words">{t.linked(columnName(col))}</span>
-				<Button variant="ghost" onclick={() => (mapping = withColumn(mapping, x.id, null))}
-					><X aria-hidden="true" />{t.unlink}</Button
-				>
+				<Button variant="ghost" onclick={() => (mapping = withColumn(mapping, x.id, null))}><X aria-hidden="true" />{t.unlink}</Button>
 			</p>
 		{/if}
 	</li>
 {/snippet}
 
-<section class="min-w-0 space-y-4 rounded-2xl border bg-card p-4 md:p-6" data-testid="correspondance">
-	<div class="space-y-1">
-		<h2 class="text-lg font-semibold">{t.title}</h2>
-		<p class="text-base text-muted-foreground">{device.isDesktop ? t.helpDesktop : t.help}</p>
-	</div>
-
-	{#if files.length > 1}
-		<label class="block max-w-md space-y-1">
-			<span class="block font-medium">{t.sheet}</span>
-			<select class={field} value={mapping.sheet} onchange={(e) => chooseSheet(e.currentTarget.value)} data-testid="feuille-choix">
-				{#each files as f (f.name)}<option value={f.name}>{t.sheetRows(f.name, f.rows)}</option>{/each}
-			</select>
-		</label>
-	{/if}
-
+{#snippet columnsList()}
 	{#if file}
 		<div class="space-y-2">
 			<h3 class="font-medium">{t.fileColumns(file.name, file.rows)}</h3>
-			<ul class={cn('min-w-0 gap-2', device.isDesktop ? 'flex flex-wrap' : 'grid sm:grid-cols-2')}>
+			<ul class={cn('min-w-0 gap-2', device.isDesktop ? 'grid' : 'grid sm:grid-cols-2')}>
 				{#each file.headers as header, i (i)}
 					<li
 						class={cn(
@@ -208,7 +192,9 @@
 			</ul>
 		</div>
 	{/if}
+{/snippet}
 
+{#snippet fieldsList()}
 	{#each groups as g (g.sheet)}
 		<div class="space-y-2">
 			<h3 class="font-semibold">{IMPORT_SHEET_NAMES[g.sheet]}</h3>
@@ -225,6 +211,33 @@
 			{/if}
 		</div>
 	{/each}
+{/snippet}
+
+<section class="min-w-0 space-y-4 rounded-2xl border bg-card p-4 md:p-6" data-testid="correspondance">
+	<div class="space-y-1">
+		<h2 class="text-lg font-semibold">{t.title}</h2>
+		<p class="text-base text-muted-foreground">{device.isDesktop ? t.helpDesktop : t.help}</p>
+	</div>
+
+	{#if files.length > 1}
+		<label class="block max-w-md space-y-1">
+			<span class="block font-medium">{t.sheet}</span>
+			<select class={field} value={mapping.sheet} onchange={(e) => chooseSheet(e.currentTarget.value)} data-testid="feuille-choix">
+				{#each files as f (f.name)}<option value={f.name}>{t.sheetRows(f.name, f.rows)}</option>{/each}
+			</select>
+		</label>
+	{/if}
+
+	{#if device.isDesktop}
+		<!-- Ordinateur : les champs à gauche, les colonnes du fichier à droite, toujours visibles pendant qu'on glisse. -->
+		<div class="grid grid-cols-[minmax(0,1fr)_18rem] items-start gap-6">
+			<div class="min-w-0 space-y-4">{@render fieldsList()}</div>
+			<aside class="sticky top-20 max-h-[calc(100vh-7rem)] min-w-0 overflow-y-auto">{@render columnsList()}</aside>
+		</div>
+	{:else}
+		{@render columnsList()}
+		{@render fieldsList()}
+	{/if}
 
 	{#if missing.length}
 		<div class="space-y-1 rounded-lg bg-warning-soft p-3 text-warning-foreground" role="status">
