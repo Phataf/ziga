@@ -501,6 +501,25 @@ describe('annulation dans les 24 heures (prompt §4, réponse 7)', () => {
 	});
 });
 
+describe('annulation d’un bien importé sans quartier (étape 4a)', () => {
+	it('un bien resté en brouillon, sans commune ni quartier, est archivé à l’annulation comme les autres', async () => {
+		const a = await createOrg(t, 'agency', 'Agence du bien sans quartier');
+		const sheets = smallRegistry(2).map((s) =>
+			s.name === PROPERTIES.name ? { ...s, rows: s.rows.map((r) => r.map((c, i) => (i === 5 ? 'Quartier introuvable' : c))) } : s
+		);
+		const up = await uploadImport(a.director, local, await workbook(sheets));
+		await analyze(a.director, up.id);
+		const job = await execute(a.director, up.id);
+		expect(job.status, JSON.stringify(job.report)).toBe('completed');
+		expect(await createdBy(a.id, job.id, 'properties', `and record_status = 'draft' and neighborhood_id is null`)).toBe(1);
+		await call(a.director, 'POST', `/imports/${job.id}/cancel`, { reason: 'Registre à reprendre' }, 202);
+		const cancelled = await settled(a.director, job.id, (j) => j.status === 'cancelled');
+		expect(cancelled.status).toBe('cancelled');
+		expect(await createdBy(a.id, job.id, 'properties', `and record_status = 'archived' and neighborhood_id is null`)).toBe(1);
+		expect(await createdBy(a.id, job.id, 'leases', `and status = 'cancelled'`)).toBe(2);
+	}, 120_000);
+});
+
 describe('rapport neutralisé, de bout en bout', () => {
 	it('un nom de locataire qui ressemble à une formule ressort du rapport en texte', async () => {
 		const a = await createOrg(t, 'agency', 'Agence du rapport');
