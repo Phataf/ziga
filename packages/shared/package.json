@@ -171,6 +171,10 @@
 		"./same-phone": {
 			"types": "./dist/same-phone.d.ts",
 			"default": "./dist/same-phone.js"
+		},
+		"./imports": {
+			"types": "./dist/imports.d.ts",
+			"default": "./dist/imports.js"
 		}
 	},
 	"files": [

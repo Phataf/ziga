@@ -110,6 +110,8 @@ export const PERMISSIONS = {
 	'person_link.manage': [D, M],
 	'maintenance_request.read': [D, M, F, V],
 	'maintenance_request.manage': [D, M],
+	// Lot 11 : import Excel d'un registre (modèle, envoi, prévisualisation, exécution, rapport, annulation).
+	'import.run': [D, M],
 	// Déclarées dès le lot 03 pour fixer le partage des rôles ; leurs endpoints viennent avec leur lot.
 	'listing.publish': [D, M],
 	'lead.manage': [D, M, F],

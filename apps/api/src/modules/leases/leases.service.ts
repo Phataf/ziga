@@ -17,7 +17,7 @@
  *   le bail, ni ses échéances, ni sa caution.
  */
 import { Injectable } from '@nestjs/common';
-import { toIsoDate } from '@ziga/shared/dates';
+import { addDays, toIsoDate } from '@ziga/shared/dates';
 import {
 	allowedDepositHolders,
 	allowedLessorTypes,
@@ -31,6 +31,7 @@ import {
 	outstandingBalance,
 	rentDueBalance,
 	rentDueOverdueFrom,
+	rentDueStatus,
 	tenantIdentitySchema,
 	tenantSchema,
 	unitOccupancy,
@@ -57,6 +58,7 @@ import {
 	type UpdateTenantData,
 	type WithWarnings
 } from '@ziga/shared/leases';
+import { newId } from '@ziga/shared/ids';
 import { can } from '@ziga/shared/permissions';
 import { generateRentSchedule, rentChangeBlocker, rentDueUpdates, scheduleUntil } from '@ziga/shared/rent-schedule';
 import { and, asc, desc, eq, gt, inArray, isNull, ne } from 'drizzle-orm';
@@ -237,7 +239,8 @@ export function rentDueView(d: RentDueRow): RentDueView {
 		status: d.status,
 		prorated: d.prorated,
 		isAdvance: d.isAdvance,
-		leaseVersion: d.leaseVersion
+		leaseVersion: d.leaseVersion,
+		kind: d.kind
 	};
 }
 
@@ -1030,7 +1033,11 @@ export class LeasesService {
 	 * Création : brouillon, ou validé tout de suite (`validate`). Le découpage absent est recopié du réglage de
 	 * l'organisation, puis figé à la validation.
 	 */
-	async createLease(input: CreateLeaseData): Promise<LeaseDetailView> {
+	/**
+	 * `imported` (lot 11) : bail repris par l'import Excel, avec la date de fin d'origine d'un bail échu passé à durée
+	 * indéterminée ; la base ne l'accepte que dans la transaction d'un import en cours.
+	 */
+	async createLease(input: CreateLeaseData, imported: { originalEndsOn: string | null } | null = null): Promise<LeaseDetailView> {
 		const c = this.context();
 		const exists = await c.tx.select({ id: leases.id }).from(leases).where(eq(leases.id, input.id)).limit(1);
 		if (exists.length) throw new AppError('CONFLICT', 'Ce bail existe déjà.', 409);
@@ -1050,6 +1057,7 @@ export class LeasesService {
 				rentEffectiveFrom: terms.duesStartOn,
 				status: 'draft',
 				version: 1,
+				originalEndsOn: imported?.originalEndsOn ?? null,
 				createdBy: c.userId,
 				updatedBy: c.userId
 			})
@@ -1210,10 +1218,11 @@ export class LeasesService {
 				current: row.version
 			});
 		}
+		// Lot 11 : l'échéance « Solde antérieur » n'appartient pas à l'échéancier ; il ne la recalcule jamais.
 		const existing = await c.tx
 			.select()
 			.from(rentDues)
-			.where(and(eq(rentDues.organizationId, c.organizationId), eq(rentDues.leaseId, id)))
+			.where(and(eq(rentDues.organizationId, c.organizationId), eq(rentDues.leaseId, id), eq(rentDues.kind, 'rent')))
 			.for('update');
 		const current = await scheduleInput(c.tx, row, scheduleUntil({ endOn: row.endsOn, duesStartOn: row.duesStartOn }, today));
 		const blocker = rentChangeBlocker(current, input.effectiveFrom, existing);
@@ -1294,7 +1303,7 @@ export class LeasesService {
 		const existing = await c.tx
 			.select()
 			.from(rentDues)
-			.where(and(eq(rentDues.organizationId, c.organizationId), eq(rentDues.leaseId, id)));
+			.where(and(eq(rentDues.organizationId, c.organizationId), eq(rentDues.leaseId, id), eq(rentDues.kind, 'rent')));
 		const current = await scheduleInput(c.tx, row, scheduleUntil({ endOn: row.endsOn, duesStartOn: row.duesStartOn }, today));
 		return rentChangeBlocker(current, effectiveFrom, existing);
 	}
@@ -1465,6 +1474,150 @@ export class LeasesService {
 		});
 		const warnings = await this.capWarning(c, row!, lease);
 		return { data: await this.accountViewOf(c, input.id), warnings };
+	}
+
+	// ---------------------------------------------------------------- import Excel (lot 11)
+
+	/** Locataires non archivés (nom et numéro), pour rapprocher les lignes d'un import des fiches existantes. */
+	async tenantsForImport(): Promise<{ id: string; fullName: string; phone: string | null }[]> {
+		const c = this.context();
+		return c.tx
+			.select({ id: tenants.id, fullName: tenants.fullName, phone: tenants.phone })
+			.from(tenants)
+			.where(and(eq(tenants.organizationId, c.organizationId), ne(tenants.status, 'archived')));
+	}
+
+	/**
+	 * Échéance « Solde antérieur » d'un bail importé (prompt §3) : loyers et charges impayés avant la date de bascule,
+	 * du début du bail à la veille de la bascule, exigible à la bascule, sans reçu. La base vérifie l'import en cours et
+	 * les dates ; elle n'appartient pas à l'échéancier du bail (jamais recalculée ni abandonnée par lui).
+	 */
+	async importOpeningBalance(input: { id: string; leaseId: string; amount: number; switchOn: string }): Promise<void> {
+		const c = this.context();
+		const lease = await this.leaseRow(c, input.leaseId);
+		const today = toIsoDate();
+		const status = rentDueStatus({ dueOn: input.switchOn, amountDue: input.amount, amountPaid: 0 }, today);
+		await c.tx.insert(rentDues).values({
+			id: input.id,
+			organizationId: c.organizationId,
+			leaseId: lease.id,
+			kind: 'opening_balance',
+			periodStart: lease.startsOn,
+			periodEnd: addDays(input.switchOn, -1),
+			dueOn: input.switchOn,
+			rent: input.amount,
+			charges: 0,
+			amountDue: input.amount,
+			amountPaid: 0,
+			status,
+			prorated: false,
+			isAdvance: false,
+			leaseVersion: lease.version
+		});
+		await this.audit.record(c.tx, {
+			actor: c.actor,
+			organizationId: c.organizationId,
+			action: 'rent_due.opening_balance',
+			objectType: 'rent_due',
+			objectId: input.id,
+			after: { leaseId: lease.id, amount: input.amount, dueOn: input.switchOn, status }
+		});
+	}
+
+	/**
+	 * D33 : caution versée avant l'adoption de la plateforme, reprise par l'import : un versement sans encaissement ni
+	 * reçu, daté du versement réel. La base ne l'accepte que pour un compte créé par l'import en cours, une fois.
+	 */
+	async importDepositReceipt(input: { id: string; accountId: string; amount: number; receivedOn: string }): Promise<void> {
+		const c = this.context();
+		const account = await this.accountRow(c, input.accountId);
+		await c.tx.insert(depositMovements).values({
+			id: input.id,
+			organizationId: c.organizationId,
+			accountId: account.id,
+			type: 'received',
+			amount: input.amount,
+			occurredOn: input.receivedOn,
+			createdBy: c.userId
+		});
+		await this.audit.record(c.tx, {
+			actor: c.actor,
+			organizationId: c.organizationId,
+			action: 'deposit.receive_imported',
+			objectType: 'deposit_account',
+			objectId: account.id,
+			after: { movementId: input.id, amount: input.amount, occurredOn: input.receivedOn, holder: account.holder, paymentId: null }
+		});
+	}
+
+	/**
+	 * Annulation d'un bail importé, avec son import (prompt §4, réponse 7) : échéances abandonnées, versements repris
+	 * contre-passés, bail « annulé » ; rien n'est supprimé. La base n'accepte qu'un bail de l'import en cours
+	 * d'annulation, sans encaissement.
+	 */
+	async cancelImportedLease(id: string, reason: string): Promise<void> {
+		const c = this.context();
+		const row = await this.leaseRow(c, id, true);
+		if (row.status === 'cancelled') return;
+		const dues = await c.tx
+			.select()
+			.from(rentDues)
+			.where(and(eq(rentDues.organizationId, c.organizationId), eq(rentDues.leaseId, id)))
+			.for('update');
+		if (dues.some((d) => d.amountPaid > 0)) {
+			throw new AppError('LEASE_HAS_PAYMENTS', 'Des paiements sont déjà imputés sur ce bail : il ne s’annule pas.', 409);
+		}
+		const now = new Date();
+		const today = toIsoDate();
+		const accounts = await c.tx
+			.select()
+			.from(depositAccounts)
+			.where(and(eq(depositAccounts.organizationId, c.organizationId), eq(depositAccounts.leaseId, id)));
+		let reversed = 0;
+		for (const account of accounts) {
+			const moves = await c.tx
+				.select()
+				.from(depositMovements)
+				.where(
+					and(
+						eq(depositMovements.organizationId, c.organizationId),
+						eq(depositMovements.accountId, account.id),
+						isNull(depositMovements.paymentId)
+					)
+				);
+			const held =
+				moves.filter((m) => m.type === 'received').reduce((n, m) => n + m.amount, 0) -
+				moves.filter((m) => m.type === 'received_cancelled').reduce((n, m) => n + m.amount, 0);
+			if (held <= 0) continue;
+			await c.tx.insert(depositMovements).values({
+				id: newId(),
+				organizationId: c.organizationId,
+				accountId: account.id,
+				type: 'received_cancelled',
+				amount: held,
+				occurredOn: today,
+				reason,
+				createdBy: c.userId
+			});
+			reversed += 1;
+		}
+		await c.tx
+			.update(leases)
+			.set({ status: 'cancelled', cancelledAt: now, cancellationReason: reason, updatedBy: c.userId, updatedAt: now })
+			.where(and(eq(leases.organizationId, c.organizationId), eq(leases.id, id)));
+		await c.tx
+			.update(rentDues)
+			.set({ status: 'waived', updatedAt: now })
+			.where(and(eq(rentDues.organizationId, c.organizationId), eq(rentDues.leaseId, id), ne(rentDues.status, 'waived')));
+		await this.audit.record(c.tx, {
+			actor: c.actor,
+			organizationId: c.organizationId,
+			action: 'lease.cancel_import',
+			objectType: 'lease',
+			objectId: id,
+			before: { status: row.status },
+			after: { status: 'cancelled', reason, waivedDues: dues.filter((d) => d.status !== 'waived').length, reversedDeposits: reversed }
+		});
 	}
 
 	/** Montant convenu : modifiable tant que le bail est un brouillon (la base l'exige aussi). */

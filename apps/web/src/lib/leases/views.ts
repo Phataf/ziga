@@ -143,7 +143,9 @@ export function toRentDue(r: Row, today: string): RentDueView {
 		status: rentDueStatus({ ...d, waived: stored === 'waived' }, today),
 		prorated: bool(r.prorated),
 		isAdvance: bool(r.is_advance),
-		leaseVersion: int(r.lease_version) ?? 1
+		leaseVersion: int(r.lease_version) ?? 1,
+		// Lot 11 : la nature arrive sur l'appareil avec la synchronisation de `kind` (étape 4a) ; d'ici là, échéance ordinaire.
+		kind: r.kind === 'opening_balance' ? 'opening_balance' : 'rent'
 	};
 }
 

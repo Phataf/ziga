@@ -1368,6 +1368,20 @@ export class PaymentsService implements OnModuleInit {
 		return rows;
 	}
 
+	/**
+	 * Lot 11 : un encaissement (quel que soit son statut, contre-écritures comprises) existe-t-il sur l'un de ces baux ?
+	 * Une annulation d'import est refusée dans ce cas (prompt §4) ; la base le vérifie aussi.
+	 */
+	async anyPaymentOn(tx: Tx, leaseIds: readonly string[]): Promise<boolean> {
+		if (!leaseIds.length) return false;
+		const [row] = await tx
+			.select({ id: payments.id })
+			.from(payments)
+			.where(inArray(payments.leaseId, [...leaseIds]))
+			.limit(1);
+		return !!row;
+	}
+
 	/** Encaissements à valider ou à rapprocher (loyers et remboursements de dépense), pour les impayés. */
 	async awaitingPayments(tx: Tx): Promise<{ leaseId: string; purpose: PaymentRow['purpose']; expenseId: string | null; amount: number }[]> {
 		return tx

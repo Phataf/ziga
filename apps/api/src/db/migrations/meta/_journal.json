@@ -183,6 +183,13 @@
 			"when": 1800000000000,
 			"tag": "0025_import_excel",
 			"breakpoints": true
+		},
+		{
+			"idx": 26,
+			"version": "7",
+			"when": 1801000000000,
+			"tag": "0026_import_purge",
+			"breakpoints": true
 		}
 	]
 }

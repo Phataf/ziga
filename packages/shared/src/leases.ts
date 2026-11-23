@@ -652,7 +652,12 @@ export interface RentDueView {
 	prorated: boolean;
 	isAdvance: boolean;
 	leaseVersion: number;
+	/** Lot 11 : `opening_balance`, l'échéance « Solde antérieur » d'un bail importé (hors de l'échéancier du bail). */
+	kind: RentDueKind;
 }
+
+export const RENT_DUE_KINDS = ['rent', 'opening_balance'] as const;
+export type RentDueKind = (typeof RENT_DUE_KINDS)[number];
 
 export interface DepositMovementView {
 	id: string;

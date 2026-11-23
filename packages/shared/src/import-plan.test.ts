@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { formatFcfa } from './money.js';
-import { defaultSwitchOn, planImport, switchDateIssue, type ImportContext, type ImportPlan } from './import-plan.js';
+import { defaultSwitchOn, importCancellable, planImport, switchDateIssue, type ImportContext, type ImportPlan } from './import-plan.js';
 import { importSheet, matchImportColumns, type ImportSheetKey } from './import-template.js';
 import type { CellValue, ImportSheetInput } from './import-rows.js';
 
@@ -874,5 +874,58 @@ describe('date de bascule (réponses 1 et 3 du porteur)', () => {
 			ctx({ billingMode: 'calendar_full_first', switchOn: '2026-11-15', choices: { depositReceived: 'full' } })
 		);
 		expect(plan.blockers.map((b) => b.code)).toEqual(['SWITCH_DATE_FIRST_OF_MONTH']);
+	});
+});
+
+describe('activation des biens et des unités (étape 3)', () => {
+	it('un bien situé (commune et quartier reconnus) est activé, ses unités aussi ; sinon il reste en brouillon, avec un avertissement', () => {
+		const r = registry();
+		r.properties = sheet('properties', PROPERTY_H, [
+			['B-01', 'P1', 'Villa ou maison', 'Villa', 'Ouagadougou', 'Tampouy', 'Gestion locative', '10', '01/01/2020', 'Non', 'Oui'],
+			['B-02', 'P1', 'Cour commune', 'Cour', 'Ouagadougou', 'Tampoui', 'Gestion locative', '10', '01/01/2020', 'Non', 'Oui'],
+			['B-03', 'P2', 'Villa ou maison', 'Villa 2', '', '', 'Gestion locative', '10', '01/01/2020', 'Non', 'Non']
+		]);
+		const plan = planImport(r, ctx({ choices: { depositReceived: 'full' } }));
+		expect(plan.properties.map((p) => [p.ref, p.activate])).toEqual([
+			['B-01', true],
+			['B-02', false],
+			['B-03', false]
+		]);
+		expect(plan.units.map((u) => [u.ref, u.activate])).toEqual([
+			['B-01-A', true],
+			['B-02-1', false],
+			['B-02-2', false],
+			['B-03-A1', false]
+		]);
+		expect(warnings(plan)).toContain(
+			'Ligne 4 de Biens, colonne Quartier : bien importé en brouillon ; choisissez sa commune et son quartier pour l’activer.'
+		);
+	});
+
+	it('un bail réservé (qui commence plus tard) exige une unité active : refusé sur un bien sans quartier reconnu', () => {
+		const r = registry();
+		r.properties = sheet('properties', PROPERTY_H, [
+			['B-01', 'P1', 'Villa ou maison', 'Villa Tampouy', 'Ouagadougou', 'Tampouy', 'Gestion locative', '10 %', '01/01/2020', 'Non', 'Oui'],
+			['B-02', 'P1', 'Cour commune', 'Cour Pissy', 'Ouagadougou', 'Pissy', 'Gestion locative', '10', '01/01/2020', 'Non', 'Oui'],
+			['B-03', 'P2', 'Immeuble d’appartements', 'Immeuble', '', '', 'Gestion locative', '8 %', '2021-06-01', 'Non', 'Non']
+		]);
+		const plan = planImport(r, ctx({ choices: { depositReceived: 'full' } }));
+		expect(errors(plan)).toContain(
+			'Ligne 4 de Baux, colonne Unité : un bail qui commence plus tard exige une unité active ; choisissez la commune et le quartier du bien B-03.'
+		);
+	});
+});
+
+describe('annulation d’un import (prompt §4)', () => {
+	const completed = { status: 'completed' as const, completedAt: '2026-11-22T10:00:00.000Z' };
+	it('possible pendant 24 heures après la fin de l’import, jamais après', () => {
+		expect(importCancellable(completed, new Date('2026-11-23T09:59:59.000Z'))).toBe(true);
+		expect(importCancellable(completed, new Date('2026-11-23T10:00:01.000Z'))).toBe(false);
+	});
+	it('seulement pour un import terminé', () => {
+		expect(importCancellable({ status: 'running', completedAt: null }, new Date('2026-11-22T10:00:00.000Z'))).toBe(false);
+		expect(importCancellable({ status: 'cancelled', completedAt: completed.completedAt }, new Date('2026-11-22T11:00:00.000Z'))).toBe(
+			false
+		);
 	});
 });

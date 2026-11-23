@@ -135,3 +135,30 @@ export interface InspectionReportJobData {
 	userId: string;
 	inspectionId: string;
 }
+
+/**
+ * Import Excel (lot 11) : lecture et analyse du fichier (prévisualisation), exécution onglet par onglet par les services
+ * des modules, annulation sous 24 heures ; et, chaque jour à 00:40 UTC, effacement des fichiers d'origine conservés 90
+ * jours. Le fichier n'est jamais lu dans la requête HTTP.
+ */
+export const IMPORTS_QUEUE = 'imports';
+export const IMPORT_ANALYZE_JOB = 'analyze';
+export const IMPORT_EXECUTE_JOB = 'execute';
+export const IMPORT_CANCEL_JOB = 'cancel';
+export const IMPORT_PURGE_JOB = 'purge-files';
+export const IMPORT_PURGE_SCHEDULER = 'imports-daily-purge';
+export const IMPORT_PURGE_PATTERN = '40 0 * * *';
+
+export interface ImportJobData {
+	organizationId: string;
+	importJobId: string;
+	/** La personne qui a lancé l'action (membre actif revérifié dans la tâche). */
+	userId: string;
+	/** Annulation : le motif. */
+	reason?: string;
+}
+
+export interface ImportPurgeJobData {
+	/** Instant imposé (tests) ; sinon maintenant. */
+	now?: string;
+}

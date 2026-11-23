@@ -466,6 +466,16 @@ export class PropertiesService {
 
 	// ---------------------------------------------------------------- unités
 
+	/** Unités non archivées de l'organisation : l'usage du quota de la formule (lot 11, avant l'exécution d'un import). */
+	async unitQuotaUsage(): Promise<number> {
+		const c = this.context();
+		const [counted] = await c.tx
+			.select({ n: sql<number>`count(*)::int` })
+			.from(units)
+			.where(and(eq(units.organizationId, c.organizationId), ne(units.recordStatus, 'archived')));
+		return counted?.n ?? 0;
+	}
+
 	/** Création : bien de l'organisation non archivé ; quota d'unités de la formule (unités non archivées). */
 	async createUnit(input: CreateUnitData): Promise<UnitView> {
 		const c = this.context();
