@@ -103,7 +103,7 @@ describe('plan d’import du registre fictif', async () => {
 			'Ligne 21 de Baux ignorée : bail terminé le 31/08/2025 ; l’historique n’est pas importé.',
 			'Ligne 31 de Baux écartée : le locataire L-30 est en erreur (Locataires, ligne 31).',
 			'Ligne 51 de Baux écartée : l’unité B-06-10 est en erreur (Unités, ligne 54).',
-			'Ligne 41 de Cautions écartée : le bail B-06-09 est écarté (Baux, ligne 50).'
+			'Ligne 41 de Cautions écartée : le bail B-06-09 est en erreur (Baux, ligne 50).'
 		]);
 	});
 
