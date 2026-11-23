@@ -1696,3 +1696,33 @@ Points du plan validés : regroupement en un seul mandat des biens d'un même pr
 - **Registre libre de test** (`apps/api/test/fixtures/imports/registre-libre.ts`, écrit en `registre-libre.xlsx` par `generate-import-fixtures.mjs`) : une feuille, huit logements, trois propriétaires dont un écrit de deux façons, un locataire dans deux logements, un logement libre, un téléphone faux.
 - **Tests** : `import-single-sheet.test.ts` (8), `imports.int.test.ts` (3 : aucun onglet reconnu, correspondance incomplète, import du registre libre), `single-sheet.test.ts` (web, 3), `e2e/import.spec.ts` (téléphone par les listes, ordinateur en glissant, jusqu'à l'import terminé).
 - **Écart corrigé pendant l'étape** : sur ordinateur, glisser une colonne vers un champ plus bas dans la page échouait (la page défilait pendant le glisser) ; les colonnes sont désormais dans un panneau fixe à côté des champs, meilleur aussi pour la personne.
+
+### Lot 11 : tests attendus et critères d'acceptation
+Tests attendus :
+- [x] Fichier du modèle rempli : tout est importé, baux actifs, unités occupées, échéances générées, soldes d'ouverture corrects : `imports.int.test.ts` (« registre fictif » : exécution, unités occupées calculées et libres « à remettre en état », échéances à partir de la bascule, solde d'ouverture payé en premier), `import-plan.test.ts` (« registre complet du modèle »), `e2e/import.spec.ts` (trois appareils).
+- [x] Fichier avec erreurs : prévisualisation exacte (`registre-fictif.test.ts` : exactement quatre erreurs et les lignes écartées en cascade ; `imports.int.test.ts` : erreurs avec la ligne et la colonne ; `e2e/import.spec.ts` : quatre lignes en erreur à l'écran) ; aucun import partiel dans un onglet en erreur (`imports.int.test.ts` : « échec imprévu d'un onglet : rien de lui (une transaction), ses dépendants non exécutés »).
+- [x] Normalisation des montants, téléphones et dates (tableau de cas) : `import-values.test.ts` (montants, téléphones E.164, dates jj/mm/aaaa, aaaa-mm-jj et numéros de série Excel), `import-csv.test.ts`.
+- [x] Doublons et rapprochements détectés : `import-plan.test.ts` (« doublons et rapprochements », « quartiers : référentiel du lot 07, suggestions ») ; même numéro et même nom proposé comme fiche existante, autre nom importé avec un avertissement ; signal « Une autre fiche porte ce numéro » (`same-phone.test.ts`, `e2e/import.spec.ts`) ; fichier libre : répétitions réunies (`import-single-sheet.test.ts`).
+- [x] Quota dépassé : refus avant exécution : `imports.int.test.ts` (« quota d'unités dépassé : refus avant toute exécution, message clair »).
+- [x] Annulation d'import dans les 24 heures ; refusée après un encaissement : `imports.int.test.ts` (annulation complète, rien de supprimé ; refus après un encaissement ; bien resté sans quartier), `imports-db.int.test.ts` (règles de la base), `e2e/import.spec.ts` (annulation sans encaissement ; refus à l'écran après le premier reçu).
+- [x] Accès croisé : un import de A ne crée jamais rien dans B : `imports.int.test.ts` (« accès croisé »), `imports-db.int.test.ts` (import_jobs et identifiant de l'import, avec le rôle `app_api`).
+- [x] Fichier de 1 000 lignes importé en moins de 60 secondes : `imports.int.test.ts` (« performance » : environ 12 secondes en local, envoi et analyse compris).
+
+Critères d'acceptation :
+- [ ] Le porteur importe le registre réel (anonymisé) d'une agence pilote et émet le premier reçu le jour même : **à faire avec la première agence pilote**. Ce qui est prêt pour cet essai : le parcours complet sur le registre fictif (cinquante baux et les désordres d'un vrai registre), jusqu'au premier reçu le jour même, est vérifié par `imports.int.test.ts` et, à l'écran, sur téléphone, tablette et ordinateur, par `e2e/import.spec.ts` ; un registre tenu sur une seule feuille s'importe aussi (étape 4b).
+- [x] Chaque message d'erreur dit la ligne, la colonne et quoi corriger, en français simple : `import-rows.ts` (« Ligne 14 de Locataires, colonne Téléphone : 8 chiffres attendus, par exemple 70 12 34 56. »), `import-values.test.ts`, `import-plan.test.ts`, `e2e/import.spec.ts` (chaque ligne en erreur à l'écran suit « Ligne N de Onglet, colonne X : … ») ; fichier libre : la feuille et la colonne du fichier (`import-single-sheet.test.ts`).
+- [x] Journal des lots mis à jour.
+
+Définition de « terminé » (`CLAUDE.md` §7) :
+- [x] `pnpm lint`, `pnpm typecheck` et `pnpm test` sans erreur ni test désactivé.
+- [x] Tests d'accès croisé pour chaque nouvelle table (`import_jobs` : `imports-db.int.test.ts`, `imports.int.test.ts`).
+- [x] Règles du §5 concernées couvertes : cloisonnement (1), montants entiers (2, normalisation), paiement jamais supprimé (3 : annulation par contre-écriture `received_cancelled`, rien de supprimé), journal (4 : origine `import`), occupation calculée (13), caution (14 et D33 : versement d'import sans encaissement, accepté par la base seulement pour l'import en cours), aucune information d'une organisation à une autre (15).
+- [x] Migrations 0025 à 0027 appliquées sur une base vide (base de test recréée à chaque exécution) et sur une base du lot 10 ter remplie (`migration-0025.int.test.ts`, qui applique toutes les migrations suivantes).
+- [x] Écrans vérifiés par Playwright sur téléphone, tablette et ordinateur, sans débordement sur téléphone (`e2e/import.spec.ts` ; fichier libre sur téléphone et ordinateur, la tablette ayant la même forme que le téléphone pour la correspondance).
+- [x] Aucune fonctionnalité hors périmètre (import depuis d'autres logiciels, historique des paiements, photos : non faits).
+- `.env.example` : à jour depuis l'étape 3 (`IMPORT_MAX_UNCOMPRESSED_BYTES`, `IMPORT_MAX_SHEETS`, `IMPORT_MAX_ROWS`, `IMPORT_MAX_CELLS`, `IMPORT_ANALYSIS_TIMEOUT_MS`), vérifié : chaque variable lue par `apps/api/src/config/env.ts` y figure.
+
+Questions ouvertes et dette :
+- **Valeurs communes du fichier libre** (étape 4b) : la liste des champs qui acceptent une valeur commune est un choix technique proposé au porteur (PR de l'étape 4b), modifiable en un seul endroit (`import-single-sheet.ts`).
+- **Durée de la tâche Playwright en CI** : 7 à 9 minutes de tests pour une limite de 20 minutes ; une installation lente du runner a déjà fait dépasser la limite une fois (PR de l'étape 4a, relancée). À surveiller ; relever la limite si cela se reproduit.
+- Le titre du lot reste « en cours » jusqu'au lancement du lot suivant par le porteur, comme aux lots précédents ; le critère du registre réel reste à cocher avec la première agence pilote.
