@@ -66,6 +66,12 @@ describe('navigation par profil (docs/UX.md §2)', () => {
 		expect([has('viewer'), has('field_agent')]).toEqual([false, false]);
 	});
 
+	it('lot 11 : « Import Excel » pour la direction, la gestion et le bailleur ; ni pour le profil lecture ni pour l’agent', () => {
+		const has = (id: keyof typeof profiles) => profiles[id].nav.some((i) => i.href === '/app/import');
+		expect([has('director'), has('manager'), has('landlord')]).toEqual([true, true, true]);
+		expect([has('viewer'), has('field_agent')]).toEqual([false, false]);
+	});
+
 	it('lot 10 : dépenses pour l’agence et le bailleur, relevés pour l’agence seule, rien pour l’agent', () => {
 		const has = (id: keyof typeof profiles, href: string) => profiles[id].nav.some((i) => i.href === href);
 		expect((['director', 'manager', 'viewer', 'landlord', 'field_agent'] as const).map((p) => has(p, '/app/depenses'))).toEqual([
