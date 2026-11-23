@@ -33,7 +33,7 @@ describe('neutralisation des formules dans le rapport (ajout 2 du porteur)', () 
 				severity: 'error',
 				code: 'INVALID',
 				message: 'Ligne 3 de Locataires, colonne Nom et prénoms : à remplir.',
-				value: '=cmd|\' /C calc\'!A0'
+				value: "=cmd|' /C calc'!A0"
 			}
 		];
 		const rows = importReportRows({ imported: [{ sheet: 'owners', row: 2, label: '@Ouédraogo' }], issues });
@@ -43,7 +43,13 @@ describe('neutralisation des formules dans le rapport (ajout 2 du porteur)', () 
 			if (typeof cell === 'string') expect(cell).not.toMatch(/^\s*[=+\-@\t\r]/);
 		}
 		expect(rows[1]).toEqual(['Propriétaires', 2, 'Importée', "'@Ouédraogo", '']);
-		expect(rows[2]).toEqual(['Locataires', 3, 'Erreur', "'=cmd|' /C calc'!A0", 'Ligne 3 de Locataires, colonne Nom et prénoms : à remplir.']);
+		expect(rows[2]).toEqual([
+			'Locataires',
+			3,
+			'Erreur',
+			"'=cmd|' /C calc'!A0",
+			'Ligne 3 de Locataires, colonne Nom et prénoms : à remplir.'
+		]);
 	});
 
 	it('ordre : onglets dans l’ordre d’exécution, puis par ligne ; statut en français', () => {

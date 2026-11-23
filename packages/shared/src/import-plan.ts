@@ -24,7 +24,14 @@
  */
 import { formatDate } from './dates.js';
 import { labelKey, type CellValue } from './import-values.js';
-import { importSheet, IMPORT_SHEET_KEYS, IMPORT_SHEET_NAMES, type ImportField, type ImportSheetInput, type ImportSheetKey } from './import-template.js';
+import {
+	importSheet,
+	IMPORT_SHEET_KEYS,
+	IMPORT_SHEET_NAMES,
+	type ImportField,
+	type ImportSheetInput,
+	type ImportSheetKey
+} from './import-template.js';
 import { makeIssue, readImportRows, type ImportIssue, type ImportRow } from './import-rows.js';
 import { formatFcfa } from './money.js';
 import type { OrganizationType } from './permissions.js';
@@ -80,9 +87,7 @@ export interface PlannedMandate {
 		startsOn: string;
 		endsOn: string | null;
 		commission:
-			| { basis: 'percent_of_collected'; rateBp: number }
-			| { basis: 'fixed_per_month' | 'fixed_per_operation'; amount: number }
-			| null;
+			{ basis: 'percent_of_collected'; rateBp: number } | { basis: 'fixed_per_month' | 'fixed_per_operation'; amount: number } | null;
 		canPublish: boolean;
 		canTakePhotos: boolean;
 		canCollectFunds: boolean;
@@ -293,8 +298,15 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 	const issues: ImportIssue[] = [];
 	const def = (k: ImportSheetKey) => importSheet(k, type);
 	const field = (k: ImportSheetKey, key: string): ImportField => def(k).fields.find((f) => f.key === key)!;
-	const issue = (k: ImportSheetKey, row: number, fieldKey: string | null, severity: ImportIssue['severity'], code: string, text: string, value: CellValue | null = null) =>
-		issues.push(makeIssue(k, row, fieldKey ? field(k, fieldKey) : null, severity, code, text, value));
+	const issue = (
+		k: ImportSheetKey,
+		row: number,
+		fieldKey: string | null,
+		severity: ImportIssue['severity'],
+		code: string,
+		text: string,
+		value: CellValue | null = null
+	) => issues.push(makeIssue(k, row, fieldKey ? field(k, fieldKey) : null, severity, code, text, value));
 	const error = (k: ImportSheetKey, row: ImportRow, fieldKey: string | null, text: string) =>
 		issue(k, row.row, fieldKey, 'error', 'INVALID', text, fieldKey ? (row.cells[fieldKey] ?? null) : null);
 	const read = (k: ImportSheetKey, messages?: Record<string, Record<string, string>>) => {
@@ -327,13 +339,19 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 			const repName = v<string>(row, 'representativeName');
 			const repPhone = v<string>(row, 'representativePhone');
 			if (ownerType === 'group' && (!repName || !repPhone) && !rowHasError('owners', row.row)) {
-				error('owners', row, repName ? 'representativePhone' : 'representativeName', 'indiquez le représentant du groupe d’indivisaires (nom et téléphone).');
+				error(
+					'owners',
+					row,
+					repName ? 'representativePhone' : 'representativeName',
+					'indiquez le représentant du groupe d’indivisaires (nom et téléphone).'
+				);
 			}
 			if (ownerType && ownerType !== 'group' && (repName || repPhone)) {
 				error('owners', row, 'representativeName', 'seul un groupe d’indivisaires a un représentant ; videz cette colonne.');
 			}
 			const email = v<string>(row, 'email');
-			if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) error('owners', row, 'email', 'adresse e-mail invalide, par exemple nom@exemple.com.');
+			if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+				error('owners', row, 'email', 'adresse e-mail invalide, par exemple nom@exemple.com.');
 			const tracked: Tracked<PlannedOwner> = { row: row.row, status: rowHasError('owners', row.row) ? 'error' : 'ok' };
 			if (ref && !owners.has(refKey(ref))) owners.set(refKey(ref), tracked);
 			const name = v<string>(row, 'name');
@@ -356,7 +374,14 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 				const chosen = choice(key) === null ? 'new' : 'existing';
 				existingId = chosen === 'existing' ? existing.id : null;
 				matches.push({ sheet: 'owners', row: row.row, key, existingId: existing.id, existingName: existing.name, chosen });
-				issue('owners', row.row, null, 'warning', 'EXISTING_MATCH', `« ${existing.name} » existe déjà avec ce numéro ; ${chosen === 'existing' ? 'la fiche existante sera utilisée' : 'une nouvelle fiche sera créée'}.`);
+				issue(
+					'owners',
+					row.row,
+					null,
+					'warning',
+					'EXISTING_MATCH',
+					`« ${existing.name} » existe déjà avec ce numéro ; ${chosen === 'existing' ? 'la fiche existante sera utilisée' : 'une nouvelle fiche sera créée'}.`
+				);
 			}
 			tracked.planned = { row: row.row, ref: ref!, data, existingId };
 		}
@@ -434,14 +459,16 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 	const mandateGroups = new Map<string, PlannedMandate>();
 	for (const row of read('properties')) {
 		const ref = v<string>(row, 'ref');
-		if (ref && properties.has(refKey(ref))) error('properties', row, 'ref', `la référence ${ref} est déjà utilisée (Biens, ligne ${properties.get(refKey(ref))!.row}).`);
+		if (ref && properties.has(refKey(ref)))
+			error('properties', row, 'ref', `la référence ${ref} est déjà utilisée (Biens, ligne ${properties.get(refKey(ref))!.row}).`);
 		let ownerRef: string | null = null;
 		let ownerDep: Tracked<PlannedOwner> | undefined;
 		if (agency) {
 			const ownerText = v<string>(row, 'ownerRef');
 			if (ownerText) {
 				const found = findOwner(ownerText);
-				if (found === 'ambiguous') error('properties', row, 'ownerRef', `deux propriétaires s’appellent ${ownerText} ; indiquez la référence du propriétaire.`);
+				if (found === 'ambiguous')
+					error('properties', row, 'ownerRef', `deux propriétaires s’appellent ${ownerText} ; indiquez la référence du propriétaire.`);
 				else if (!found) error('properties', row, 'ownerRef', `le propriétaire ${ownerText} n’existe pas dans l’onglet Propriétaires.`);
 				else {
 					ownerDep = found;
@@ -459,7 +486,8 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 			let commission: PlannedMandate['terms']['commission'] = null;
 			if (rate !== null && amount !== null) error('properties', row, 'commissionRate', 'un pourcentage ou un montant, pas les deux.');
 			else if (rate !== null) {
-				if (basis && basis !== 'percent_of_collected') error('properties', row, 'commissionBasis', 'un pourcentage se calcule sur les loyers encaissés ; videz cette colonne.');
+				if (basis && basis !== 'percent_of_collected')
+					error('properties', row, 'commissionBasis', 'un pourcentage se calcule sur les loyers encaissés ; videz cette colonne.');
 				commission = { basis: 'percent_of_collected', rateBp: rate };
 			} else if (amount !== null) {
 				if (basis === 'percent_of_collected') error('properties', row, 'commissionBasis', 'un montant fixe est par mois ou par opération.');
@@ -501,7 +529,15 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 		let communeId = resolveCommune(communeRaw).id;
 		let neighborhoodId: string | null = null;
 		if (communeRaw && !resolveCommune(communeRaw).known) {
-			issue('properties', row.row, 'commune', 'warning', 'UNKNOWN_COMMUNE', `commune « ${communeRaw} » inconnue ; le bien est importé sans commune.`, communeRaw);
+			issue(
+				'properties',
+				row.row,
+				'commune',
+				'warning',
+				'UNKNOWN_COMMUNE',
+				`commune « ${communeRaw} » inconnue ; le bien est importé sans commune.`,
+				communeRaw
+			);
 		}
 		if (neighborhoodRaw) {
 			const place = resolvePlace(communeRaw, neighborhoodRaw, row.row);
@@ -510,7 +546,15 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 				communeId = place.communeId;
 			} else if (place.status === 'unresolved') {
 				const where = place.communeId ? ` à ${communeName(place.communeId)}` : '';
-				issue('properties', row.row, 'neighborhood', 'warning', 'UNKNOWN_NEIGHBORHOOD', `quartier « ${neighborhoodRaw} » inconnu${where} ; choisissez-le dans les suggestions, sinon le bien est importé sans quartier.`, neighborhoodRaw);
+				issue(
+					'properties',
+					row.row,
+					'neighborhood',
+					'warning',
+					'UNKNOWN_NEIGHBORHOOD',
+					`quartier « ${neighborhoodRaw} » inconnu${where} ; choisissez-le dans les suggestions, sinon le bien est importé sans quartier.`,
+					neighborhoodRaw
+				);
 			}
 		}
 		tracked.planned = {
@@ -568,7 +612,11 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 			data: {
 				type: v<string>(row, 'type')!,
 				label: v<string>(row, 'label')!,
-				rooms: { bedrooms: v<number>(row, 'bedrooms') ?? 0, livingRooms: v<number>(row, 'livingRooms') ?? 0, bathrooms: v<number>(row, 'bathrooms') ?? 0 },
+				rooms: {
+					bedrooms: v<number>(row, 'bedrooms') ?? 0,
+					livingRooms: v<number>(row, 'livingRooms') ?? 0,
+					bathrooms: v<number>(row, 'bathrooms') ?? 0
+				},
 				rent: v<number>(row, 'rent'),
 				charges: v<number>(row, 'charges')
 			},
@@ -585,7 +633,8 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 	const firstByPhone = new Map<string, { row: number; name: string; key: string }>();
 	for (const row of read('tenants')) {
 		const ref = v<string>(row, 'ref');
-		if (ref && tenants.has(refKey(ref))) error('tenants', row, 'ref', `la référence ${ref} est déjà utilisée (Locataires, ligne ${tenants.get(refKey(ref))!.row}).`);
+		if (ref && tenants.has(refKey(ref)))
+			error('tenants', row, 'ref', `la référence ${ref} est déjà utilisée (Locataires, ligne ${tenants.get(refKey(ref))!.row}).`);
 		const name = v<string>(row, 'fullName');
 		const tracked: TrackedTenant = { row: row.row, status: 'ok', ref, name };
 		if (ref && !tenants.has(refKey(ref))) tenants.set(refKey(ref), tracked);
@@ -611,13 +660,28 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 			const first = firstByPhone.get(phone);
 			if (first && nameKey(first.name) === nameKey(name!)) {
 				// La même personne écrite deux fois : une seule fiche, que les baux de cette ligne partagent.
-				issue('tenants', row.row, null, 'warning', 'DUPLICATE_MERGED', `même nom et même téléphone que la ligne ${first.row} ; une seule fiche est créée.`);
+				issue(
+					'tenants',
+					row.row,
+					null,
+					'warning',
+					'DUPLICATE_MERGED',
+					`même nom et même téléphone que la ligne ${first.row} ; une seule fiche est créée.`
+				);
 				tracked.planned = { row: row.row, key: first.key, ref, data, existingId: null };
 				tracked.merged = true;
 				continue;
 			}
 			if (first) {
-				issue('tenants', row.row, 'phone', 'warning', 'SHARED_PHONE', `même téléphone que ${first.name} (ligne ${first.row}) ; deux fiches sont créées (colocataires, famille).`, row.cells.phone ?? null);
+				issue(
+					'tenants',
+					row.row,
+					'phone',
+					'warning',
+					'SHARED_PHONE',
+					`même téléphone que ${first.name} (ligne ${first.row}) ; deux fiches sont créées (colocataires, famille).`,
+					row.cells.phone ?? null
+				);
 			} else {
 				firstByPhone.set(phone, { row: row.row, name: name!, key });
 			}
@@ -631,9 +695,24 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 				const chosen = choice(mkey) === null ? 'new' : 'existing';
 				existingId = chosen === 'existing' ? existing.id : null;
 				matches.push({ sheet: 'tenants', row: row.row, key: mkey, existingId: existing.id, existingName: existing.fullName, chosen });
-				issue('tenants', row.row, null, 'warning', 'EXISTING_MATCH', `« ${existing.fullName} » existe déjà avec ce numéro ; ${chosen === 'existing' ? 'la fiche existante sera utilisée' : 'une nouvelle fiche sera créée'}.`);
+				issue(
+					'tenants',
+					row.row,
+					null,
+					'warning',
+					'EXISTING_MATCH',
+					`« ${existing.fullName} » existe déjà avec ce numéro ; ${chosen === 'existing' ? 'la fiche existante sera utilisée' : 'une nouvelle fiche sera créée'}.`
+				);
 			} else if (same.length) {
-				issue('tenants', row.row, 'phone', 'warning', 'EXISTING_SAME_PHONE', `une autre fiche porte déjà ce numéro (${same.map((t) => t.fullName).join(', ')}).`, row.cells.phone ?? null);
+				issue(
+					'tenants',
+					row.row,
+					'phone',
+					'warning',
+					'EXISTING_SAME_PHONE',
+					`une autre fiche porte déjà ce numéro (${same.map((t) => t.fullName).join(', ')}).`,
+					row.cells.phone ?? null
+				);
 			}
 		}
 		tracked.planned = { row: row.row, key, ref, data, existingId };
@@ -669,10 +748,21 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 			if (!found) error('leases', row, 'tenant', `le locataire ${tenantText} n’existe pas dans l’onglet Locataires.`);
 			else if ('ambiguous' in found) {
 				const lines = found.ambiguous;
-				error('leases', row, 'tenant', `deux locataires s’appellent ${tenantText} (Locataires, lignes ${lines.slice(0, -1).join(', ')} et ${lines[lines.length - 1]}) ; indiquez la référence du locataire.`);
+				error(
+					'leases',
+					row,
+					'tenant',
+					`deux locataires s’appellent ${tenantText} (Locataires, lignes ${lines.slice(0, -1).join(', ')} et ${lines[lines.length - 1]}) ; indiquez la référence du locataire.`
+				);
 			} else tenant = found.found;
 		}
-		if (explicitRef && leaseByRef.has(refKey(explicitRef))) error('leases', row, 'ref', `la référence ${explicitRef} est déjà utilisée (Baux, ligne ${leaseByRef.get(refKey(explicitRef))!.row}).`);
+		if (explicitRef && leaseByRef.has(refKey(explicitRef)))
+			error(
+				'leases',
+				row,
+				'ref',
+				`la référence ${explicitRef} est déjà utilisée (Baux, ligne ${leaseByRef.get(refKey(explicitRef))!.row}).`
+			);
 		const unitKey = unitText ? refKey(unitText) : null;
 		const ref = explicitRef ?? (unitText ? ((leasesPerUnit.get(unitKey!) ?? 0) > 1 ? `${unitText} (ligne ${row.row})` : unitText) : null);
 		const tracked: TrackedLease = { row: row.row, status: 'ok', unitKey, ref, unit };
@@ -685,7 +775,8 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 		const exitOn = v<string>(row, 'exitOn');
 		if (startsOn && duration) {
 			const computed = endOnFromDuration(startsOn, duration);
-			if (endsOn && endsOn !== computed) error('leases', row, 'endsOn', `la date de fin ne correspond pas à la durée (${formatDate(computed)} pour ${duration} mois).`);
+			if (endsOn && endsOn !== computed)
+				error('leases', row, 'endsOn', `la date de fin ne correspond pas à la durée (${formatDate(computed)} pour ${duration} mois).`);
 			endsOn = endsOn ?? computed;
 		}
 		if (startsOn && endsOn && endsOn < startsOn) error('leases', row, 'endsOn', 'la date de fin précède la date d’entrée.');
@@ -696,7 +787,14 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 		const beneficiary = agency ? v<'organization' | 'owner'>(row, 'penaltyBeneficiary') : penaltyRate !== null ? 'organization' : null;
 		const penalty = [penaltyRate, graceDays, beneficiary];
 		if (penalty.some((x) => x !== null) && penalty.some((x) => x === null)) {
-			error('leases', row, 'penaltyRate', agency ? 'pénalité : indiquez le taux, le délai de grâce et le bénéficiaire, ou aucun des trois.' : 'pénalité : indiquez le taux et le délai de grâce, ou aucun des deux.');
+			error(
+				'leases',
+				row,
+				'penaltyRate',
+				agency
+					? 'pénalité : indiquez le taux, le délai de grâce et le bénéficiaire, ou aucun des trois.'
+					: 'pénalité : indiquez le taux et le délai de grâce, ou aucun des deux.'
+			);
 		}
 		if (rowHasError('leases', row.row)) {
 			tracked.status = 'error';
@@ -723,20 +821,42 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 			const m = property.mandate;
 			if (m.type !== 'rental_management') {
 				const label = { letting: 'mise en location', sale: 'vente', other: 'autre mandat' }[m.type];
-				error('leases', row, 'unitRef', `le bien ${property.planned!.ref} est sous mandat de ${label} ; un bail exige un mandat de gestion locative.`);
+				error(
+					'leases',
+					row,
+					'unitRef',
+					`le bien ${property.planned!.ref} est sous mandat de ${label} ; un bail exige un mandat de gestion locative.`
+				);
 			} else {
 				const limit = startsOn! > ctx.today ? startsOn! : ctx.today;
-				if (m.startsOn > limit) error('leases', row, 'unitRef', `le mandat du bien ${property.planned!.ref} ne commence que le ${formatDate(m.startsOn)} ; un bail exige un mandat en vigueur.`);
-				else if (m.endsOn && m.endsOn < ctx.today) error('leases', row, 'unitRef', `le mandat du bien ${property.planned!.ref} a pris fin le ${formatDate(m.endsOn)}.`);
+				if (m.startsOn > limit)
+					error(
+						'leases',
+						row,
+						'unitRef',
+						`le mandat du bien ${property.planned!.ref} ne commence que le ${formatDate(m.startsOn)} ; un bail exige un mandat en vigueur.`
+					);
+				else if (m.endsOn && m.endsOn < ctx.today)
+					error('leases', row, 'unitRef', `le mandat du bien ${property.planned!.ref} a pris fin le ${formatDate(m.endsOn)}.`);
 			}
 		}
 		const status: PlannedLease['status'] = startsOn! > ctx.today ? 'signed' : 'active';
 		const slot = inForce.get(unitKey!) ?? {};
 		if (!rowHasError('leases', row.row)) {
 			if (status === 'active' && slot.active) {
-				error('leases', row, 'unitRef', `l’unité ${unitText} a déjà un bail en vigueur (Baux, ligne ${slot.active}) ; un seul bail en vigueur par unité.`);
+				error(
+					'leases',
+					row,
+					'unitRef',
+					`l’unité ${unitText} a déjà un bail en vigueur (Baux, ligne ${slot.active}) ; un seul bail en vigueur par unité.`
+				);
 			} else if (status === 'signed' && slot.signed) {
-				error('leases', row, 'unitRef', `l’unité ${unitText} a déjà un bail réservé (Baux, ligne ${slot.signed}) ; un seul bail à venir par unité.`);
+				error(
+					'leases',
+					row,
+					'unitRef',
+					`l’unité ${unitText} a déjà un bail réservé (Baux, ligne ${slot.signed}) ; un seul bail à venir par unité.`
+				);
 			}
 		}
 		if (rowHasError('leases', row.row)) {
@@ -746,7 +866,15 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 		slot[status] = row.row;
 		inForce.set(unitKey!, slot);
 		if (exitOn) {
-			issue('leases', row.row, 'exitOn', 'warning', 'EXIT_PLANNED', `départ prévu le ${formatDate(exitOn)} : le bail est importé en vigueur ; enregistrez le congé après l’import.`, row.cells.exitOn ?? null);
+			issue(
+				'leases',
+				row.row,
+				'exitOn',
+				'warning',
+				'EXIT_PLANNED',
+				`départ prévu le ${formatDate(exitOn)} : le bail est importé en vigueur ; enregistrez le congé après l’import.`,
+				row.cells.exitOn ?? null
+			);
 		}
 		let originalEndsOn: string | null = null;
 		const terms: PlannedLeaseTerms = {
@@ -764,12 +892,28 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 			terms.endsOn = null;
 			terms.durationMonths = null;
 			terms.renewalMode = 'open_ended';
-			issue('leases', row.row, 'endsOn', 'warning', 'LAPSED_FIXED_TERM', `bail échu le ${formatDate(originalEndsOn)} sans congé ; importé à durée indéterminée, la date de fin est gardée pour information.`, row.cells.endsOn ?? null);
+			issue(
+				'leases',
+				row.row,
+				'endsOn',
+				'warning',
+				'LAPSED_FIXED_TERM',
+				`bail échu le ${formatDate(originalEndsOn)} sans congé ; importé à durée indéterminée, la date de fin est gardée pour information.`,
+				row.cells.endsOn ?? null
+			);
 		}
 		if (terms.startsOn < ctx.switchOn) {
 			terms.duesStartOn = importedDuesStartOn(terms.startsOn, ctx.switchOn, ctx.billingMode);
 			if (terms.advanceMonths > 0) {
-				issue('leases', row.row, 'advanceMonths', 'warning', 'ADVANCE_IGNORED', 'sans objet pour un bail commencé avant la bascule ; ignorée.', row.cells.advanceMonths ?? null);
+				issue(
+					'leases',
+					row.row,
+					'advanceMonths',
+					'warning',
+					'ADVANCE_IGNORED',
+					'sans objet pour un bail commencé avant la bascule ; ignorée.',
+					row.cells.advanceMonths ?? null
+				);
 				terms.advanceMonths = 0;
 			}
 		}
@@ -794,7 +938,15 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 		}
 		const refund = v<number>(row, 'depositRefundDays');
 		if (refund !== null) terms.depositRefundDays = refund;
-		tracked.planned = { row: row.row, ref: ref!, unitRef: unit!.planned!.ref, tenantKey: tenant!.planned!.key, status, terms, originalEndsOn };
+		tracked.planned = {
+			row: row.row,
+			ref: ref!,
+			unitRef: unit!.planned!.ref,
+			tenantKey: tenant!.planned!.key,
+			status,
+			terms,
+			originalEndsOn
+		};
 	}
 
 	/** Bail visé par « Bail ou unité » : référence du bail, sinon le bail de l'unité (en vigueur d'abord). */
@@ -804,7 +956,10 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 		const onUnit = leases.filter((l) => l.unitKey === refKey(text));
 		if (!onUnit.length) return units.has(refKey(text)) ? { unitWithoutLease: true } : null;
 		const pick =
-			onUnit.find((l) => l.planned?.status === 'active') ?? onUnit.find((l) => l.planned?.status === 'signed') ?? onUnit.find((l) => l.status !== 'ended') ?? onUnit[0]!;
+			onUnit.find((l) => l.planned?.status === 'active') ??
+			onUnit.find((l) => l.planned?.status === 'signed') ??
+			onUnit.find((l) => l.status !== 'ended') ??
+			onUnit[0]!;
 		return { lease: pick };
 	};
 	/** Résout le bail d'une ligne de Cautions ou de Soldes ; écarte la ligne si ce bail n'est pas importé. */
@@ -827,7 +982,11 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 			return null;
 		}
 		if (lease.status !== 'ok') {
-			skip(k, row.row, `écartée : le bail ${text} ${lease.status === 'error' ? 'est en erreur' : 'est écarté'} (Baux, ligne ${lease.row}).`);
+			skip(
+				k,
+				row.row,
+				`écartée : le bail ${text} ${lease.status === 'error' ? 'est en erreur' : 'est écarté'} (Baux, ligne ${lease.row}).`
+			);
 			return null;
 		}
 		return lease.planned!;
@@ -843,7 +1002,12 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 		const depositType = v<PlannedDeposit['type']>(row, 'type') ?? 'security_deposit';
 		const seenKey = `${lease.ref}|${depositType}`;
 		if (depositSeen.has(seenKey)) {
-			error('deposits', row, 'lease', `ce bail a déjà ${depositType === 'security_deposit' ? 'une caution' : 'une garantie des factures'} (Cautions, ligne ${depositSeen.get(seenKey)}).`);
+			error(
+				'deposits',
+				row,
+				'lease',
+				`ce bail a déjà ${depositType === 'security_deposit' ? 'une caution' : 'une garantie des factures'} (Cautions, ligne ${depositSeen.get(seenKey)}).`
+			);
 			continue;
 		}
 		const agreed = v<number>(row, 'agreedAmount')!;
@@ -862,9 +1026,25 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 			: 'organization';
 		if (depositType === 'security_deposit' && agreed > 2 * lease.terms.rent) {
 			depositsAboveCap++;
-			issue('deposits', row.row, 'agreedAmount', 'warning', 'DEPOSIT_ABOVE_CAP', `caution supérieure à deux mois de loyer (${formatFcfa(2 * lease.terms.rent)}) : un avertissement sera journalisé.`, row.cells.agreedAmount ?? null);
+			issue(
+				'deposits',
+				row.row,
+				'agreedAmount',
+				'warning',
+				'DEPOSIT_ABOVE_CAP',
+				`caution supérieure à deux mois de loyer (${formatFcfa(2 * lease.terms.rent)}) : un avertissement sera journalisé.`,
+				row.cells.agreedAmount ?? null
+			);
 		}
-		deposits.push({ row: row.row, leaseRef: lease.ref, type: depositType, agreedAmount: agreed, receivedAmount: received, receivedOn, holder });
+		deposits.push({
+			row: row.row,
+			leaseRef: lease.ref,
+			type: depositType,
+			agreedAmount: agreed,
+			receivedAmount: received,
+			receivedOn,
+			holder
+		});
 	}
 
 	// ------------------------------------------------ soldes d'ouverture
@@ -878,13 +1058,23 @@ export function planImport(sheets: Partial<Record<ImportSheetKey, ImportSheetInp
 		if (!lease) continue;
 		const amount = v<number>(row, 'amount')!;
 		if (balanceSeen.has(lease.ref)) {
-			error('opening_balances', row, 'lease', `ce bail a déjà un solde d’ouverture (Soldes d’ouverture, ligne ${balanceSeen.get(lease.ref)}).`);
+			error(
+				'opening_balances',
+				row,
+				'lease',
+				`ce bail a déjà un solde d’ouverture (Soldes d’ouverture, ligne ${balanceSeen.get(lease.ref)}).`
+			);
 			continue;
 		}
 		balanceSeen.set(lease.ref, row.row);
 		if (amount === 0) continue;
 		if (lease.terms.startsOn >= ctx.switchOn) {
-			error('opening_balances', row, 'lease', `ce bail commence après la bascule (${formatDate(ctx.switchOn)}) ; il n’a pas de solde antérieur.`);
+			error(
+				'opening_balances',
+				row,
+				'lease',
+				`ce bail commence après la bascule (${formatDate(ctx.switchOn)}) ; il n’a pas de solde antérieur.`
+			);
 			continue;
 		}
 		openingBalances.push({ row: row.row, leaseRef: lease.ref, amount, dueOn: ctx.switchOn });

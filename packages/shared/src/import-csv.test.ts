@@ -62,11 +62,7 @@ describe('lecture d’un CSV', () => {
 	});
 
 	it('cellules vides et ligne plus courte que l’en-tête', () => {
-		expect(parseCsv('A;B;C\n1;;3\n4')).toEqual([
-			['A', 'B', 'C'],
-			['1', '', '3'],
-			['4']
-		]);
+		expect(parseCsv('A;B;C\n1;;3\n4')).toEqual([['A', 'B', 'C'], ['1', '', '3'], ['4']]);
 	});
 
 	it('un texte qui commence par « = » reste un texte', () => {

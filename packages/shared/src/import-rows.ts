@@ -16,7 +16,13 @@ import {
 	type CellValue,
 	type Parsed
 } from './import-values.js';
-import { IMPORT_SHEET_NAMES, type ImportField, type ImportSheetDefinition, type ImportSheetInput, type ImportSheetKey } from './import-template.js';
+import {
+	IMPORT_SHEET_NAMES,
+	type ImportField,
+	type ImportSheetDefinition,
+	type ImportSheetInput,
+	type ImportSheetKey
+} from './import-template.js';
 
 export type { CellValue } from './import-values.js';
 export type { ImportSheetInput } from './import-template.js';
@@ -51,7 +57,9 @@ export interface ImportRow {
 export const REQUIRED_MESSAGE = 'à remplir.';
 
 export function issueMessage(sheet: ImportSheetKey, row: number, column: string | null, text: string): string {
-	return column ? `Ligne ${row} de ${IMPORT_SHEET_NAMES[sheet]}, colonne ${column} : ${text}` : `Ligne ${row} de ${IMPORT_SHEET_NAMES[sheet]} : ${text}`;
+	return column
+		? `Ligne ${row} de ${IMPORT_SHEET_NAMES[sheet]}, colonne ${column} : ${text}`
+		: `Ligne ${row} de ${IMPORT_SHEET_NAMES[sheet]} : ${text}`;
 }
 
 export function makeIssue(
@@ -82,7 +90,8 @@ function parseField(field: ImportField, cell: CellValue | undefined): Parsed<unk
 		case 'text':
 		case 'reference': {
 			const text = importText(cell);
-			if (text && field.maxLength && text.length > field.maxLength) return { error: `texte trop long : ${field.maxLength} caractères au plus.` };
+			if (text && field.maxLength && text.length > field.maxLength)
+				return { error: `texte trop long : ${field.maxLength} caractères au plus.` };
 			return { value: text };
 		}
 		case 'amount':

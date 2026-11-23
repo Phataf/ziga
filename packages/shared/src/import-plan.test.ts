@@ -78,7 +78,19 @@ function registry(): Record<string, ImportSheetInput> {
 		properties: sheet('properties', PROPERTY_H, [
 			['B-01', 'P1', 'Villa ou maison', 'Villa Tampouy', 'Ouagadougou', 'Tampouy', 'Gestion locative', '10 %', '01/01/2020', 'Non', 'Oui'],
 			['B-02', 'P1', 'Cour commune', 'Cour Pissy', 'Ouagadougou', 'Pissy', 'Gestion locative', '10', '01/01/2020', 'Non', 'Oui'],
-			['B-03', 'P2', 'Immeuble d’appartements', 'Immeuble Somgandé', 'Ouagadougou', 'Somgande', 'Gestion locative', '8 %', '2021-06-01', 'Non', 'Non']
+			[
+				'B-03',
+				'P2',
+				'Immeuble d’appartements',
+				'Immeuble Somgandé',
+				'Ouagadougou',
+				'Somgande',
+				'Gestion locative',
+				'8 %',
+				'2021-06-01',
+				'Non',
+				'Non'
+			]
 		]),
 		units: sheet('units', UNIT_H, [
 			['B-01-A', 'B-01', 'Villa', 'Villa', 3, '150 000', ''],
@@ -220,16 +232,54 @@ describe('mandats', () => {
 
 	it('commission obligatoire pour la gestion locative ; montant fixe accepté', () => {
 		const r = registry();
-		r.properties = sheet('properties', [...PROPERTY_H, 'Commission (FCFA)', 'Base de la commission'], [
-			['B-01', 'P1', 'Villa ou maison', 'Villa', 'Ouagadougou', 'Tampouy', 'Gestion locative', '', '01/01/2020', 'Non', 'Oui', '', ''],
-			['B-02', 'P1', 'Cour commune', 'Cour', 'Ouagadougou', 'Pissy', 'Gestion locative', '', '01/01/2020', 'Non', 'Oui', '20 000', 'Montant fixe par mois'],
-			['B-03', 'P2', 'Villa ou maison', 'Villa 2', 'Ouagadougou', 'Pissy', 'Gestion locative', '', '01/01/2020', 'Non', 'Oui', '15 000', '']
-		]);
+		r.properties = sheet(
+			'properties',
+			[...PROPERTY_H, 'Commission (FCFA)', 'Base de la commission'],
+			[
+				['B-01', 'P1', 'Villa ou maison', 'Villa', 'Ouagadougou', 'Tampouy', 'Gestion locative', '', '01/01/2020', 'Non', 'Oui', '', ''],
+				[
+					'B-02',
+					'P1',
+					'Cour commune',
+					'Cour',
+					'Ouagadougou',
+					'Pissy',
+					'Gestion locative',
+					'',
+					'01/01/2020',
+					'Non',
+					'Oui',
+					'20 000',
+					'Montant fixe par mois'
+				],
+				[
+					'B-03',
+					'P2',
+					'Villa ou maison',
+					'Villa 2',
+					'Ouagadougou',
+					'Pissy',
+					'Gestion locative',
+					'',
+					'01/01/2020',
+					'Non',
+					'Oui',
+					'15 000',
+					''
+				]
+			]
+		);
 		const plan = planImport(r, ctx());
 		expect(errors(plan)).toContain('Ligne 2 de Biens, colonne Commission (%) : indiquez la commission du mandat (en % ou en FCFA).');
-		expect(plan.mandates.find((m) => m.propertyRefs.includes('B-02'))!.terms.commission).toEqual({ basis: 'fixed_per_month', amount: 20000 });
+		expect(plan.mandates.find((m) => m.propertyRefs.includes('B-02'))!.terms.commission).toEqual({
+			basis: 'fixed_per_month',
+			amount: 20000
+		});
 		// Montant sans base : montant fixe par mois.
-		expect(plan.mandates.find((m) => m.propertyRefs.includes('B-03'))!.terms.commission).toEqual({ basis: 'fixed_per_month', amount: 15000 });
+		expect(plan.mandates.find((m) => m.propertyRefs.includes('B-03'))!.terms.commission).toEqual({
+			basis: 'fixed_per_month',
+			amount: 15000
+		});
 	});
 
 	it('un bail importé exige un mandat de gestion locative', () => {
@@ -249,7 +299,12 @@ describe('mandats', () => {
 	it('bailleur particulier : gestion directe, aucune colonne de mandat, l’organisation bailleur et détentrice', () => {
 		const plan = planImport(
 			{
-				properties: sheet('properties', ['Référence du bien', 'Type de bien', 'Nom du bien'], [['B-01', 'Villa ou maison', 'Ma villa']], 'landlord'),
+				properties: sheet(
+					'properties',
+					['Référence du bien', 'Type de bien', 'Nom du bien'],
+					[['B-01', 'Villa ou maison', 'Ma villa']],
+					'landlord'
+				),
 				units: sheet('units', UNIT_H, [['U1', 'B-01', 'Villa', 'Villa', 3, '100000', '']], 'landlord'),
 				tenants: sheet('tenants', TENANT_H, [['L1', '', 'Kaboré Issouf', '70123456']], 'landlord'),
 				leases: sheet('leases', LEASE_H, [['U1', 'L1', '01/01/2024', '', '', '100000', '', '']], 'landlord'),
@@ -341,7 +396,9 @@ describe('lignes en erreur, écartées en cascade (ajout 3 du porteur)', () => {
 			['L2', 'Mme', 'Traoré Awa', '7654321'],
 			['L3', 'M.', 'Zongo Paul', '65432109']
 		]);
-		expect(errors(planImport(r, ctx()))).toContain('Ligne 4 de Locataires, colonne Téléphone : 8 chiffres attendus, par exemple 70 12 34 56.');
+		expect(errors(planImport(r, ctx()))).toContain(
+			'Ligne 4 de Locataires, colonne Téléphone : 8 chiffres attendus, par exemple 70 12 34 56.'
+		);
 	});
 });
 
@@ -393,7 +450,9 @@ describe('baux : bascule et règles des réponses du porteur', () => {
 	it('avance remplie sur un bail commencé avant la bascule : ignorée avec un avertissement (réponse 4)', () => {
 		const plan = lease(['B-01-A', 'L1', '01/03/2021', '', '', '150000', '', '2']);
 		expect(plan.leases[0]!.terms.advanceMonths).toBe(0);
-		expect(warnings(plan)).toContain('Ligne 2 de Baux, colonne Avance (mois) : sans objet pour un bail commencé avant la bascule ; ignorée.');
+		expect(warnings(plan)).toContain(
+			'Ligne 2 de Baux, colonne Avance (mois) : sans objet pour un bail commencé avant la bascule ; ignorée.'
+		);
 	});
 
 	it('bail commencé entre la bascule et aujourd’hui : facturé depuis son début', () => {
@@ -491,7 +550,11 @@ describe('soldes d’ouverture et cautions (réponses 2 et 6)', () => {
 		const plan = planImport(r, ctx());
 		expect(plan.deposits).toHaveLength(1);
 		expect(plan.summary.depositsAboveCap).toBe(1);
-		expect(warnings(plan).some((w) => w.startsWith('Ligne 2 de Cautions, colonne Montant convenu (FCFA) : caution supérieure à deux mois de loyer'))).toBe(true);
+		expect(
+			warnings(plan).some((w) =>
+				w.startsWith('Ligne 2 de Cautions, colonne Montant convenu (FCFA) : caution supérieure à deux mois de loyer')
+			)
+		).toBe(true);
 	});
 
 	it('garantie des factures : jamais comptée dans le seuil de deux mois', () => {
@@ -514,7 +577,9 @@ describe('soldes d’ouverture et cautions (réponses 2 et 6)', () => {
 			['B-01-A', 'Caution', '300000', '', '', ''],
 			['B-01-A', 'Caution', '300000', '', '', '']
 		]);
-		expect(errors(planImport(r, ctx()))).toContain('Ligne 3 de Cautions, colonne Bail ou unité : ce bail a déjà une caution (Cautions, ligne 2).');
+		expect(errors(planImport(r, ctx()))).toContain(
+			'Ligne 3 de Cautions, colonne Bail ou unité : ce bail a déjà une caution (Cautions, ligne 2).'
+		);
 	});
 });
 
@@ -558,7 +623,9 @@ describe('doublons et rapprochements (prompt §2.3, réponse 8)', () => {
 			{ sheet: 'tenants', row: 2, key: 'tenants:2', existingId: 'tenant-1', existingName: 'Kaboré Issouf', chosen: 'existing' }
 		]);
 		expect(plan.tenants[0]!.existingId).toBe('tenant-1');
-		expect(warnings(plan)).toContain('Ligne 2 de Locataires : « Kaboré Issouf » existe déjà avec ce numéro ; la fiche existante sera utilisée.');
+		expect(warnings(plan)).toContain(
+			'Ligne 2 de Locataires : « Kaboré Issouf » existe déjà avec ce numéro ; la fiche existante sera utilisée.'
+		);
 	});
 
 	it('la personne peut choisir de créer une nouvelle fiche', () => {
@@ -604,7 +671,19 @@ describe('quartiers : référentiel du lot 07, suggestions, jamais créés (rép
 		r.properties = sheet(
 			'properties',
 			PROPERTY_H,
-			places.map(([commune, nb], i) => [`B-0${i + 1}`, 'P1', 'Villa ou maison', `Bien ${i + 1}`, commune, nb, 'Gestion locative', '10', '01/01/2020', 'Non', 'Oui'])
+			places.map(([commune, nb], i) => [
+				`B-0${i + 1}`,
+				'P1',
+				'Villa ou maison',
+				`Bien ${i + 1}`,
+				commune,
+				nb,
+				'Gestion locative',
+				'10',
+				'01/01/2020',
+				'Non',
+				'Oui'
+			])
 		);
 		r.units = sheet('units', UNIT_H, []);
 		r.leases = sheet('leases', LEASE_H, []);

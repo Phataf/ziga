@@ -108,11 +108,81 @@ export const PROPERTIES: FixtureSheet = {
 		'Encaissement par l’agence'
 	],
 	rows: [
-		['B-01', 'Villa Tampouy', 'P1', 'Villa ou maison', 'Ouagadougou', 'Tampoui', 'Gestion locative', '10 %', '', '', '01/01/2019', 'Non', 'Oui'],
-		['B-02', 'Cour Dassasgho', 'OUEDRAOGO Mariam', 'Cour commune', 'Ouaga', 'Dasasgho', 'Gestion locative', '10', '', '', serial(2019, 1, 1), 'non', 'oui'],
-		['B-03', 'Immeuble Wend Panga', 'P2', 'Immeuble d’appartements', 'Ouagadougou', 'Ouaga2000', 'Gestion locative', '8 %', '', '', '2020-06-01', 'Oui', 'Oui'],
-		['B-04', 'Résidence Kalgondé', 'P2', "Immeuble d'appartements", 'OUAGADOUGOU', 'kalgonde', 'gestion locative', '8%', '', '', '01/06/2020', 'Oui', 'Oui'],
-		['B-05', 'Boutiques Zogona', 'P2', 'Local commercial', 'Ouagadougou', 'Zogona', 'Gestion locative', '', '25 000', 'Montant fixe par mois', '01/01/2022', 'Non', 'Non'],
+		[
+			'B-01',
+			'Villa Tampouy',
+			'P1',
+			'Villa ou maison',
+			'Ouagadougou',
+			'Tampoui',
+			'Gestion locative',
+			'10 %',
+			'',
+			'',
+			'01/01/2019',
+			'Non',
+			'Oui'
+		],
+		[
+			'B-02',
+			'Cour Dassasgho',
+			'OUEDRAOGO Mariam',
+			'Cour commune',
+			'Ouaga',
+			'Dasasgho',
+			'Gestion locative',
+			'10',
+			'',
+			'',
+			serial(2019, 1, 1),
+			'non',
+			'oui'
+		],
+		[
+			'B-03',
+			'Immeuble Wend Panga',
+			'P2',
+			'Immeuble d’appartements',
+			'Ouagadougou',
+			'Ouaga2000',
+			'Gestion locative',
+			'8 %',
+			'',
+			'',
+			'2020-06-01',
+			'Oui',
+			'Oui'
+		],
+		[
+			'B-04',
+			'Résidence Kalgondé',
+			'P2',
+			"Immeuble d'appartements",
+			'OUAGADOUGOU',
+			'kalgonde',
+			'gestion locative',
+			'8%',
+			'',
+			'',
+			'01/06/2020',
+			'Oui',
+			'Oui'
+		],
+		[
+			'B-05',
+			'Boutiques Zogona',
+			'P2',
+			'Local commercial',
+			'Ouagadougou',
+			'Zogona',
+			'Gestion locative',
+			'',
+			'25 000',
+			'Montant fixe par mois',
+			'01/01/2022',
+			'Non',
+			'Non'
+		],
 		['B-06', 'Cour Pissy', 'P3', 'Cour commune', 'Ouagadougou', 'Pisy', 'Gestion locative', '12 %', '', '', '15/03/2021', 'Non', 'Non']
 	]
 };
@@ -311,7 +381,14 @@ export const DEPOSITS: FixtureSheet = {
 	rows: withDeposit.map((u, i) => {
 		const agreed = u.ref === DEPOSIT_ABOVE_CAP_UNIT ? 3 * u.rent : 2 * u.rent;
 		const received = u.ref === PARTIAL_DEPOSIT_UNIT ? u.rent : '';
-		return [u.ref, writtenAmount(i, agreed), received === '' ? '' : writtenAmount(i, received), '', u.property === 'B-06' ? 'Propriétaire' : '', 'Caution'];
+		return [
+			u.ref,
+			writtenAmount(i, agreed),
+			received === '' ? '' : writtenAmount(i, received),
+			'',
+			u.property === 'B-06' ? 'Propriétaire' : '',
+			'Caution'
+		];
 	})
 };
 

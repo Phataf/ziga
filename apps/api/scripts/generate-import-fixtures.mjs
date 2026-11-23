@@ -31,7 +31,18 @@ writeFileSync(out('registre-fictif.xlsx'), await writeXlsxFile(sheets).toBuffer(
 
 /** Windows-1252 : ASCII et Latin-1 sur un octet, plus les quelques signes propres à Windows. */
 const CP1252 = new Map([
-	['€', 0x80], ['‚', 0x82], ['„', 0x84], ['…', 0x85], ['‘', 0x91], ['’', 0x92], ['“', 0x93], ['”', 0x94], ['–', 0x96], ['—', 0x97], ['œ', 0x9c], ['Œ', 0x8c]
+	['€', 0x80],
+	['‚', 0x82],
+	['„', 0x84],
+	['…', 0x85],
+	['‘', 0x91],
+	['’', 0x92],
+	['“', 0x93],
+	['”', 0x94],
+	['–', 0x96],
+	['—', 0x97],
+	['œ', 0x9c],
+	['Œ', 0x8c]
 ]);
 function encodeCp1252(text) {
 	const bytes = [];

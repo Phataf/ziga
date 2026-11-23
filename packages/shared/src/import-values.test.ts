@@ -144,10 +144,13 @@ describe('dates (jj/mm/aaaa, aaaa-mm-jj, numéro de série Excel)', () => {
 		expect(parseImportDate(null)).toEqual(ok(null));
 	});
 
-	it.each(['31/02/2021', '2021-02-30', '13/13/2021', 'mars 2021', '01/03/21', '12', '1/3'])('« %s » refusé avec le format attendu', (input) => {
-		const r = parseImportDate(input);
-		expect('error' in r && r.error).toBe('date attendue au format jj/mm/aaaa, par exemple 01/03/2021.');
-	});
+	it.each(['31/02/2021', '2021-02-30', '13/13/2021', 'mars 2021', '01/03/21', '12', '1/3'])(
+		'« %s » refusé avec le format attendu',
+		(input) => {
+			const r = parseImportDate(input);
+			expect('error' in r && r.error).toBe('date attendue au format jj/mm/aaaa, par exemple 01/03/2021.');
+		}
+	);
 
 	it('numéro de série hors des années plausibles : refusé', () => {
 		expect('error' in parseImportDate(5)).toBe(true);

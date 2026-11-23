@@ -146,7 +146,13 @@ describe('classeur lu → onglets à importer', () => {
 		const { sheets, unknownSheets, columnIssues } = workbookImportSheets(
 			[
 				{ sheet: 'Notice', data: [['Mode d’emploi']] },
-				{ sheet: 'Locataires', data: [['Téléphone', 'Nom et prénoms', 'Couleur'], ['70123456', 'Kaboré Issouf', 'bleu']] },
+				{
+					sheet: 'Locataires',
+					data: [
+						['Téléphone', 'Nom et prénoms', 'Couleur'],
+						['70123456', 'Kaboré Issouf', 'bleu']
+					]
+				},
 				{ sheet: 'Baux', data: [['Unité', 'Locataire']] },
 				{ sheet: 'Feuil3', data: [] }
 			],
@@ -157,9 +163,24 @@ describe('classeur lu → onglets à importer', () => {
 		expect(sheets.tenants!.rows).toHaveLength(2);
 		expect(unknownSheets).toEqual(['Feuil3']);
 		expect(columnIssues).toEqual([
-			{ sheet: 'tenants', kind: 'ignored', header: 'Couleur', message: 'Locataires : la colonne « Couleur » ne correspond à aucun champ ; elle est ignorée.' },
-			{ sheet: 'leases', kind: 'missing', header: 'Date d’entrée', message: 'Baux : la colonne obligatoire « Date d’entrée » est absente.' },
-			{ sheet: 'leases', kind: 'missing', header: 'Loyer mensuel (FCFA)', message: 'Baux : la colonne obligatoire « Loyer mensuel (FCFA) » est absente.' }
+			{
+				sheet: 'tenants',
+				kind: 'ignored',
+				header: 'Couleur',
+				message: 'Locataires : la colonne « Couleur » ne correspond à aucun champ ; elle est ignorée.'
+			},
+			{
+				sheet: 'leases',
+				kind: 'missing',
+				header: 'Date d’entrée',
+				message: 'Baux : la colonne obligatoire « Date d’entrée » est absente.'
+			},
+			{
+				sheet: 'leases',
+				kind: 'missing',
+				header: 'Loyer mensuel (FCFA)',
+				message: 'Baux : la colonne obligatoire « Loyer mensuel (FCFA) » est absente.'
+			}
 		]);
 	});
 
