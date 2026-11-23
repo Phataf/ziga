@@ -1797,6 +1797,19 @@ Ajouts du porteur :
 - « Libre le » au lendemain de la fin du bail, et annonce suspendue à la sortie puis republiée à la main une fois l'unité prête : confirmés.
 - `moveInTotal` (`listings.ts`), tests écrits d'abord en rouge : avec avance, sans avance, sans charges, format FCFA du total.
 
+### Étape 2 : migration 0028, synchronisation en lecture, tests SQL
+- Commencée par le total à réunir (Q16, commits à part, tests d'abord en rouge).
+- **Migration `0028_listings`** :
+  - `organizations` : `public_slug` (format, mots réservés, même liste que `RESERVED_PUBLIC_SLUGS`, unique), `public_presentation`, `public_phone_visible` (accord du bailleur, faux par défaut) ; `organization_public_slugs` garde toutes les adresses portées (redirection 301, jamais reprise par une autre organisation), écrite par la base seule, agences seulement ;
+  - `listings` : cible (unité pour une location, bien entier pour une vente), référence `ZG-XXXXXX` unique, prix entier, précision de l'emplacement ; machine d'états tenue par la base (mêmes passages que `LISTING_TRANSITIONS`), dates d'état posées par elle, 3 photos prêtes pour demander la publication, prix exigé hors état interne ; une seule annonce non retirée par unité et par bien à vendre ; retirée, elle ne change plus ; jamais supprimée ;
+  - `listing_photos` : photos prêtes de la cible (l'unité ou les parties communes pour une location ; le bien et ses unités pour une vente), 15 au plus, seul l'ordre change ;
+  - `leads` : né « nouveau », statuts de `LEAD_TRANSITIONS`, formulaire sans auteur et sur une annonce, noté à la main par un membre qui suit les prospects, affecté à un membre actif (direction, gestion ou agent de terrain), annonce, source et auteur figés, jamais supprimé ;
+  - `showcase_listings` : projection publique, seules les colonnes publiques ; écrite dans le contexte de l'organisation, lisible par tous quand elle est visible (`public_read`), aucun accès du back-office, jamais synchronisée ;
+  - `showcase_organizations()` et `showcase_organization_by_slug()` (`SECURITY DEFINER`) : nom, adresse, présentation, badge et logo d'une agence ; jamais le nom ni la page d'un bailleur, son numéro seulement avec son accord ; adresse ancienne ou actuelle ; `listing_organizations()` pour la tâche de nuit (identifiants seulement).
+- **Synchronisation** (`docs/SYNC.md`) : `listings` et `listing_photos` (direction, gestion, lecture ; agent de terrain : ses unités) ; `leads` dans deux streams, `organization_leads` (direction, gestion) et `assigned_leads` (agent de terrain, recherche indexée par la personne) ; jamais le profil lecture ; colonnes publiques de l'organisation. Schéma local identique à celui que déduit PowerSync.
+- **Tests** : `listings-db.int.test.ts` (23 tests : listes fermées comparées à `packages/shared`, accès croisé A/B en lecture, modification et référence sur les quatre tables, règles de chaque table, colonnes de la projection comparées à une liste autorisée, adresse publique et ce que la vitrine voit d'une organisation), `migration-0028.int.test.ts` (base du lot 11 remplie), `sync.int.test.ts` et `sync-streams.int.test.ts` (prospects jamais au profil lecture ni hors de leurs deux streams, projection jamais synchronisée).
+- Le flux PowerSync contre le vrai service (`e2e/sync.spec.ts` : A ne reçoit ni annonce ni prospect de B, le profil lecture aucun prospect) vient à l'étape 3, quand l'API crée annonces et prospects.
+
 ### Notes pour le lot 13
 - **Tuiles** : rendu des tuiles de Ouagadougou et Saaba (zooms 13 à 17, environ 15 000 tuiles, environ 300 Mo) à partir de l'extrait OSM (ODbL), hors du dépôt, puis dépôt sur notre stockage derrière Cloudflare. **Jamais** par téléchargement en masse depuis `tile.openstreetmap.org`, que sa politique d'usage interdit. Mention « © les contributeurs d'OpenStreetMap » conservée.
 - **Purge du CDN** : implémentation Cloudflare de `CdnPurger` (lot 12 : `console` et `memory`).
