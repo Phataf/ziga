@@ -57,3 +57,4 @@ Journal des décisions structurantes. Une décision ne change que par une nouvel
 | Prestataire SMS réel pour les codes de vérification (coût par SMS, couverture Orange et Moov) | 10 ter | Grilles des prestataires |
 | Agrégateur de paiement retenu (CinetPay, Ligdicash, PayDunya…) : frais, KYC, plafonds, notifications | 14 | Grilles et documentation des prestataires |
 | Durée de conservation des coordonnées des prospects (nom, téléphone, message laissés depuis la vitrine ou notés à la main, lot 12) : aucun effacement automatique d'ici là | 13 | Juriste, ARCOD |
+| Frais d'agence à la charge du locataire à l'entrée : encadrés par la loi ? À afficher sur l'annonce ? (lot 12 : le total à réunir affiché sur une annonce de location est « hors frais d'agence », le registre ne les connaît pas ; aucun champ ajouté) | 13 | Juriste |

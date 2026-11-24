@@ -94,6 +94,10 @@ Dans l'ordre, dans le lot qui crée la table :
 | colonnes du lot 11 | 11 | `rent_dues.kind` (« Solde antérieur » d'un bail importé, hors de l'échéancier), `leases.original_ends_on` (fin d'origine d'un bail échu importé à durée indéterminée), `leases.import_job_id` (« Contrats à déposer ») ; agent de terrain : pour les baux de ses unités, comme les autres colonnes | jamais (écrites par l'import) |
 | `import_jobs` | 11 | **jamais synchronisée** : imports lus par l'API (`GET /imports`), en ligne seulement | jamais |
 | `person_links` | 10 ter | **jamais synchronisée** : liens entre fiches et comptes, lus par le serveur seul (`my_person_links()` pour les espaces personnels) | jamais |
+| `listings`, `listing_photos` | 12 | annonces (état, cause de suspension, dates) et photos choisies ; direction, gestion, lecture ; agent de terrain : les annonces de ses unités et leurs photos | jamais (publication en ligne seulement, réponse du porteur Q13) |
+| `leads` | 12 | prospects (nom, téléphone et message du visiteur, statut, agent affecté, notes) ; direction et gestion : tous (stream `organization_leads`) ; agent de terrain : ceux qui lui sont affectés (stream `assigned_leads`, recherche indexée par `leads.assigned_member_id = auth.user_id()`) ; **jamais le profil lecture** | statut, affectation, notes ; prospect noté à la main (WhatsApp, appel) : étape 3 |
+| `organizations` (colonnes du lot 12) | 12 | `public_slug`, `public_presentation`, `public_phone_visible` (page publique, accord du bailleur pour son numéro) | non (réglage du directeur, en ligne) |
+| `showcase_listings`, `organization_public_slugs` | 12 | **jamais synchronisées** : projection publique de la vitrine et historique des adresses, lues par l'API seule | jamais |
 
 ## 4. Lire dans la base locale (écrans)
 

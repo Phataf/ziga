@@ -2,7 +2,7 @@
  * Schéma Drizzle des modules organizations et audit (lot 03). La migration SQL (0002) fait foi : règles
  * d'accès (RLS), triggers (bailleur à un seul membre, dernier directeur, journal en ajout seul) et clés composites.
  */
-import { customType, date, inet, integer, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { boolean, customType, date, inet, integer, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 const bytea = customType<{ data: Buffer }>({ dataType: () => 'bytea' });
 const tstz = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
@@ -46,6 +46,10 @@ export const organizations = pgTable('organizations', {
 	receiptPrefix: text('receipt_prefix'),
 	receiptTicketWidth: integer('receipt_ticket_width').$type<58 | 80>().notNull().default(80),
 	receiptNumberingStartedAt: tstz('receipt_numbering_started_at'),
+	// Lot 12 : page publique d'une agence (adresse, présentation) ; accord du bailleur pour afficher son numéro (Q4).
+	publicSlug: text('public_slug'),
+	publicPresentation: text('public_presentation'),
+	publicPhoneVisible: boolean('public_phone_visible').notNull().default(false),
 	createdBy: uuid('created_by').notNull(),
 	createdAt: tstz('created_at').notNull().defaultNow(),
 	updatedAt: tstz('updated_at').notNull().defaultNow()

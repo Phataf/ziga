@@ -29,6 +29,9 @@ export const SYNCED_TABLES = {
 		receipt_prefix: 'text',
 		receipt_ticket_width: 'integer',
 		receipt_numbering_started_at: 'text',
+		public_slug: 'text',
+		public_presentation: 'text',
+		public_phone_visible: 'integer',
 		updated_at: 'text'
 	},
 	organization_members: {
@@ -709,6 +712,52 @@ export const SYNCED_TABLES = {
 		created_at: 'text',
 		updated_at: 'text'
 	},
+	/** Lot 12 : annonces (direction, gestion, lecture ; agent de terrain : celles de ses unités), en lecture. */
+	listings: {
+		organization_id: 'text',
+		operation: 'text',
+		property_id: 'text',
+		unit_id: 'text',
+		reference: 'text',
+		title: 'text',
+		description: 'text',
+		price: 'integer',
+		location_precision: 'text',
+		visibility: 'text',
+		suspension_reason: 'text',
+		suspended_at: 'text',
+		archive_reason: 'text',
+		archived_at: 'text',
+		publication_requested_at: 'text',
+		published_at: 'text',
+		first_published_at: 'text',
+		created_by: 'text',
+		created_at: 'text',
+		updated_at: 'text'
+	},
+	/** Lot 12 : photos choisies d'une annonce et leur ordre. */
+	listing_photos: {
+		organization_id: 'text',
+		listing_id: 'text',
+		media_id: 'text',
+		position: 'integer'
+	},
+	/** Lot 12 : prospects ; direction et gestion, agent de terrain pour ceux qui lui sont affectés, jamais le profil lecture. */
+	leads: {
+		organization_id: 'text',
+		listing_id: 'text',
+		source: 'text',
+		name: 'text',
+		phone: 'text',
+		message: 'text',
+		status: 'text',
+		assigned_member_id: 'text',
+		notes: 'text',
+		created_by: 'text',
+		last_contact_at: 'text',
+		created_at: 'text',
+		updated_at: 'text'
+	},
 	/** Lot 10 bis : congés (agent de terrain : ceux de ses baux, enregistrés, sans indemnité ni preuve). */
 	lease_notices: {
 		organization_id: 'text',
@@ -939,5 +988,8 @@ export const ORGANIZATION_SCOPED_TABLES = [
 	'repairs',
 	'deposit_settlements',
 	'deposit_settlement_lines',
-	'management_transfers'
+	'management_transfers',
+	'listings',
+	'listing_photos',
+	'leads'
 ] as const satisfies readonly SyncedTable[];

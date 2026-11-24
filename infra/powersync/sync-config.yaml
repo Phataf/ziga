@@ -24,7 +24,7 @@ streams:
           AND organization_members.status = 'active'
           AND organizations.verification_status != 'suspended'
     queries:
-      - SELECT id, type, legal_name, trade_name, phone, address, commune, po_box, rccm, ifu, verification_status, plan_id, accepted_payment_methods, logo_id, rent_billing_mode, receipt_prefix, receipt_ticket_width, receipt_numbering_started_at, updated_at FROM organizations WHERE id IN my_organizations
+      - SELECT id, type, legal_name, trade_name, phone, address, commune, po_box, rccm, ifu, verification_status, plan_id, accepted_payment_methods, logo_id, rent_billing_mode, receipt_prefix, receipt_ticket_width, receipt_numbering_started_at, public_slug, public_presentation, public_phone_visible, updated_at FROM organizations WHERE id IN my_organizations
       - SELECT id, organization_id, user_id, role, status, display_name, joined_at FROM organization_members WHERE organization_id IN my_organizations
       - SELECT organization_id || ':' || feature_key AS id, organization_id, feature_key, disabled_by_organization FROM organization_feature_settings WHERE organization_id IN my_organizations
       - SELECT id, feature_key, scope, organization_id, user_id, value, starts_at, ends_at FROM feature_overrides WHERE organization_id IN my_organizations AND revoked_at IS NULL
@@ -52,6 +52,7 @@ streams:
   # Lot 10 bis : congés, états des lieux et leurs lignes, accords, réparations, décomptes de sortie et leurs lignes,
   # transferts de gestion ; nouvelles colonnes des baux, échéances, cautions, imputations, reçus et portées.
   # Lot 10 ter : signalements des locataires (fiche du bail), sans la personne qui signale (reported_by).
+  # Lot 12 : annonces et photos choisies (lecture ; publication en ligne seulement) ; jamais la projection publique.
   managed_properties:
     auto_subscribe: true
     with:
@@ -70,6 +71,8 @@ streams:
       - SELECT id, organization_id, civility, full_name, phone, secondary_phone, nationality, profession, previous_address, emergency_contact_name, emergency_contact_phone, notes, status, archived_at, created_at, updated_at FROM tenants WHERE organization_id IN managed_organizations
       - SELECT id, organization_id, unit_id, tenant_id, starts_on, ends_on, duration_months, dues_start_on, rent, charges, rent_effective_from, periodicity, due_day, billing_mode, advance_months, lessor_type, payment_terms, penalty_rate_bp, penalty_grace_days, penalty_beneficiary, notice_tenant_fixed_term_months, notice_tenant_open_ended_months, notice_lessor_fixed_term_months, notice_lessor_open_ended_months, reduced_notice_months, reduced_notice_cases, early_termination_indemnity_months, renewal_mode, deposit_refund_days, status, activated_on, activated_at, cancelled_at, cancellation_reason, notice_given_on, exit_on, ended_at, end_reason, end_kind, version, last_renewed_on, last_renewal_automatic, original_ends_on, import_job_id, created_at, updated_at FROM leases WHERE organization_id IN managed_organizations
       - SELECT id, organization_id, lease_id, version, rent, charges, rent_effective_from, starts_on, ends_on, dues_start_on, due_day, billing_mode, periodicity, advance_months, status, changed_by, recorded_at FROM lease_versions WHERE organization_id IN managed_organizations
+      - SELECT id, organization_id, operation, property_id, unit_id, reference, title, description, price, location_precision, visibility, suspension_reason, suspended_at, archive_reason, archived_at, publication_requested_at, published_at, first_published_at, created_by, created_at, updated_at FROM listings WHERE organization_id IN managed_organizations
+      - SELECT id, organization_id, listing_id, media_id, position FROM listing_photos WHERE organization_id IN managed_organizations
       - SELECT id, organization_id, lease_id, kind, period_start, period_end, due_on, rent, charges, amount_due, amount_paid, status, prorated, is_advance, lease_version, exit_adjusted_at, created_at, updated_at FROM rent_dues WHERE organization_id IN managed_organizations
       - SELECT id, organization_id, lease_id, type, agreed_amount, agreed_months, holder, holder_name, status, created_at, updated_at FROM deposit_accounts WHERE organization_id IN managed_organizations
       - SELECT id, organization_id, account_id, type, amount, previous_holder, new_holder, new_holder_name, reason, occurred_on, document_id, agreement_id, inspection_item_id, payment_id, settlement_id, settlement_line_id, rent_due_id, expense_id, repair_id, management_transfer_id, refunded_by, refund_method, refund_reference, created_by, created_at FROM deposit_movements WHERE organization_id IN managed_organizations
@@ -105,6 +108,7 @@ streams:
   # ni accord, ni réparation chiffrée, ni imputation sur caution (encaissement, imputation et reçu de provenance
   # `deposit` exclus).
   # Lot 10 ter : les signalements de ses baux (sans la personne qui signale).
+  # Lot 12 (agent de terrain) : annonces de ses unités et leurs photos, en lecture.
   assigned_units:
     auto_subscribe: true
     with:
@@ -147,6 +151,16 @@ streams:
           AND organization_members.status = 'active'
           AND organization_members.role = 'field_agent'
           AND organizations.verification_status != 'suspended'
+      my_unit_listings: |
+        SELECT listings.id FROM listings
+          JOIN units ON units.id = listings.unit_id
+          JOIN organizations ON organizations.id = units.organization_id
+          JOIN organization_members ON organization_members.organization_id = organizations.id
+        WHERE units.assigned_agent_id = auth.user_id()
+          AND organization_members.user_id = auth.user_id()
+          AND organization_members.status = 'active'
+          AND organization_members.role = 'field_agent'
+          AND organizations.verification_status != 'suspended'
       my_unit_tenants: |
         SELECT leases.tenant_id FROM leases
           JOIN units ON units.id = leases.unit_id
@@ -172,6 +186,8 @@ streams:
       - SELECT id, organization_id, tenant_id, rent_due_ids, expense_ids, channel, template_level, note, sent_at, sent_by, created_at FROM reminders WHERE tenant_id IN my_unit_tenants
       - SELECT id, organization_id, lease_id, origin, status, notified_on, planned_exit_on, notice_ends_on, rent_ends_on, created_at, updated_at FROM lease_notices WHERE lease_id IN my_unit_leases AND status = 'recorded'
       - SELECT id, organization_id, lease_id, title, description, status, planned_on, done_at, status_note, handled_by, created_at, updated_at FROM maintenance_requests WHERE lease_id IN my_unit_leases
+      - SELECT id, organization_id, operation, property_id, unit_id, reference, title, description, price, location_precision, visibility, suspension_reason, suspended_at, archive_reason, archived_at, publication_requested_at, published_at, first_published_at, created_by, created_at, updated_at FROM listings WHERE unit_id IN my_units
+      - SELECT id, organization_id, listing_id, media_id, position FROM listing_photos WHERE listing_id IN my_unit_listings
       - SELECT id, organization_id, lease_id, type, status, inspected_on, performed_by, furnished, organization_signed_at, organization_signed_by, tenant_signed_at, tenant_signed_recorded_by, scan_document_id, organization_observations, tenant_observations, disputed_at, dispute_outcome, dispute_outcome_document_id, created_by, created_at, updated_at FROM inspections WHERE lease_id IN my_unit_leases
       - SELECT id, organization_id, inspection_id, room, element, position, description, finding, entry_item_id, created_by, created_at, updated_at FROM inspection_items WHERE inspection_id IN my_unit_inspections
       - SELECT id, organization_id, type, owner_id, mandate_id, property_id, unit_id, tenant_id, lease_id, lease_contract_id, contract_template_id, inspection_id, inspection_item_id, taken_at, received_after_signature, version, replaces_id, file_name, mime_type, byte_size, sha256, status, restriction, uploaded_by, created_at, activated_at, replaced_at, withdrawn_at, withdrawal_reason FROM documents WHERE lease_id IN my_unit_leases AND type = 'inspection_photo' AND restriction IS NULL
@@ -221,6 +237,35 @@ streams:
       - SELECT id, organization_id, lease_id, amendment_id, origin, template_source, template_id, template_version, status, current_version, frozen_version, frozen_at, frozen_by, generation_status, generation_error, signing_place, signing_date, copies, expected_signers, organization_signed_on, owner_signed_on, tenant_signed_on, signature_mode, signed_document_id, signature_recorded_by, signature_recorded_at, legalized_on, legalization_commune, legalization_reference, legalization_document_id, registered_on, registration_reference, registration_document_id, legalization_reminder, created_by, created_at, updated_at FROM lease_contracts WHERE organization_id IN contract_organizations
       - SELECT id, organization_id, contract_id, number, lease_version, template_source, template_id, template_version, blank_fields, warnings, docx_document_id, pdf_document_id, docx_sha256, pdf_sha256, page_count, created_by, created_at FROM contract_versions WHERE organization_id IN contract_organizations
       - SELECT id, organization_id, lease_id, number, type, effective_from, new_rent, new_charges, new_ends_on, open_ended, description, expected_lease_version, status, applied_at, applied_lease_version, cancelled_at, cancellation_reason, created_by, created_at, updated_at FROM lease_amendments WHERE organization_id IN contract_organizations
+
+  # Lot 12 : prospects (nom, téléphone et message d'un visiteur). Direction et gestion : tous ceux de l'organisation ;
+  # agent de terrain : ceux qui lui sont affectés (stream assigned_leads) ; jamais le profil lecture (réponse du
+  # porteur, Q5). Un prospect n'appartient qu'à l'organisation de l'annonce (règle 15).
+  organization_leads:
+    auto_subscribe: true
+    with:
+      lead_organizations: |
+        SELECT organizations.id FROM organizations
+          JOIN organization_members ON organization_members.organization_id = organizations.id
+        WHERE organization_members.user_id = auth.user_id()
+          AND organization_members.status = 'active'
+          AND organization_members.role != 'field_agent'
+          AND organization_members.role != 'viewer'
+          AND organizations.verification_status != 'suspended'
+    query: SELECT id, organization_id, listing_id, source, name, phone, message, status, assigned_member_id, notes, created_by, last_contact_at, created_at, updated_at FROM leads WHERE organization_id IN lead_organizations
+  assigned_leads:
+    auto_subscribe: true
+    with:
+      my_leads: |
+        SELECT leads.id FROM leads
+          JOIN organizations ON organizations.id = leads.organization_id
+          JOIN organization_members ON organization_members.organization_id = organizations.id
+        WHERE leads.assigned_member_id = auth.user_id()
+          AND organization_members.user_id = auth.user_id()
+          AND organization_members.status = 'active'
+          AND organization_members.role = 'field_agent'
+          AND organizations.verification_status != 'suspended'
+    query: SELECT id, organization_id, listing_id, source, name, phone, message, status, assigned_member_id, notes, created_by, last_contact_at, created_at, updated_at FROM leads WHERE id IN my_leads
 
   # Représentant légal (pièce d'identité) : réservé au directeur, comme l'écran des paramètres.
   organization_representatives:

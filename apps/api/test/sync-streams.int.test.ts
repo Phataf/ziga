@@ -239,4 +239,33 @@ describe('Sync Streams (lot 05, D30)', () => {
 		expect(SYNCED_TABLES.leases).toMatchObject({ original_ends_on: 'text', import_job_id: 'text' });
 		expect(SYNCED_TABLES.rent_dues).toMatchObject({ kind: 'text' });
 	});
+
+	it('lot 12 : prospects à la direction et à la gestion, à l’agent de terrain ceux qui lui sont affectés, jamais au profil lecture', () => {
+		const managers = stream('organization_leads');
+		expect(managers).toContain("organization_members.role != 'field_agent'");
+		expect(managers).toContain("organization_members.role != 'viewer'");
+		expect(managers).toMatch(/FROM leads WHERE organization_id IN lead_organizations/);
+		const agent = stream('assigned_leads');
+		expect(agent).toContain('leads.assigned_member_id = auth.user_id()');
+		expect(agent).toContain("organization_members.role = 'field_agent'");
+		expect(agent).toContain('organization_members.user_id = auth.user_id()');
+		expect(agent).toMatch(/FROM leads WHERE id IN my_leads/);
+		const yaml = readFileSync(CONFIG, 'utf8');
+		const others = yaml.replace(managers, '').replace(agent, '');
+		expect(others).not.toMatch(/FROM leads\b/);
+	});
+
+	it('lot 12 : annonces et photos choisies en lecture ; la projection publique et l’historique des adresses jamais', () => {
+		expect(stream('managed_properties')).toMatch(/FROM listings WHERE organization_id IN managed_organizations/);
+		expect(stream('managed_properties')).toMatch(/FROM listing_photos WHERE organization_id IN managed_organizations/);
+		expect(stream('assigned_units')).toMatch(/FROM listings WHERE unit_id IN my_units/);
+		expect(stream('assigned_units')).toMatch(/FROM listing_photos WHERE listing_id IN my_unit_listings/);
+		const yaml = readFileSync(CONFIG, 'utf8');
+		expect(yaml).not.toMatch(/\b(showcase_listings|organization_public_slugs)\b/);
+		expect(SYNCED_TABLES.organizations).toMatchObject({
+			public_slug: 'text',
+			public_presentation: 'text',
+			public_phone_visible: 'integer'
+		});
+	});
 });
